@@ -9,7 +9,7 @@ import yaml
 
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.data import TraceStep
-from tokeo.core.utils.json import jsonTokeoEncoder
+from tokeo.core.utils.json import TokeoJsonUnknownNameEncoder
 
 
 def coerce_model_param_value(raw):
@@ -76,36 +76,49 @@ def parse_model_params(pairs):
     return params
 
 
-def jsonTokeoAiCompactEncoder(obj):
+class TokeoJsonAiTraceEncoder(TokeoJsonUnknownNameEncoder):
     """
-    JSON encoder for a compact trace: drop the object on unchanged steps.
+    JSON encoder for the ```ai ask --trace``` export.
 
-    Used as the json.dumps default hook for the ```ai ask --trace``` export. A
-    ```TraceStep``` with ```changed=False``` left its object exactly as the last
-    changed step already showed it, so its object is pure repetition; this
-    renders such a step without the ```object``` field. A changed step keeps its
-    object. Everything else delegates to ```jsonTokeoEncoder``` with
-    ```ignore_unknown=False```, so a date, dataclass, or live origin renders the
-    same as in the full export.
-
-    ### Args
-
-    - **obj** (any): The object json could not serialize on its own
-
-    ### Returns
-
-    - **dict|str**: A step dict (without ```object``` when unchanged), or the
-        shared encoder's result for anything else
+    Extends the name encoder; in compact mode it drops the ```object``` field
+    of an unchanged ```TraceStep```, since that object only repeats what the
+    last changed step already showed.
 
     """
-    # a trace step: render its fields, and drop the object when the step is
-    # unchanged -- an unchanged step repeats the object the last changed step
-    # already showed, so it is pure repetition in the compact view. a changed
-    # step keeps its object (it shows what actually changed). the changed flag
-    # is read off the built dict, after the type is known
-    if isinstance(obj, TraceStep):
-        step = dict(obj.__dict__)
-        if not step['changed']:
-            del step['object']
-        return step
-    return jsonTokeoEncoder(obj, ignore_unknown=False)
+
+    def __init__(self, compact=False):
+        super().__init__()
+        self.compact = compact
+
+    def encode(self, obj):
+        """
+        Encode a trace step, dropping its object on an unchanged compact step.
+
+        A ```TraceStep``` with ```changed=False``` left its object exactly as the
+        last changed step already showed it, so its object is pure repetition;
+        in compact mode this renders the step without the ```object``` field. A
+        changed step keeps its object. Everything else delegates to the base
+        name encoder, so a date, dataclass, or live origin renders the same as
+        in the full export (an unknown object as its type name).
+
+        ### Args
+
+        - **obj** (any): The object json could not serialize on its own
+
+        ### Returns
+
+        - **dict|str**: A step dict (without ```object``` when unchanged), or the
+            base encoder's result for anything else
+
+        """
+        # a trace step: render its fields, and drop the object when the step is
+        # unchanged -- an unchanged step repeats the object the last changed step
+        # already showed, so it is pure repetition in the compact view. a changed
+        # step keeps its object (it shows what actually changed). the changed flag
+        # is read off the built dict, after the type is known
+        if self.compact and isinstance(obj, TraceStep):
+            step = dict(obj.__dict__)
+            if not step['changed']:
+                del step['object']
+            return step
+        return super().encode(obj)

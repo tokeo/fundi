@@ -59,7 +59,6 @@ from cement.core.meta import MetaMixin
 from cement.core.foundation import SIGNALS
 from cement.core.exc import CaughtSignal
 
-import json
 import importlib
 import shlex
 from copy import deepcopy
@@ -76,8 +75,8 @@ from prompt_toolkit.completion import Completer, Completion
 
 from tokeo.ext.argparse import Controller
 from tokeo.core.utils.base import as_list
-from tokeo.core.utils.json import jsonDump
-from tokeo.core.ai.utils import parse_model_params, jsonTokeoAiCompactEncoder
+from tokeo.core.utils.json import json_dump, TokeoJsonUnknownNameEncoder
+from tokeo.core.ai.utils import parse_model_params, TokeoJsonAiTraceEncoder
 from tokeo.core.ai import (
     TokeoAiError,
     ToolResult,
@@ -848,7 +847,7 @@ class TokeoAi(MetaMixin):
                 {
                     'id': call.id,
                     'type': 'function',
-                    'function': {'name': call.name, 'arguments': json.dumps(call.arguments or {})},
+                    'function': {'name': call.name, 'arguments': json_dump(call.arguments or {}, encoder=TokeoJsonUnknownNameEncoder())},
                 }
                 for call in result.tool_calls
             ],
@@ -1024,10 +1023,8 @@ class AiController(Controller):
         # --trace prints the whole result with the full trace; --trace-compact
         # prints it with a compact trace (unchanged steps drop their repeated
         # object); otherwise just the answer text
-        if self.app.pargs.as_trace:
-            self.app.print(jsonDump(result, indent=2, ignore_unknown=False))
-        elif self.app.pargs.as_trace_compact:
-            self.app.print(jsonDump(result, default=jsonTokeoAiCompactEncoder, indent=2))
+        if self.app.pargs.as_trace or self.app.pargs.as_trace_compact:
+            self.app.print(json_dump(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.as_trace_compact), indent=2))
         else:
             self.app.print(result.answer.text)
 
