@@ -64,7 +64,19 @@ from tokeo.core.ai.exc import TokeoAiError
 
 # the package facade: the public names live in focused modules (data shapes,
 # one base class per concern); import them from here as before
-from tokeo.core.ai.data import Usage, ToolCall, ToolResult, ChatResult, Invocation, ChatMessage, TraceStep, TokeoAiStatus, TokeoAiResult
+from tokeo.core.ai.data import (
+    Usage,
+    ToolCall,
+    ToolResult,
+    ToolValue,
+    ToolStates,
+    ChatResult,
+    Invocation,
+    ChatMessage,
+    TraceStep,
+    TokeoAiStatus,
+    TokeoAiResult,
+)
 from tokeo.core.ai.context import TokeoAiContext
 from tokeo.core.ai.provider import TokeoAiProvider
 from tokeo.core.ai.tool import TokeoAiTool
@@ -78,6 +90,8 @@ __all__ = [
     'Usage',
     'ToolCall',
     'ToolResult',
+    'ToolValue',
+    'ToolStates',
     'ChatResult',
     'Invocation',
     'ChatMessage',

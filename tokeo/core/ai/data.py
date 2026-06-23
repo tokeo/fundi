@@ -68,26 +68,81 @@ class ToolCall:
 
 
 @dataclass
-class ToolResult:
+class ToolValue:
     """
-    Result returned by a tool.
+    The value a tool delivered, in prepared views.
+
+    A ```ToolResult``` holds a ```ToolValue``` when the tool delivered
+    something, and ```None``` when it did not. So the mere existence answers
+    "is there a value?" -- ```if result.value:``` reads as "did the tool deliver
+    a value", not a truthiness test of the value (a delivered ```0```/```""```
+    still has a value object and so stays truthy).
 
     ### Args
 
-    - **text** (str): The model-facing result; only this enters the message
-        history (truncated for the token budget by the result stage)
-    - **data** (object | None): Optional structured detail for the trace or a
-        ui; kept out of the message history to avoid duplicating large blobs
-
-    ### Notes
-
-    : A tool may also return a plain string, which is treated as
-        ```ToolResult(text=that_string)```.
+    - **as_str** (str): The value as a string, the model-facing form
+    - **as_json** (str): The value as a json string, built with the framework
+        encoder so dates and dataclasses survive
+    - **as_data** (object): The value as a structured object for the trace or a
+        ui (the former ```data``` field), kept out of the message history
 
     """
 
-    text: str = ''
-    data: object = None
+    as_str: str = ''
+    as_json: str = ''
+    as_data: object = None
+
+
+@dataclass
+class ToolStates:
+    """
+    Facts about a tool run, filled by trusted framework or tool code.
+
+    Never written by executed untrusted content: the tool is the trust
+    boundary; the executed code writes only its value, the surrounding tool code
+    observes the run and fills these states.
+
+    ### Args
+
+    - **incomplete** (bool): The json form is not faithful to the value (the
+        encoder had to substitute a representation for something it could not
+        render); ```False``` when the json form represents the value faithfully
+    - **stdout** (str | None): Informal output of the run -- captured print
+        output of executed code, or a note the tool set on purpose; ```None```
+        when there was none
+    - **stderr** (str | None): Informal error output of the run; ```None```
+        when there was none
+    - **exception** (str | None): The exception that the executed code raised,
+        as ```type: message```; ```None``` when the run did not raise
+
+    """
+
+    incomplete: bool = False
+    stdout: object = None
+    stderr: object = None
+    exception: object = None
+
+
+@dataclass
+class ToolResult:
+    """
+    Result a tool produced, assembled by the framework, not by the tool.
+
+    A tool returns a plain value (or ```None```), and the framework turns it
+    into this transport object. A tool that wants finer control may build one
+    itself with ```create_tool_result``` (see ```tokeo.core.ai.tool```).
+
+    ### Args
+
+    - **value** (ToolValue | None): The delivered value in prepared views, or
+        ```None``` when the tool returned nothing. Existence answers "is there a
+        value?", truthy for any delivered value including ```0```/```""```
+    - **state** (ToolStates): Facts about the run (see ```ToolStates```)
+
+    """
+
+    value: object = None      # a ToolValue, or None when nothing was returned
+    state: ToolStates = field(default_factory=ToolStates)
 
 
 @dataclass
