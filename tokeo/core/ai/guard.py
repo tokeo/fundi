@@ -123,11 +123,20 @@ class TokeoAiGuard(MetaMixin):
         place) or a new ```Invocation```.
 
     - **```on_return(ctx, invocation)```** -- after the tool ran, on the same
-        ```Invocation```. Now ```invocation.result``` (a ```ToolResult``` with
-        ```.text``` and ```.data```) or ```invocation.error``` is filled, and
-        ```invocation.sandbox``` names where it ran. Reshape ```result.text```
-        (mask, shorten) or inspect ```error```. Return ```None``` or a new
-        ```Invocation```.
+        ```Invocation```. Now ```invocation.result``` (a ```ToolResult``` whose
+        ```value``` is a ```ToolValue``` with ```as_str```, ```as_json``` and
+        ```as_data```, plus a ```state``` carrying ```incomplete```,
+        ```stdout```, ```stderr``` and ```exception```) is filled, or
+        ```invocation.error``` holds a sandbox-machinery failure (a tool that
+        raised is not an error here -- it rides in ```result.state.exception```).
+        ```invocation.sandbox``` names where it ran. ```value``` is ```None```
+        when the tool returned nothing, so guard the access. Reshape the result
+        (mask, shorten) by writing the views you change, or replace the whole
+        ```value``` via ```create_tool_result``` to keep the three views
+        coherent; inspect ```error``` and ```result.state.exception``` to tell a
+        machinery failure from a tool that raised. Return ```None``` or a new
+        ```Invocation```. See ```GUARDS.md``` for the write contract and the
+        memory note.
 
     - **```on_close(ctx, result)```** -- once, on the final answer of the whole
         run, after the loop. ```result``` is the final ```ChatResult```. Same
@@ -155,9 +164,11 @@ class TokeoAiGuard(MetaMixin):
         typed subclass such as ```TokeoAiPolicyGuardError```). The handler does
         *not* catch guard exceptions, so the raise propagates out of ```chat```
         and **ends the whole run at once** -- the rest of the guard chain, the
-        remaining loop turns, and the final answer are all abandoned. (The loop's
-        own try/except around a tool's *execution* only turns a crashing tool
-        into an error result; it does not catch a guard's raise.)
+        remaining loop turns, and the final answer are all abandoned. (The
+        sandbox catches a tool that *raises* and records it in
+        ```result.state.exception```; the loop's own try/except around the
+        sandbox call only turns a machinery failure into ```invocation.error```.
+        Neither catches a guard's raise.)
 
     Raise a hard abort when proceeding would be wrong, not merely unwanted: a
     required masking backend is unreachable and the run must not continue
