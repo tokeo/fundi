@@ -17,9 +17,25 @@ The job has the shape::
       "caps": { "memory_mb": 256 }   # caps to enforce in this process
     }
 
-The reply is ```{"text": "...", "data": ...}``` on success, or ```{"error":
-"..."}``` on failure -- a short message, never a traceback, so nothing leaks
-across the boundary.
+The reply is the JSON-encoded ```ToolResult``` on success::
+
+    {
+      "value": { "as_str": "...", "as_json": "..." } | null,
+      "state": { "incomplete": bool, "stdout": ..., "stderr": ...,
+                 "exception": "type: message" | null }
+    }
+
+Only the two string views of a value cross; ```as_data``` is left out, since a
+raw object (a datetime, a set) need not be JSON-able. The parent rebuilds
+```as_data``` from ```as_json```, so a value's structured form survives the
+boundary as its encoded JSON shape.
+
+A tool that raised is a normal reply too, carrying its message in
+```state.exception``` with a null ```value``` -- the tool throwing is the tool's
+own outcome, not a sandbox failure. Only a failure of the sandbox machinery
+itself (a bad job, an unenforceable cap, an unimportable tool) becomes a
+```{"error": "..."}``` reply with a non-zero exit, a short message and never a
+traceback, so nothing leaks across the boundary.
 
 ### Notes
 
@@ -28,10 +44,12 @@ across the boundary.
     app is not available in a child process and must not be relied on.
 """
 
+import io
 import sys
 import json
 import importlib
 import resource
+import contextlib
 
 
 def _set_caps(caps):
@@ -89,30 +107,77 @@ def _load_tool(dotted, options):
     return tool
 
 
+def _encode_result(output):
+    # reduce a ToolResult to the JSON-able reply that crosses the boundary; the
+    # same shape the parent rebuilds a ToolResult from. a value crosses as its
+    # two string views, or null when the tool delivered nothing -- as_data is
+    # deliberately NOT sent: a raw object (a datetime, a set) need not be
+    # JSON-able, so the parent reconstructs as_data from as_json instead
+    value = output.value
+    if value is None:
+        value_doc = None
+    else:
+        value_doc = dict(as_str=value.as_str, as_json=value.as_json)
+    state = output.state
+    state_doc = dict(
+        incomplete=state.incomplete,
+        stdout=state.stdout,
+        stderr=state.stderr,
+        exception=state.exception,
+    )
+    return dict(value=value_doc, state=state_doc)
+
+
 def main():
     """
     Read one job from stdin, run the tool, write the result to stdout.
 
-    Wraps everything so any failure becomes a clean ```{"error": ...}``` reply
-    with a non-zero exit, instead of a traceback crossing the boundary.
+    A failure of the sandbox machinery (a bad job, an unenforceable cap, an
+    unimportable tool) becomes a clean ```{"error": ...}``` reply with a
+    non-zero exit. A tool that itself raises is not a machinery failure: it is
+    caught around its own call and returned as a normal ```ToolResult``` reply
+    carrying the message in ```state.exception```.
     """
+    # imports from inside, so an import failure here is still a machinery error
+    # and crosses as {"error": ...}, not as a tool result
+    from tokeo.core.ai.data import ToolResult, ToolStates
+    from tokeo.core.ai.tool import create_tool_result
+
     try:
         job = json.loads(sys.stdin.read() or '{}')
         _set_caps(job.get('caps'))
         tool = _load_tool(job['tool'], job.get('options'))
-        output = tool.exec(**(job.get('arguments') or {}))
-        # a tool may return a ToolResult or a plain string; reduce both to the
-        # JSON-able text/data that may cross the boundary
-        if hasattr(output, 'text'):
-            reply = dict(text=output.text, data=getattr(output, 'data', None))
-        else:
-            reply = dict(text=str(output), data=None)
-        sys.stdout.write(json.dumps(reply))
-        return 0
     except Exception as err:
-        # only a short message crosses back, never a traceback
+        # machinery failure (bad job, unenforceable cap, unimportable tool):
+        # a short message crosses back as an error, never a traceback
         sys.stdout.write(json.dumps(dict(error=f'{type(err).__name__}: {err}')))
         return 1
+    # capture the tool's own stdout/stderr while it runs: a print() must not
+    # reach the real stdout, where it would corrupt the single JSON reply the
+    # parent reads. the buffers also hold output a tool emitted before raising
+    out_buf, err_buf = io.StringIO(), io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
+            output = tool.exec(**(job.get('arguments') or {}))
+    except Exception as err:
+        # the tool itself raised: its own outcome, returned as a result with no
+        # value and the message in state.exception (the same split as in process)
+        output = ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
+    # a finished ToolResult passes through; a bare None carries no value; any
+    # other value is wrapped -- so the reply is always a ToolResult
+    if output is None:
+        output = ToolResult(value=None)
+    elif not isinstance(output, ToolResult):
+        output = create_tool_result(output)
+    # fold the captured streams into the run states, but only where the tool
+    # left them unset -- a stdout/stderr the tool set on purpose is its own note
+    # and wins; an empty buffer stays None
+    if output.state.stdout is None and out_buf.getvalue():
+        output.state.stdout = out_buf.getvalue()
+    if output.state.stderr is None and err_buf.getvalue():
+        output.state.stderr = err_buf.getvalue()
+    sys.stdout.write(json.dumps(_encode_result(output)))
+    return 0
 
 
 if __name__ == '__main__':

@@ -18,8 +18,9 @@ or network isolation needs a container, VM, or WASM backend the user supplies.
 : The tool is rebuilt in the child from its dotted ```type``` and ```options```
     (carried on the instance by the handler), with ```app=None``` -- a child has
     no live parent app, and the uniformity rule means a tool that needs an app
-    builds it itself. Only JSON-able arguments and the ```ToolResult```
-    text/data cross the boundary.
+    builds it itself. The full ```ToolResult``` (its value views and run states)
+    crosses the boundary as JSON; only a sandbox-machinery failure (timeout, a
+    runner crash, a non-JSON reply) is raised as a ```TokeoAiError```.
 """
 
 import os
@@ -27,7 +28,7 @@ import sys
 import json
 import subprocess
 
-from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult
+from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
 from tokeo.core.ai.sandboxes._common import _importable_path, expand_env
 
 
@@ -63,6 +64,12 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
     def exec(self, tool, arguments):
         """
         Run the tool in a runner subprocess and return its result.
+
+        The full ```ToolResult``` is rebuilt from the runner's JSON, including a
+        tool that raised -- the child catches the tool's own throw and reports it
+        in ```state.exception```, so it returns as a result, not as a raise.
+        Only a sandbox-machinery failure (timeout, a runner crash, a non-JSON or
+        ```error``` reply) is raised here for the loop to catch.
 
         ### Args
 
@@ -128,9 +135,12 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         except subprocess.TimeoutExpired:
             raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the ' 'subprocess sandbox')
         reply = self._decode(proc, dotted)
+        # WHY raise on error: an "error" reply is a sandbox-machinery failure
+        # (a bad job, an unenforceable cap, an unimportable tool) -- the tool's
+        # own throw is not here, it rides in state.exception of a normal reply
         if 'error' in reply:
             raise TokeoAiError(f'tool {dotted!r} failed in the subprocess sandbox: {reply["error"]}')
-        return ToolResult(text=reply.get('text', ''), data=reply.get('data'))
+        return self._rebuild(reply)
 
     def _decode(self, proc, dotted):
         # the runner writes exactly one json document to stdout; anything else
@@ -140,6 +150,31 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         except json.JSONDecodeError:
             detail = (proc.stderr or '').strip()[:200] or 'no output'
             raise TokeoAiError(f'tool {dotted!r} produced no valid result in the subprocess sandbox: {detail}')
+
+    def _rebuild(self, reply):
+        # turn the runner's JSON back into a ToolResult: a null value stays
+        # None (the tool delivered nothing), otherwise the two string views
+        # cross and as_data is reconstructed from as_json -- only the JSON view
+        # of a value survives a process boundary, so a raw datetime returns as
+        # its encoded form; the run states are carried across as recorded
+        value_doc = reply.get('value')
+        if value_doc is None:
+            value = None
+        else:
+            as_json = value_doc.get('as_json', '')
+            value = ToolValue(
+                as_str=value_doc.get('as_str', ''),
+                as_json=as_json,
+                as_data=json.loads(as_json) if as_json else None,
+            )
+        state_doc = reply.get('state') or {}
+        state = ToolStates(
+            incomplete=state_doc.get('incomplete', False),
+            stdout=state_doc.get('stdout'),
+            stderr=state_doc.get('stderr'),
+            exception=state_doc.get('exception'),
+        )
+        return ToolResult(value=value, state=state)
 
     def validate_options(self, options):
         """
