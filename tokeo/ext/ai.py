@@ -79,7 +79,6 @@ from tokeo.core.utils.json import json_dump, TokeoJsonUnknownNameEncoder
 from tokeo.core.ai.utils import parse_model_params, TokeoJsonAiTraceEncoder
 from tokeo.core.ai import (
     TokeoAiError,
-    ToolResult,
     Invocation,
     ChatMessage,
     TokeoAiContext,
@@ -645,8 +644,9 @@ class TokeoAi(MetaMixin):
             try:
                 # the seam: the agent's sandbox chain contains the exec (a hard
                 # deny or an exhausted chain raises and is recorded as an error)
-                output = self._exec_in_sandbox(invocation.name, invocation.arguments, agent_obj, profile, call_deny, invocation)
-                invocation.result = output if isinstance(output, ToolResult) else ToolResult(text=str(output))
+                # the sandbox wraps a plain value into a ToolResult itself, so
+                # the innermost layer owns the wrap and this is always a ToolResult
+                invocation.result = self._exec_in_sandbox(invocation.name, invocation.arguments, agent_obj, profile, call_deny, invocation)
             except Exception as err:
                 # the pipeline is resilient: a failing tool is recorded and the
                 # loop continues, instead of crashing the whole call
@@ -658,9 +658,13 @@ class TokeoAi(MetaMixin):
         if invocation.decision == Invocation.DENY:
             content = f'denied: {invocation.reason or "blocked by a guard"}'
         elif invocation.error is not None:
+            # a sandbox-machinery error (timeout, transport, an exhausted chain)
             content = f'error: {invocation.error}'
+        elif invocation.result and invocation.result.state.exception is not None:
+            # a tool that raised: caught by the sandbox, carried in its state
+            content = f'error: {invocation.result.state.exception}'
         else:
-            content = invocation.result.text if invocation.result is not None else ''
+            content = invocation.result.value.as_str if invocation.result and invocation.result.value else ''
         return invocation, content
 
     def chat(
@@ -797,18 +801,26 @@ class TokeoAi(MetaMixin):
                     # the invocation is tracked inside _exec_guarded at creation
                     # and handed back, so the outcome is read off the object
                     invocation, content = self._exec_guarded(call, at_call, at_return, ctx, agent_obj, profile, deny)
-                    ok = invocation.decision != Invocation.DENY and invocation.error is None
+                    ok = (
+                        invocation.decision != Invocation.DENY
+                        and invocation.error is None
+                        and (invocation.result is None or invocation.result.state.exception is None)
+                    )
                 else:
                     # the lean path is as resilient as the guard pipeline: an
                     # unknown or failing tool (or a deny/exhausted sandbox
                     # chain) becomes feedback the model may correct itself on,
                     # instead of an exception killing the whole loop
                     try:
-                        output = self._exec_in_sandbox(call.name, call.arguments or {}, agent_obj, profile, deny)
-                        # a tool may return a ToolResult or a plain string;
-                        # only the model-facing text goes back into the history
-                        content = output.text if isinstance(output, ToolResult) else str(output)
-                        ok = True
+                        tool_result = self._exec_in_sandbox(call.name, call.arguments or {}, agent_obj, profile, deny)
+                        # the sandbox always returns a ToolResult; a tool that
+                        # raised is carried in its state, not thrown here
+                        if tool_result.state.exception is not None:
+                            content = f'error: {tool_result.state.exception}'
+                            ok = False
+                        else:
+                            content = tool_result.value.as_str if tool_result.value else ''
+                            ok = True
                     except Exception as err:
                         content = f'error: {type(err).__name__}: {err}'
                         ok = False
