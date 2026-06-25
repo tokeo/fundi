@@ -9,7 +9,8 @@ tools are imported. Each is a minimal ```TokeoAiTool```.
 import os
 import time
 
-from tokeo.core.ai import TokeoAiTool, ToolResult
+from tokeo.core.ai import TokeoAiTool
+from tokeo.core.ai.tool import create_tool_result
 
 
 class EchoTool(TokeoAiTool):
@@ -24,7 +25,7 @@ class EchoTool(TokeoAiTool):
         }
 
     def exec(self, **arguments):
-        return ToolResult(text=str(arguments.get('text', '')))
+        return create_tool_result(str(arguments.get('text', '')))
 
 
 class CwdTool(TokeoAiTool):
@@ -35,7 +36,7 @@ class CwdTool(TokeoAiTool):
         parameters = {'type': 'object', 'properties': {}}
 
     def exec(self, **arguments):
-        return ToolResult(text=os.getcwd())
+        return create_tool_result(os.getcwd())
 
 
 class EnvTool(TokeoAiTool):
@@ -52,7 +53,7 @@ class EnvTool(TokeoAiTool):
     def exec(self, **arguments):
         # an absent variable comes back as the literal "<unset>", so a test
         # can tell "set to empty" from "not set at all"
-        return ToolResult(text=os.environ.get(arguments['name'], '<unset>'))
+        return create_tool_result(os.environ.get(arguments['name'], '<unset>'))
 
 
 class SleepTool(TokeoAiTool):
@@ -68,4 +69,40 @@ class SleepTool(TokeoAiTool):
 
     def exec(self, **arguments):
         time.sleep(float(arguments.get('seconds', 0)))
-        return ToolResult(text='slept')
+        return create_tool_result('slept')
+
+
+class RaiseTool(TokeoAiTool):
+    """Raise a ValueError, to prove the sandbox catches a tool that fails."""
+
+    class Meta:
+        description = 'raise a ValueError'
+        parameters = {'type': 'object', 'properties': {}}
+
+    def exec(self, **arguments):
+        raise ValueError('tool failed on purpose')
+
+
+class DataTool(TokeoAiTool):
+    """Return a structured value and print, to prove the three views and state."""
+
+    class Meta:
+        description = 'return a dict and write to stdout'
+        parameters = {'type': 'object', 'properties': {}}
+
+    def exec(self, **arguments):
+        # print reaches the captured stdout the sandbox folds into state; the
+        # dict value fills all three views (as_str/as_json/as_data) coherently
+        print('side output')
+        return create_tool_result(dict(answer=42, label='ok'))
+
+
+class NothingTool(TokeoAiTool):
+    """Return nothing at all, to prove the no-result termination (value None)."""
+
+    class Meta:
+        description = 'return nothing'
+        parameters = {'type': 'object', 'properties': {}}
+
+    def exec(self, **arguments):
+        return None

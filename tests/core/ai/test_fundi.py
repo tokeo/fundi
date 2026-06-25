@@ -14,7 +14,7 @@ import sys
 import pytest
 from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
-from tokeo.core.ai import TokeoAiError, ToolResult, TokeoAiFundiAgent, TokeoAiAgent
+from tokeo.core.ai import TokeoAiError, TokeoAiFundiAgent, TokeoAiAgent
 from tokeo.core.ai.sandboxes._common import expand_env
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
@@ -99,10 +99,11 @@ def ai_config():
 
 def run(app, tool_name, agent_name, **arguments):
     # drive just the seam: resolve the agent and execute one tool call through
-    # its sandbox chain, returning the model-facing text
+    # its sandbox chain, returning the model-facing text. value is None when the
+    # tool returned nothing, so guard the access
     agent = app.ai._agent(agent_name)
     out = app.ai._exec_in_sandbox(tool_name, arguments, agent)
-    return out.text if isinstance(out, ToolResult) else str(out)
+    return out.value.as_str if out.value else ''
 
 
 # --------------------------------------------------------------------------------------
