@@ -67,17 +67,23 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
             self._log(f'call {invocation.name!r} arguments={invocation.arguments!r}')
 
     def on_return(self, ctx, invocation):
-        """Log the outcome of a completed tool call (denied, errored, or result)."""
+        """Log a completed tool call's outcome (denied, errored, raised, result)."""
         if invocation.decision == invocation.DENY:
             self._log(f'return {invocation.name!r} denied: {invocation.reason}')
         elif invocation.error is not None:
-            # name WHERE it ran when a sandbox was reached (a denied call never
-            # reaches one, so sandbox stays None there)
+            # a sandbox-machinery failure (timeout, transport); name WHERE it ran
+            # when a sandbox was reached (a denied call never reaches one, so
+            # sandbox stays None there)
             where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
             self._log(f'return {invocation.name!r} errored{where}: {invocation.error}')
+        elif invocation.result and invocation.result.state.exception is not None:
+            # a tool that raised: caught by the sandbox, carried in its state --
+            # distinct from the machinery error above, so the log tells them apart
+            where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
+            self._log(f'return {invocation.name!r} raised{where}: {invocation.result.state.exception}')
         else:
             where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
-            text = invocation.result.text if invocation.result is not None else ''
+            text = invocation.result.value.as_str if invocation.result and invocation.result.value else ''
             self._log(f'return {invocation.name!r} ran{where}, returned: {text!r}')
 
     def on_close(self, ctx, result):

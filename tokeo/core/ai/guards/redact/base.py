@@ -34,11 +34,11 @@ class TokeoAiRedactGuard(TokeoAiGuard):
     ```TokeoAiGuard```: it states the guard's role -- masking -- on the agent and
     the trace. For *what object each stage hands you and which text to mask*
     (```on_call``` the string values in ```invocation.arguments```;
-    ```on_return``` the ```invocation.result.text```; ```on_answer```/
-    ```on_close``` a ```ChatResult.text```; ```on_begin```/```on_prompt``` the
-    contents in ```ctx.messages```), see the stage guide in the
-    ```TokeoAiGuard``` class documentation -- the single reference for building a
-    guard across its stations.
+    ```on_return``` the ```invocation.result.value.as_str``` of a tool call;
+    ```on_answer```/```on_close``` a ```ChatResult.text```;
+    ```on_begin```/```on_prompt``` the contents in ```ctx.messages```), see the
+    stage guide in the ```TokeoAiGuard``` class documentation -- the single
+    reference for building a guard across its stations.
 
     A redact guard normally only masks and never stops the run. If masking is
     *required* and cannot be done -- a masking backend it depends on is

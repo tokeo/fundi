@@ -35,8 +35,8 @@ class TokeoAiTruncateGuard(TokeoAiGuard):
     Always derive from this type (```TokeoAiTruncateGuard```), not from
     ```TokeoAiGuard```: it states the guard's role -- shortening -- on the agent
     and the trace. For *what object each stage hands you and which text to cap*
-    (```on_return``` the ```invocation.result.text``` of a completed tool call;
-    ```on_close``` the final ```ChatResult.text``` of the whole run;
+    (```on_return``` the ```invocation.result.value.as_str``` of a completed
+    tool call; ```on_close``` the final ```ChatResult.text``` of the whole run;
     ```on_answer``` a per-round ```ChatResult.text```), see the stage guide in
     the ```TokeoAiGuard``` class documentation -- the single reference for
     building a guard across its stations.
