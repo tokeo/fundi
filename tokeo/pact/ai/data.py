@@ -140,7 +140,7 @@ class ToolResult:
 
     """
 
-    value: object = None      # a ToolValue, or None when nothing was returned
+    value: object = None  # a ToolValue, or None when nothing was returned
     state: ToolStates = field(default_factory=ToolStates)
 
 
