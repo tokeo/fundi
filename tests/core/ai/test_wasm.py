@@ -102,7 +102,7 @@ def test_wasm_needs_a_runtime():
     sandbox._setup(None)
     tool = TokeoAiPythonUntrustedExecTool(None)
     with pytest.raises(TokeoAiError, match='runtime'):
-        sandbox.exec(tool, dict(code='result = 1'))
+        sandbox.exec(tool, dict(code='1'))
 
 
 def test_wasm_validate_options_rejects_unknown():
@@ -132,32 +132,47 @@ def test_wasm_missing_mount_path_names_the_path(tmp):
     sandbox._setup(None)
     tool = TokeoAiPythonUntrustedExecTool(None)
     with pytest.raises(TokeoAiError, match=r'/no/such/host/path'):
-        sandbox.exec(tool, dict(code='result = 1'))
+        sandbox.exec(tool, dict(code='1'))
 
 
 def test_untrusted_exec_runs_in_process():
-    # the tool logic itself (compile/exec, result -> text) is sandbox-agnostic
+    # the tool returns the snippet's raw value now -- the sandbox layer wraps it
+    # into a ToolResult, so exec itself is sandbox-agnostic and value-only
     tool = TokeoAiPythonUntrustedExecTool(None)
-    result = tool.exec(code='result = sum(range(10))')
-    assert result.text == '45' and result.data == 45
+    assert tool.exec(code='sum(range(10))') == 45
 
 
-def test_untrusted_exec_sets_the_direct_flag():
-    # the flag is what tells the wasm sandbox to skip tool rebuild in the guest
-    assert TokeoAiPythonUntrustedExecTool(None).wasm_direct_exec is True
-    assert getattr(TokeoAiPythonTrustedExecTool(None), 'wasm_direct_exec', False) is False
+def test_untrusted_exec_sets_the_pysnippet_flag():
+    # the flag is what tells the wasm sandbox to run the snippet via run_snippet
+    # in the guest instead of rebuilding the tool
+    assert TokeoAiPythonUntrustedExecTool(None).wasm_exec_pysnippet is True
+    assert getattr(TokeoAiPythonTrustedExecTool(None), 'wasm_exec_pysnippet', False) is False
 
 
 def test_trusted_exec_runs_in_process():
     tool = TokeoAiPythonTrustedExecTool(None)
-    result = tool.exec(code='result = sum(range(10))')
-    assert result.text == '45' and result.data == 45
+    assert tool.exec(code='sum(range(10))') == 45
 
 
-def test_untrusted_exec_non_json_result_keeps_text_only():
+def test_untrusted_exec_delivers_by_return():
+    # a return is the other delivery form: the wrap makes a top-level return
+    # legal and hands its value back
     tool = TokeoAiPythonUntrustedExecTool(None)
-    result = tool.exec(code='result = object()')
-    assert result.text.startswith('<object') and result.data is None
+    assert tool.exec(code='return sum(range(10))') == 45
+
+
+def test_untrusted_exec_without_a_value_returns_none():
+    # a snippet that ends on a statement delivers nothing: the tool returns None,
+    # which the sandbox reads as 'no value', not as a json null
+    tool = TokeoAiPythonUntrustedExecTool(None)
+    assert tool.exec(code='x = sum(range(10))') is None
+
+
+def test_untrusted_exec_non_json_value_is_returned_raw():
+    # the tool no longer screens for json-ability -- it returns the raw object
+    # and the sandbox's encoder decides how to represent it (and flags loss)
+    tool = TokeoAiPythonUntrustedExecTool(None)
+    assert isinstance(tool.exec(code='object()'), object)
 
 
 _PYTHON_WASM = os.environ.get('TOKEO_TEST_PYTHON_WASM')
@@ -269,7 +284,7 @@ def test_untrusted_exec_through_the_agent_chain():
         agent = app.ai._agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
-            dict(code='import statistics\nresult = statistics.median([5, 1, 9, 3, 7])'),
+            dict(code='import statistics\nstatistics.median([5, 1, 9, 3, 7])'),
             agent,
         )
         # value is None when the tool returned nothing, so guard the access
@@ -288,7 +303,7 @@ def test_trusted_exec_through_the_agent_chain():
         agent = app.ai._agent('trusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_trusted',
-            dict(code='import tokeo\nresult = bool(tokeo.__name__)'),
+            dict(code='import tokeo\nbool(tokeo.__name__)'),
             agent,
         )
         # value is None when the tool returned nothing, so guard the access
@@ -300,17 +315,21 @@ def test_trusted_exec_through_the_agent_chain():
     not _have_build,
     reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
-def test_untrusted_guest_cannot_import_tokeo():
-    # the untrusted path mounts no app: importing tokeo must fail in the guest,
-    # proving the framework stays invisible to untrusted code
+def test_untrusted_guest_cannot_import_the_framework():
+    # the untrusted path mounts the pact contract (tokeo.pact) but no framework,
+    # so the bare tokeo namespace and tokeo.pact resolve by design, while the
+    # framework does not: importing tokeo.core fails in the guest, recorded as a
+    # tool exception on the result (A) with no value -- the framework stays
+    # invisible to untrusted code even though the inert contract is visible
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')
-        with pytest.raises(TokeoAiError, match='ModuleNotFoundError'):
-            app.ai._exec_in_sandbox(
-                'run_untrusted',
-                dict(code='import tokeo\nresult = 1'),
-                agent,
-            )
+        out = app.ai._exec_in_sandbox(
+            'run_untrusted',
+            dict(code='import tokeo.core.ai\n1'),
+            agent,
+        )
+        assert out.value is None
+        assert 'ModuleNotFoundError' in (out.state.exception or '')
 
 
 @pytest.mark.skipif(
@@ -318,13 +337,16 @@ def test_untrusted_guest_cannot_import_tokeo():
     reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_wasm_guest_has_no_network():
-    # the guest must not be able to open a socket -- the syscalls do not exist
-    # in its world; the snippet's failure surfaces as a tool error
+    # the guest must not reach the network -- the syscalls do not exist in its
+    # world, so the resolver call fails: no value, the failure on the result's
+    # state (A). the exception type is build-specific (gaierror/OSError, or a
+    # missing socket module), so only the recorded failure is asserted
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')
-        with pytest.raises(TokeoAiError):
-            app.ai._exec_in_sandbox(
-                'run_untrusted',
-                dict(code='import socket\nresult = socket.gethostbyname("example.com")'),
-                agent,
-            )
+        out = app.ai._exec_in_sandbox(
+            'run_untrusted',
+            dict(code='import socket\nsocket.gethostbyname("example.com")'),
+            agent,
+        )
+        assert out.value is None
+        assert out.state.exception is not None

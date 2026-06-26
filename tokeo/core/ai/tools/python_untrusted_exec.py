@@ -1,10 +1,11 @@
 """
 The ```python_untrusted_exec``` tool: run model-generated Python in isolation.
 
-This is the CodeAct pattern for code you must NOT trust. The snippet runs by a
-direct guest path that imports nothing from tokeo -- the wasm guest sees only
-its standard library and the code itself, never the framework. That keeps the
-isolation total: the model-generated code cannot even read tokeo's own modules.
+This is the CodeAct pattern for code you must NOT trust. The snippet runs by the
+exec-pysnippet guest path that imports nothing from tokeo except the pact
+contract -- the wasm guest sees its standard library, the contract, and the code
+itself, never the framework. That keeps the isolation total: the model-generated
+code cannot read tokeo's own modules.
 
 ### Security
 
@@ -19,38 +20,40 @@ isolation total: the model-generated code cannot even read tokeo's own modules.
 
 ### Notes
 
-: ```wasm_direct_exec = True``` tells the wasm sandbox to run the ```code```
-    argument directly in the guest, WITHOUT rebuilding this tool there -- so no
-    tokeo mount is needed and the untrusted code stays walled off from the
-    framework. The contract with the generated code: assign the model-facing
-    answer to a variable named ```result```; it is coerced to text. The same
-    ```exec``` body also runs in process (for tests or a trusted agent that
-    deliberately chose no sandbox), so the tool is self-contained either way.
+: ```wasm_exec_pysnippet = True``` tells the wasm sandbox to run the ```code```
+    argument via run_snippet in the guest, WITHOUT rebuilding this tool there --
+    so only the pact contract is mounted and the untrusted code stays walled off
+    from the framework. The snippet delivers its answer by ending on an expression
+    (the jupyter form) or by a ```return```; the same delivery runs in process
+    (for tests or a trusted agent that deliberately chose no sandbox), so the tool
+    is self-contained either way.
 """
 
-from tokeo.core.ai import TokeoAiTool, ToolResult
+from tokeo.core.ai import TokeoAiTool
+from tokeo.pact.ai.pysnippet import run_snippet
 
 
 class TokeoAiPythonUntrustedExecTool(TokeoAiTool):
     """
-    Execute UNTRUSTED model-generated Python in isolation, returning ```result```.
+    Execute UNTRUSTED model-generated Python in isolation, returning its value.
 
     DANGER: runs arbitrary code -- only ever behind the wasm sandbox or a
-    hardened, disposable docker container. The wasm path runs the code directly
-    in the guest with no tokeo import, so the framework stays invisible to it.
+    hardened, disposable docker container. The wasm path runs the code via
+    run_snippet in the guest with only the pact contract mounted, so the
+    framework stays invisible to it.
     """
 
-    # the wasm sandbox runs the code argument directly in the guest instead of
-    # rebuilding this tool there: no tokeo mount, total isolation for untrusted
-    # code
-    wasm_direct_exec = True
+    # the wasm sandbox runs the code argument via run_snippet in the guest
+    # instead of rebuilding this tool there: only the pact contract is mounted,
+    # total isolation for untrusted code
+    wasm_exec_pysnippet = True
 
     class Meta:
         """Tool meta-data sent to the model."""
 
         description = (
             'Execute a short Python snippet to compute an answer. '
-            'Assign the final value to a variable named `result`. '
+            'Deliver the value as the last line (an expression) or with a `return`. '
             'No network, no file access, only the Python standard library.'
         )
 
@@ -59,7 +62,7 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiTool):
             'properties': {
                 'code': {
                     'type': 'string',
-                    'description': 'Python source to run; set `result` to the answer.',
+                    'description': 'Python source to run; end on the value or `return` it.',
                 },
             },
             'required': ['code'],
@@ -70,38 +73,19 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiTool):
 
     def exec(self, **arguments):
         """
-        Compile and run the snippet, returning its ```result``` as text.
+        Run the snippet and return the value it delivered.
+
+        The tool hands back the raw value (or ```None``` when the snippet
+        delivered none); the sandbox layer wraps it into a ```ToolResult```.
 
         ### Args
 
-        - **code** (str): The Python source; it should assign ```result```
+        - **code** (str): The Python source; it delivers by a last expression
+            or a ```return```
 
         ### Returns
 
-        - **ToolResult**: The string form of the snippet's ```result``` (empty
-            when the snippet sets nothing), with the raw value kept in ```data```
+        - **object | None**: The value the snippet delivered, or ```None```
 
         """
-        return _run_snippet(arguments.get('code') or '')
-
-
-def _run_snippet(code):
-    # a dedicated namespace: the snippet reads and writes here, the answer is
-    # whatever it bound to ```result```. shared by the in-process path and the
-    # guest entry (which inlines the same contract)
-    namespace = {}
-    compiled = compile(code, '<python_exec>', 'exec')
-    exec(compiled, namespace)
-    result = namespace.get('result')
-    text = '' if result is None else str(result)
-    return ToolResult(text=text, data=result if _json_able(result) else None)
-
-
-def _json_able(value):
-    import json
-
-    try:
-        json.dumps(value)
-        return True
-    except (TypeError, ValueError):
-        return False
+        return run_snippet(arguments.get('code') or '')

@@ -17,10 +17,13 @@ different sandbox.
 : The tool is rebuilt in the guest from its dotted ```type``` and ```options```
     with ```app=None``` -- a guest has no live parent app, and the uniformity
     rule means a tool that needs an app builds it itself. Only JSON-able
-    arguments and the ```ToolResult``` text/data cross the bridge. Unlike the
-    subprocess sandbox there is no parent-path injection: nothing is visible
-    that the config did not mount, on purpose -- visibility is the whole point
-    of choosing wasm.
+    arguments and the result's two string views (```as_str```/```as_json```)
+    cross the bridge; the parent rebuilds ```as_data``` from ```as_json```. The
+    guest builds the result with the pact contract (```create_tool_result```),
+    mounted read-only for both paths since it is dependency-free and cannot
+    weaken the isolation. Unlike the subprocess sandbox there is no parent-path
+    injection: nothing else is visible that the config did not mount, on purpose
+    -- visibility is the whole point of choosing wasm.
 
 : Full documentation -- when to use it, the two python-exec tools, installing a
     WASI Python build into ```./wasm```, every option, the file bridge, the two
@@ -32,15 +35,24 @@ import os
 import json
 import tempfile
 
-from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult
+from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
 from tokeo.core.ai.sandboxes._common import _importable_path, expand_env
 
-# the guest entry script: it runs INSIDE the wasm interpreter, reads the task
-# from the read-write /io mount, rebuilds the tool with no app, and writes the
-# reply. kept as a string so the host can drop it into the scratch dir next to
-# the task -- the guest needs no host import path beyond the mounted code
-_GUEST_ENTRY = r"""
-import json, importlib
+# the exec-tool guest entry (the trusted/rebuild path): it runs INSIDE the wasm
+# interpreter, reads the task from the read-write /io mount, REBUILDS the tool
+# with no app and calls its exec, then writes the reply. kept as a string so the
+# host can drop it into the scratch dir next to the task -- the guest needs no
+# host import path beyond the mounted code. the pact contract is mounted too, so
+# the guest builds a ToolResult the same way the host would (create_tool_result),
+# and the reply carries the value/state shape the parent rebuilds from
+_GUEST_ENTRY_EXEC_TOOL = r"""
+import io
+import json
+import importlib
+import contextlib
+
+from tokeo.pact.ai.data import ToolResult, ToolStates
+from tokeo.pact.ai.tool import create_tool_result
 
 with open('/io/task.json') as f:
     task = json.load(f)
@@ -54,27 +66,71 @@ def _load(dotted, options):
     return tool
 
 
+def _encode(output):
+    # the same reply shape the parent rebuilds from: a value crosses as its two
+    # string views, or null when nothing was delivered -- as_data is NOT sent,
+    # the parent reconstructs it from as_json
+    value = output.value
+    value_doc = None if value is None else dict(as_str=value.as_str, as_json=value.as_json)
+    state = output.state
+    state_doc = dict(
+        incomplete=state.incomplete,
+        stdout=state.stdout,
+        stderr=state.stderr,
+        exception=state.exception,
+    )
+    return dict(value=value_doc, state=state_doc)
+
+
 reply = {}
 try:
     tool = _load(task['tool'], task.get('options'))
-    result = tool.exec(**(task.get('arguments') or {}))
-    if isinstance(result, str):
-        reply = dict(text=result, data=None)
-    else:
-        reply = dict(text=getattr(result, 'text', ''), data=getattr(result, 'data', None))
+    # capture the tool's own stdout so a print() lands in state.stdout instead
+    # of being lost, the same way the subprocess runner folds it in
+    out_buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out_buf):
+            output = tool.exec(**(task.get('arguments') or {}))
+    except Exception as tool_err:
+        # the tool itself raised (A): a result with no value and the message in
+        # state.exception, NOT a machinery error -- the same split as in process
+        output = ToolResult(value=None, state=ToolStates(
+            exception='{}: {}'.format(type(tool_err).__name__, tool_err)))
+    # a finished ToolResult passes through; a bare None carries no value; any
+    # other value is wrapped -- so the result is always a ToolResult
+    if output is None:
+        output = ToolResult(value=None)
+    elif not isinstance(output, ToolResult):
+        output = create_tool_result(output)
+    # fold the captured stdout into the state, but only where the tool left it
+    # unset -- a stdout the tool set on purpose is its own note and wins
+    if output.state.stdout is None and out_buf.getvalue():
+        output.state.stdout = out_buf.getvalue()
+    reply = _encode(output)
 except Exception as err:
+    # anything outside the tool call -- tool load, encode, json -- is a
+    # machinery error (B): an error reply the host turns into a TokeoAiError
     reply = dict(error='{}: {}'.format(type(err).__name__, err))
 
 with open('/io/reply.json', 'w') as f:
     json.dump(reply, f)
 """
 
-# the direct-exec guest entry for untrusted tools: it runs the code argument
-# itself, importing NOTHING from tokeo, so no app mount is needed and the
-# untrusted snippet stays walled off from the framework. the result contract
-# (assign ```result```) mirrors the untrusted tool's own exec body
-_GUEST_ENTRY_DIRECT = r"""
+# the exec-pysnippet guest entry (the untrusted path): it runs the code
+# argument itself via run_snippet, rebuilding NO tool from tokeo, so the
+# untrusted snippet stays walled off from the framework. it still imports the
+# pact contract (dataclasses, create_tool_result, run_snippet -- no framework,
+# no IO, no secrets), so it builds the same value/state result the exec-tool path
+# does and delivers the snippet's value the same way, mirroring the untrusted
+# tool body
+_GUEST_ENTRY_EXEC_PYSNIPPET = r"""
+import io
 import json
+import contextlib
+
+from tokeo.pact.ai.data import ToolResult
+from tokeo.pact.ai.tool import create_tool_result
+from tokeo.pact.ai.pysnippet import run_snippet
 
 with open('/io/task.json') as f:
     task = json.load(f)
@@ -83,16 +139,36 @@ reply = {}
 try:
     code = (task.get('arguments') or {}).get('code') or ''
     namespace = {}
-    exec(compile(code, '<python_exec>', 'exec'), namespace)
-    result = namespace.get('result')
-    text = '' if result is None else str(result)
+    # capture the snippet's stdout so a print() lands in state.stdout instead
+    # of being lost, the same way the trusted path and the subprocess runner do
+    out_buf = io.StringIO()
     try:
-        json.dumps(result)
-        data = result
-    except (TypeError, ValueError):
-        data = None
-    reply = dict(text=text, data=data)
+        with contextlib.redirect_stdout(out_buf):
+            result = run_snippet(code, namespace)
+    except Exception as code_err:
+        # the snippet is the problem -- it raised at run time, did not parse, or
+        # used a form the wrap does not support: a result with no value and the
+        # message in state.exception (A), NOT a machinery error
+        output = ToolResult(value=None)
+        output.state.exception = '{}: {}'.format(type(code_err).__name__, code_err)
+    else:
+        # a None result carries no value; any other value is wrapped the way
+        # the framework would -- create_tool_result builds the coherent views
+        output = ToolResult(value=None) if result is None else create_tool_result(result)
+    if output.state.stdout is None and out_buf.getvalue():
+        output.state.stdout = out_buf.getvalue()
+    value = output.value
+    value_doc = None if value is None else dict(as_str=value.as_str, as_json=value.as_json)
+    state = output.state
+    reply = dict(value=value_doc, state=dict(
+        incomplete=state.incomplete,
+        stdout=state.stdout,
+        stderr=state.stderr,
+        exception=state.exception,
+    ))
 except Exception as err:
+    # anything outside the snippet run -- reading the task, encoding, json -- is
+    # a machinery error (B): an error reply the host turns into a TokeoAiError
     reply = dict(error='{}: {}'.format(type(err).__name__, err))
 
 with open('/io/reply.json', 'w') as f:
@@ -210,10 +286,10 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             raise TokeoAiError('the wasm sandbox needs a runtime (python.wasm) and a stdlib path -- see the docs')
 
         dotted = _importable_path(type(tool), 'tool')
-        # an untrusted tool flags itself for direct exec: the guest runs the
-        # code argument without rebuilding the tool, so no tokeo mount is
-        # needed and the framework stays invisible to the untrusted snippet
-        direct = getattr(tool, 'wasm_direct_exec', False)
+        # an untrusted tool flags itself for pysnippet exec: the guest runs the
+        # code argument directly via run_snippet, without rebuilding the tool, so
+        # no tokeo mount is needed and the framework stays invisible to the snippet
+        is_exec_pysnippet = getattr(tool, 'wasm_exec_pysnippet', False)
         task = dict(
             tool=dotted,
             arguments=arguments or {},
@@ -225,7 +301,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             with open(os.path.join(io_dir, 'task.json'), 'w') as f:
                 json.dump(task, f)
             with open(os.path.join(io_dir, 'entry.py'), 'w') as f:
-                f.write(_GUEST_ENTRY_DIRECT if direct else _GUEST_ENTRY)
+                f.write(_GUEST_ENTRY_EXEC_PYSNIPPET if is_exec_pysnippet else _GUEST_ENTRY_EXEC_TOOL)
             self._run_guest(wasmtime, io_dir, dotted)
             reply_path = os.path.join(io_dir, 'reply.json')
             if not os.path.exists(reply_path):
@@ -234,7 +310,32 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                 reply = json.load(f)
         if 'error' in reply:
             raise TokeoAiError(f'tool {dotted!r} failed in the wasm sandbox: {reply["error"]}')
-        return ToolResult(text=reply.get('text', ''), data=reply.get('data'))
+        return self._rebuild(reply)
+
+    def _rebuild(self, reply):
+        # turn the guest's JSON back into a ToolResult: a null value stays None
+        # (the tool delivered nothing), otherwise the two string views cross and
+        # as_data is reconstructed from as_json -- only the JSON view of a value
+        # survives the bridge, so a raw datetime returns as its encoded form;
+        # the run states are carried across as recorded
+        value_doc = reply.get('value')
+        if value_doc is None:
+            value = None
+        else:
+            as_json = value_doc.get('as_json', '')
+            value = ToolValue(
+                as_str=value_doc.get('as_str', ''),
+                as_json=as_json,
+                as_data=json.loads(as_json) if as_json else None,
+            )
+        state_doc = reply.get('state') or {}
+        state = ToolStates(
+            incomplete=state_doc.get('incomplete', False),
+            stdout=state_doc.get('stdout'),
+            stderr=state_doc.get('stderr'),
+            exception=state_doc.get('exception'),
+        )
+        return ToolResult(value=value, state=state)
 
     def _run_guest(self, wasmtime, io_dir, dotted):
         # assemble the wasmtime store with the cap, the timeout, the mounts and
@@ -287,20 +388,59 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # read-only (the guest gets no write outside /io and /work)
         for guest_path, host_path in (self._config('mounts') or {}).items():
             mount(host_path, guest_path, False, f'mount {guest_path!r}')
-        # the bundled wasi stdlib shims, mounted read-only at /lib/shims and put
-        # FIRST on PYTHONPATH so they shadow the absent multiprocessing/
-        # threading modules for a framework rebuilt in the guest
+        # the pact contract, made importable as the dotted tokeo.pact.* the
+        # guest entry expects. a leaf mount at /lib/tokeo/pact/{name} cannot
+        # work: /lib is the stdlib mount and does not list a tokeo child, so the
+        # dotted import fails at its first step. instead a writable package root
+        # /pkg is given the REAL namespace chain tokeo/pact (plain dirs, no
+        # __init__ -- PEP 420) with an empty stub per subpackage as the mount
+        # point, then each real subpackage is mounted OVER its stub. pact is a
+        # split namespace (utils from tokeo, ai from fundi), each name single-
+        # origin, so a name is mounted once. pact is dependency-free -- no
+        # framework, no IO, no secrets -- so it is carried for BOTH paths, the
+        # untrusted one too: seeing it cannot weaken the isolation
+        import tokeo.pact
+
+        pkg_host = os.path.join(io_dir, 'pkg')
+        pact_host = os.path.join(pkg_host, 'tokeo', 'pact')
+        os.makedirs(pact_host, exist_ok=True)
+        seen = set()
+        pact_mounts = []
+        for origin in tokeo.pact.__path__:
+            if not os.path.isdir(origin):
+                continue
+            for name in sorted(os.listdir(origin)):
+                child = os.path.join(origin, name)
+                if name.startswith(('_', '.')) or not os.path.isdir(child) or name in seen:
+                    continue
+                seen.add(name)
+                # the empty stub is the mount point the parent listing shows;
+                # the real subpackage is mounted over it to supply the content
+                os.makedirs(os.path.join(pact_host, name), exist_ok=True)
+                pact_mounts.append((child, f'/pkg/tokeo/pact/{name}'))
+        # the staging root carries the namespace chain read-only; untrusted code
+        # gets no write to the contract even though the stubs live under io_dir
+        mount(pkg_host, '/pkg', False, 'pact package root')
+        for child, guest_path in pact_mounts:
+            mount(child, guest_path, False, f'pact {os.path.basename(guest_path)!r}')
+        # the bundled wasi stdlib shims: ours, like pact, so they live under the
+        # /pkg root rather than inside the user's /lib stdlib. mounted read-only
+        # at /pkg/shims and kept FIRST on PYTHONPATH so they stand in for the
+        # absent multiprocessing/threading modules a rebuilt framework imports.
+        # a leaf mount needs no stub here: /pkg/shims is itself a path root, so
+        # the import lists it directly and never traverses /pkg to find it
         shim_path = None
         if self._config('shim_wasi_stdlib'):
             shim_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wasi_shims')
-            mount(shim_path, '/lib/shims', False, 'wasi shims')
+            mount(shim_path, '/pkg/shims', False, 'wasi shims')
         # the scrubbed env: only listed keys survive, expanded like elsewhere.
         # PYTHONPATH/PYTHONHOME point the interpreter at the stdlib mounted at
         # /lib so it can boot (find encodings etc); the shims lead, then /lib,
-        # then a user PYTHONPATH so mounted tool code is importable too
+        # then /pkg so the dotted tokeo.pact contract resolves, then a user
+        # PYTHONPATH so mounted tool code is importable too
         env = expand_env(self._config('env'))
         user_pythonpath = env.get('PYTHONPATH')
-        parts = (['/lib/shims'] if shim_path else []) + ['/lib']
+        parts = (['/pkg/shims'] if shim_path else []) + ['/lib', '/pkg']
         if user_pythonpath:
             parts.append(user_pythonpath)
         env['PYTHONPATH'] = ':'.join(parts)

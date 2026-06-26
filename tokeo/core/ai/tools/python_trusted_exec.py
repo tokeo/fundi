@@ -12,23 +12,24 @@ project) mounted and importable -- the snippet can then use framework helpers.
     wasm guest must mount the app to import it, the guest can read that mounted
     code -- acceptable for trusted snippets, NOT for model-generated untrusted
     code. For untrusted code use ```python_untrusted_exec```, which runs in the
-    guest without any tokeo mount.
+    guest with only the pact contract mounted.
 
 ### Notes
 
-: This tool does not set ```wasm_direct_exec```, so the wasm sandbox rebuilds
+: This tool does not set ```wasm_exec_pysnippet```, so the wasm sandbox rebuilds
     it in the guest from its dotted path -- which requires the app on the
     guest's import path (mount it read-only, e.g. ```/app```, and add ```/app```
-    to ```env.PYTHONPATH```). The snippet contract is the same: assign the
-    answer to ```result```.
+    to ```env.PYTHONPATH```). The snippet delivers the same way: end on an
+    expression (the jupyter form) or use a ```return```.
 """
 
-from tokeo.core.ai import TokeoAiTool, ToolResult
+from tokeo.core.ai import TokeoAiTool
+from tokeo.pact.ai.pysnippet import run_snippet
 
 
 class TokeoAiPythonTrustedExecTool(TokeoAiTool):
     """
-    Execute TRUSTED Python with the target app importable, returning ```result```.
+    Execute TRUSTED Python with the target app importable, returning its value.
 
     Rebuilt inside the wasm guest the normal way, so the guest must have the
     app (tokeo/your project) mounted and on PYTHONPATH. For untrusted code use
@@ -39,7 +40,8 @@ class TokeoAiPythonTrustedExecTool(TokeoAiTool):
         """Tool meta-data sent to the model."""
 
         description = (
-            'Execute a short Python snippet with the application available. ' 'Assign the final value to a variable named `result`.'
+            'Execute a short Python snippet with the application available. '
+            'Deliver the value as the last line (an expression) or with a `return`.'
         )
 
         parameters = {
@@ -47,7 +49,7 @@ class TokeoAiPythonTrustedExecTool(TokeoAiTool):
             'properties': {
                 'code': {
                     'type': 'string',
-                    'description': 'Python source to run; set `result` to the answer.',
+                    'description': 'Python source to run; end on the value or `return` it.',
                 },
             },
             'required': ['code'],
@@ -58,32 +60,19 @@ class TokeoAiPythonTrustedExecTool(TokeoAiTool):
 
     def exec(self, **arguments):
         """
-        Compile and run the snippet, returning its ```result``` as text.
+        Run the snippet and return the value it delivered.
+
+        The tool hands back the raw value (or ```None``` when the snippet
+        delivered none); the sandbox layer wraps it into a ```ToolResult```.
 
         ### Args
 
-        - **code** (str): The Python source; it should assign ```result```
+        - **code** (str): The Python source; it delivers by a last expression
+            or a ```return```
 
         ### Returns
 
-        - **ToolResult**: The string form of the snippet's ```result``` (empty
-            when the snippet sets nothing), with the raw value kept in ```data```
+        - **object | None**: The value the snippet delivered, or ```None```
 
         """
-        code = arguments.get('code') or ''
-        namespace = {}
-        compiled = compile(code, '<python_exec>', 'exec')
-        exec(compiled, namespace)
-        result = namespace.get('result')
-        text = '' if result is None else str(result)
-        return ToolResult(text=text, data=result if _json_able(result) else None)
-
-
-def _json_able(value):
-    import json
-
-    try:
-        json.dumps(value)
-        return True
-    except (TypeError, ValueError):
-        return False
+        return run_snippet(arguments.get('code') or '')
