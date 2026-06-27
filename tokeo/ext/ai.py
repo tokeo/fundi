@@ -47,10 +47,10 @@ ai:
 
 ### Notes
 
-    : With no selector given, ```app.ai``` uses ```ai.defaults.profile```, which
-        ships as the built-in ```mock``` profile, so ```ai ask``` answers out of
-        the box without any model or server; there is no hard-coded code
-        fallback.
+: With no selector given, ```app.ai``` uses ```ai.defaults.profile```, which
+    ships as the built-in ```mock``` profile, so ```ai ask``` answers out of
+    the box without any model or server; there is no hard-coded code
+    fallback.
 
 """
 
@@ -155,8 +155,8 @@ class TokeoAi(MetaMixin):
             # stays empty (and ai ask --trace has nothing to show). only safe
             # when no active guard reads the trace itself
             trace=True,
-            # the default profile (model) and agent used when a call names
-            # none; the built-in mock profile lets a fresh app answer at once
+            # the default profile (model) used when a call names none;
+            # the built-in mock profile lets a fresh app answer at once
             defaults=dict(profile='mock'),
             # named profiles; each binds a provider type to its details. the
             # built-in mock profile lets a fresh app answer without any setup.
