@@ -23,8 +23,11 @@ class TokeoAiProvider:
         ### Args
 
         - **app**: The Tokeo application instance
-        - ***args**: Positional arguments for the parent initializer
-        - ****kw**: Keyword arguments for the parent initializer
+        - **args**: Positional arguments for the parent initializer
+
+        ### Keyword Args
+
+        - **kw**: Keyword arguments for the parent initializer
 
         """
         self.app = app

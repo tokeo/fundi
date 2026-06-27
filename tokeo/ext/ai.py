@@ -181,8 +181,11 @@ class TokeoAi(MetaMixin):
         ### Args
 
         - **app**: The Tokeo application instance
-        - ***args**: Positional arguments passed to the parent initializer
-        - ****kw**: Keyword arguments passed to the parent initializer
+        - **args**: Positional arguments passed to the parent initializer
+
+        ### Keyword Args
+
+        - **kw**: Keyword arguments passed to the parent initializer
 
         """
         super(TokeoAi, self).__init__(*args, **kw)
@@ -254,7 +257,10 @@ class TokeoAi(MetaMixin):
         ### Args
 
         - **key** (str): Configuration key to retrieve
-        - ****kwargs**: Additional arguments passed to ```config.get```
+
+        ### Keyword Args
+
+        - **kwargs**: Additional arguments passed to ```config.get```
 
         ### Returns
 

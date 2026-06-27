@@ -49,8 +49,11 @@ class TokeoAiTool(MetaMixin):
         ### Args
 
         - **app**: The Tokeo application instance
-        - ***args**: Positional arguments for the parent initializer
-        - ****kw**: Keyword arguments for the parent initializer
+        - **args**: Positional arguments for the parent initializer
+
+        ### Keyword Args
+
+        - **kw**: Keyword arguments for the parent initializer
 
         """
         super(TokeoAiTool, self).__init__(*args, **kw)
