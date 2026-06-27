@@ -4,8 +4,9 @@ The wasm sandbox: real isolation against untrusted code, not just cleanup.
 It runs a tool call inside a WebAssembly guest under Wasmtime. The guest is a
 user-supplied CPython-WASI build (the ```runtime```/```stdlib``` options); the
 host writes the task as JSON into a private scratch dir mounted read-write at
-```/io```, a small bundled guest entry script rebuilds the tool and writes the
-```ToolResult``` back to ```/io/reply.json```. The guest has NO network (the
+```/io```, a small bundled guest entry script either rebuilds the tool (trusted)
+or runs the snippet directly (untrusted), then writes the ```ToolResult``` back
+to ```/io/reply.json```. The guest has NO network (the
 syscalls do not exist in its world), sees NO host file outside the explicit
 ```mounts```, and runs under a hard memory cap (Wasmtime store limits, the same
 on every platform) and an epoch timeout. This is deny-by-default: a tool that
@@ -14,9 +15,11 @@ different sandbox.
 
 ### Notes
 
-: The tool is rebuilt in the guest from its dotted ```type``` and ```options```
-    with ```app=None``` -- a guest has no live parent app, and the uniformity
-    rule means a tool that needs an app builds it itself. Only JSON-able
+: On the trusted path the tool is rebuilt in the guest from its dotted ```type```
+    and ```options``` with ```app=None``` -- a guest has no live parent app, and
+    the uniformity rule means a tool that needs an app builds it itself; on the
+    untrusted path no tool is rebuilt at all, the guest runs the snippet directly.
+    Either way only JSON-able
     arguments and the result's two string views (```as_str```/```as_json```)
     cross the bridge; the parent rebuilds ```as_data``` from ```as_json```. The
     guest builds the result with the pact contract (```create_tool_result```),
@@ -288,7 +291,8 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         dotted = _importable_path(type(tool), 'tool')
         # an untrusted tool flags itself for pysnippet exec: the guest runs the
         # code argument directly via run_snippet, without rebuilding the tool, so
-        # no tokeo mount is needed and the framework stays invisible to the snippet
+        # no app/framework mount is needed (only the pact contract) and the
+        # framework stays invisible to the snippet
         is_exec_pysnippet = getattr(tool, 'wasm_exec_pysnippet', False)
         task = dict(
             tool=dotted,

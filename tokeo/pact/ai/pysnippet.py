@@ -23,7 +23,8 @@ class TokeoPactSnippetError(Exception):
 
     Raised for a top-level ```await``` (or ```async for```/```async with```): a
     plain function wrap cannot make it legal, and an async wrap is out of scope.
-    The caller treats it as a machinery error, not as a delivered value.
+    The caller treats it as a tool error -- recorded as the snippet's exception
+    (A) with no value delivered -- not as a machinery error.
     """
 
 

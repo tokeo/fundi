@@ -220,7 +220,7 @@ class WasmTest(TokeoTest):
 
 def wasm_ai_config():
     # a self-contained ai config with BOTH built-in tools, each behind a wasm
-    # sandbox: the untrusted tool runs directly in the guest (no mount), the
+    # sandbox: the untrusted tool runs directly in the guest (no app mount), the
     # trusted tool is rebuilt in the guest, so its sandbox mounts the tokeo
     # source read-only at /app and adds it to PYTHONPATH
     cfg = init_defaults('ai')
@@ -278,7 +278,7 @@ def wasm_ai_config():
     reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_untrusted_exec_through_the_agent_chain():
-    # the untrusted tool runs the snippet directly in the guest (no tokeo
+    # the untrusted tool runs the snippet directly in the guest (no app
     # mount) and the result crosses the file bridge back
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')
