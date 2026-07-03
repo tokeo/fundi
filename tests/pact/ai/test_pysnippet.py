@@ -46,12 +46,39 @@ def test_walrus_last_expression_delivers():
     assert run_snippet('(n := 21) * 2') == 42
 
 
+def test_single_name_assignment_delivers_its_value():
+    # a name bound on the last line delivers that value
+    assert run_snippet('x = 5\ny = x * 2') == 10
+
+
+def test_chained_assignment_delivers_the_shared_value():
+    # every target of a chain gets the same value, so that value is delivered
+    assert run_snippet('a = b = 21 * 2') == 42
+
+
+def test_subscript_assignment_delivers_the_container():
+    # writing into a dict on the last line delivers the mutated root container
+    assert run_snippet("d = {}\nd['a'] = 1\nd['b'] = 2") == {'a': 1, 'b': 2}
+
+
+def test_tuple_target_delivers_a_tuple_of_names():
+    # a tuple of names delivers a tuple of the bound values
+    assert run_snippet('a, b = 1, 2') == (1, 2)
+
+
 # -- no value: the block runs but delivers nothing --------------------------
 
 
-def test_ending_on_assignment_delivers_none():
-    # the block ends on a statement, not an expression: nothing to return
-    assert run_snippet('x = 5\ny = x * 2') is None
+def test_attribute_assignment_delivers_none():
+    # an attribute write delivers no value: the object itself is not carried
+    # back, as it is generally not serializable across the sandbox boundary
+    assert run_snippet('import types\no = types.SimpleNamespace()\no.x = 5') is None
+
+
+def test_ambiguous_assignment_target_delivers_none():
+    # a mixed tuple or a starred target has no single unambiguous value
+    assert run_snippet("d = {}\na, d['k'] = 1, 2") is None
+    assert run_snippet('a, *b = [1, 2, 3]') is None
 
 
 def test_ending_on_a_loop_delivers_none():

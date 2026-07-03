@@ -162,10 +162,10 @@ def test_untrusted_exec_delivers_by_return():
 
 
 def test_untrusted_exec_without_a_value_returns_none():
-    # a snippet that ends on a statement delivers nothing: the tool returns None,
-    # which the sandbox reads as 'no value', not as a json null
+    # a snippet that ends on a statement -- here a loop, not a value-bearing
+    # line -- delivers nothing: the tool returns None, read as 'no value'
     tool = TokeoAiPythonUntrustedExecTool(None)
-    assert tool.exec(code='x = sum(range(10))') is None
+    assert tool.exec(code='total = 0\nfor i in range(10):\n    total += i') is None
 
 
 def test_untrusted_exec_non_json_value_is_returned_raw():

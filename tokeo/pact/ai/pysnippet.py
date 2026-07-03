@@ -3,11 +3,11 @@ Run a model-written Python snippet and hand back the value it produced.
 
 A snippet is a bare block of statements, so it cannot use a top-level ```return```
 and has no natural place to leave its answer. This module gives it one without a
-magic variable: the snippet delivers a value either by ending on an expression
-(the jupyter form, where the last line is the value) or by a ```return```, and
-the block is wrapped into a function so that ```return``` is legal and its value
-is captured on the call. A block that delivers neither yields ```None``` -- the
-contract's 'no value', which the caller reports as such.
+magic variable: the snippet delivers a value by ending on an expression (the
+jupyter form), by a ```return```, or by an assignment whose bound value is then
+handed back; the block is wrapped into a function so that ```return``` is legal
+and its value is captured on the call. A block that delivers none yields
+```None``` -- the contract's 'no value', which the caller reports as such.
 
 It is kept dependency-free (the standard library ```ast``` only) so the same run
 works in process and inside an isolated sandbox guest, which mounts this contract
@@ -33,11 +33,30 @@ def run_snippet(code, namespace=None):
     Wrap and run a snippet, returning the value it delivered or ```None```.
 
     The snippet is parsed (not executed) first, so its structure decides how it
-    delivers: a bare last expression becomes the return value (the jupyter form),
-    a ```return``` is honoured once the block is wrapped into a function, and a
-    block that ends on a statement -- an assignment, a loop, an ```if``` -- runs
-    for its effects and delivers ```None```. An empty block delivers ```None```
-    as well.
+    delivers. The value comes from the last top-level statement; printed text is
+    never the value (it goes to stdout). A block that delivers no value yields
+    ```None``` -- the contract's 'no value'. An empty block yields ```None``` too.
+
+    Forms that deliver a value:
+
+    - an expression on the last line (the jupyter form), which includes calling
+      a function defined earlier in the block
+    - an explicit ```return```
+    - a single-name assignment (```name = x```, ```name += x```, ```name: T =
+      x```), delivering the bound name's value
+    - a chained assignment (```a = b = x```), delivering that shared value
+    - a subscript assignment (```d[k] = x```, nested or augmented), delivering
+      the mutated root container (a dict or list), prior mutations included
+    - a tuple or list of names (```a, b = ...```), delivering a tuple of them
+
+    Forms that deliver nothing (```None```):
+
+    - an attribute assignment (```o.x = ...```), since the object itself is
+      generally not serializable across the sandbox boundary
+    - a ```print(...)```, whose text goes to stdout, not the value
+    - a plain statement: import, an uncalled def, a loop, ```if```, ```del```
+    - an ambiguous assignment target: a mixed tuple (```a, d[k] = ...```) or a
+      starred target (```a, *b = ...```)
 
     ### Args
 
@@ -67,11 +86,19 @@ def run_snippet(code, namespace=None):
     # an empty body (blank source or comments only) carries no value
     if not tree.body:
         return None
-    # a bare last expression is the snippet's value (jupyter form): turn it into
-    # a return so the wrapping function hands that value back on the call
+    # the last top-level statement decides the delivered value
     last = tree.body[-1]
     if isinstance(last, ast.Expr):
+        # a bare last expression is the snippet's value (jupyter form): turn it
+        # into a return so the wrapping function hands that value back
         tree.body[-1] = ast.copy_location(ast.Return(value=last.value), last)
+    else:
+        # an assignment on the last line carries a clear value too; append a
+        # return of the bound name (or mutated container / tuple) after it, so
+        # the assignment runs first and the value is then handed back
+        delivered = _assignment_value(last)
+        if delivered is not None:
+            tree.body.append(ast.copy_location(ast.Return(value=delivered), last))
     # wrap the whole block in a function so a return -- the snippet's own or the
     # one just synthesised -- is legal; falling through returns None by itself
     wrapper = ast.FunctionDef(
@@ -88,6 +115,50 @@ def run_snippet(code, namespace=None):
     # call the wrapper: its return is the delivered value; a fall-through gives
     # None, which is the contract's 'no value delivered'
     return ns['__tokeo_snippet__']()
+
+
+def _assignment_value(stmt):
+    # the value an assignment on the snippet's last line delivers, as an ast
+    # expression to return after it -- or None when the form has no single
+    # unambiguous value (an attribute write, a mixed or starred target)
+    if isinstance(stmt, ast.Assign):
+        # plain or chained (a = b = x): every target gets the same value, so the
+        # first target that resolves to a deliverable node carries it
+        for target in stmt.targets:
+            value = _target_value(target)
+            if value is not None:
+                return value
+        return None
+    if isinstance(stmt, (ast.AugAssign, ast.AnnAssign)):
+        return _target_value(stmt.target)
+    return None
+
+
+def _target_value(target):
+    # turn an assignment target into the ast expression to hand back, or None
+    if isinstance(target, ast.Name):
+        # a single name delivers its bound value
+        return ast.Name(id=target.id, ctx=ast.Load())
+    if isinstance(target, (ast.Subscript, ast.Attribute)):
+        # a subscript write (d[k] = x, nested) delivers the mutated root
+        # container; an attribute write anywhere in the chain is excluded, as
+        # the object itself is generally not serializable across the boundary
+        node = target
+        while isinstance(node, (ast.Subscript, ast.Attribute)):
+            if isinstance(node, ast.Attribute):
+                return None
+            node = node.value
+        return ast.Name(id=node.id, ctx=ast.Load()) if isinstance(node, ast.Name) else None
+    if isinstance(target, (ast.Tuple, ast.List)):
+        # a, b = ... delivers a tuple of the bound names; a non-name element
+        # (a starred or nested target) makes the value ambiguous, so skip it
+        names = []
+        for element in target.elts:
+            if not isinstance(element, ast.Name):
+                return None
+            names.append(ast.Name(id=element.id, ctx=ast.Load()))
+        return ast.Tuple(elts=names, ctx=ast.Load())
+    return None
 
 
 def _has_toplevel_async(tree):

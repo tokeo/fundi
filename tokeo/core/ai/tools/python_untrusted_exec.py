@@ -52,9 +52,13 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiTool):
         """Tool meta-data sent to the model."""
 
         description = (
-            'Execute a short Python snippet to compute an answer. '
-            'Deliver the value as the last line (an expression) or with a `return`. '
-            'No network, no file access, only the Python standard library.'
+            'Execute a short to medium Python source code snippet to compute an answer. '
+            'The answer from snippet must be one of: a. expression on the last snippet '
+            'code line; b. use explicit `return` statement; c. call a function inside '
+            'the snippet that returns it. Never use a `print` statement to return the '
+            'result or await an input value or user confirmation. The code must be run '
+            'completely in background. No network, no file access, only the Python '
+            'standard library.'
         )
 
         parameters = {
@@ -62,7 +66,7 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiTool):
             'properties': {
                 'code': {
                     'type': 'string',
-                    'description': 'Python source to run; end on the value or `return` it.',
+                    'description': description,
                 },
             },
             'required': ['code'],
