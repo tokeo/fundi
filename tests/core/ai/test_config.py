@@ -17,7 +17,7 @@ pin each resolver's rules in isolation, without the handler or class loading
 import pytest
 
 from tokeo.core.ai import TokeoAiError
-from tokeo.core.ai.guard import GUARD_STAGE_ANY
+from tokeo.core.ai.governor import GOVERNOR_STAGE_ANY
 from tokeo.core.ai.config.guards import resolve_guards, parse_entry
 from tokeo.core.ai.config.tools import resolve_tools, find_cycles
 from tokeo.core.ai.config.sandboxes import sandbox_contains_tool, sandbox_for
@@ -51,7 +51,7 @@ def test_stage_list_runs_only_named_stages():
 
 def test_any_token_means_all_class_stages():
     # [_any] is the explicit form of the bare name: all the class's stages
-    entries = _resolve({}, [{'alpha': [GUARD_STAGE_ANY]}])
+    entries = _resolve({}, [{'alpha': [GOVERNOR_STAGE_ANY]}])
     assert entries[0].stages == frozenset({'on_prompt', 'on_call', 'on_return'})
 
 

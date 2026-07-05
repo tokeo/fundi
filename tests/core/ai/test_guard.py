@@ -18,12 +18,12 @@ from tokeo.core.ai.guards.policy import (
     TokeoAiAbortPolicyGuard,
     TokeoAiPolicyGuardError,
 )
-from tokeo.core.ai.guard import (
-    TokeoAiGuard,
-    GUARD_STAGES,
-    GUARD_STAGE_ON_CALL,
-    GUARD_STAGE_ON_RETURN,
-    GUARD_STAGE_ON_PROMPT,
+from tokeo.core.ai.guard import TokeoAiGuard
+from tokeo.core.ai.governor import (
+    GOVERNOR_STAGES,
+    GOVERNOR_STAGE_ON_CALL,
+    GOVERNOR_STAGE_ON_RETURN,
+    GOVERNOR_STAGE_ON_PROMPT,
 )
 
 
@@ -84,7 +84,7 @@ def _by_stage(app, guards):
     for index, guard in enumerate(guards):
         identity = f'g{index}'
         objs[identity] = guard
-        stages = frozenset(stage for stage in GUARD_STAGES if guard.has_stage(stage))
+        stages = frozenset(stage for stage in GOVERNOR_STAGES if guard.has_stage(stage))
         entries.append(GuardConfigEntry(identity, stages, 'agent'))
     app.ai._resolve_guards = lambda agent_obj: entries
     app.ai._guard = lambda identity: objs[identity]
@@ -97,11 +97,11 @@ def test_each_stage_gets_its_own_ordered_list():
         a = OnCallGuard(app)
         b = OnReturnGuard(app)
         by_stage = _by_stage(app, [a, b])
-        assert by_stage[GUARD_STAGE_ON_CALL] == [a]
-        assert by_stage[GUARD_STAGE_ON_RETURN] == [b]
+        assert by_stage[GOVERNOR_STAGE_ON_CALL] == [a]
+        assert by_stage[GOVERNOR_STAGE_ON_RETURN] == [b]
         # every stage has a list, empty where no guard participates
-        assert set(by_stage) == set(GUARD_STAGES)
-        assert by_stage[GUARD_STAGE_ON_PROMPT] == []
+        assert set(by_stage) == set(GOVERNOR_STAGES)
+        assert by_stage[GOVERNOR_STAGE_ON_PROMPT] == []
 
 
 def test_order_within_a_stage_follows_the_flat_list():
@@ -110,10 +110,10 @@ def test_order_within_a_stage_follows_the_flat_list():
         first = OnCallGuard(app)
         second = OnCallGuard(app)
         by_stage = _by_stage(app, [first, second])
-        assert by_stage[GUARD_STAGE_ON_CALL] == [first, second]
+        assert by_stage[GOVERNOR_STAGE_ON_CALL] == [first, second]
         # reversing the flat list reverses the stage order
         by_stage = _by_stage(app, [second, first])
-        assert by_stage[GUARD_STAGE_ON_CALL] == [second, first]
+        assert by_stage[GOVERNOR_STAGE_ON_CALL] == [second, first]
 
 
 def test_a_guard_with_several_stages_appears_in_each():
@@ -122,8 +122,8 @@ def test_a_guard_with_several_stages_appears_in_each():
         both = CallAndReturnGuard(app)
         only_call = OnCallGuard(app)
         by_stage = _by_stage(app, [only_call, both])
-        assert by_stage[GUARD_STAGE_ON_CALL] == [only_call, both]
-        assert by_stage[GUARD_STAGE_ON_RETURN] == [both]
+        assert by_stage[GOVERNOR_STAGE_ON_CALL] == [only_call, both]
+        assert by_stage[GOVERNOR_STAGE_ON_RETURN] == [both]
 
 
 def test_stage_lists_are_independent_views_of_the_flat_order():
@@ -134,8 +134,8 @@ def test_stage_lists_are_independent_views_of_the_flat_order():
         c = OnCallGuard(app)
         # flat order [c, pc]: at on_call, c is before pc; at on_prompt, pc alone
         by_stage = _by_stage(app, [c, pc])
-        assert by_stage[GUARD_STAGE_ON_CALL] == [c, pc]
-        assert by_stage[GUARD_STAGE_ON_PROMPT] == [pc]
+        assert by_stage[GOVERNOR_STAGE_ON_CALL] == [c, pc]
+        assert by_stage[GOVERNOR_STAGE_ON_PROMPT] == [pc]
 
 
 def test_no_guards_gives_empty_lists_for_every_stage():
@@ -143,7 +143,7 @@ def test_no_guards_gives_empty_lists_for_every_stage():
     # exactly as the unguarded path)
     with AiTest() as app:
         by_stage = _by_stage(app, [])
-        assert all(by_stage[stage] == [] for stage in GUARD_STAGES)
+        assert all(by_stage[stage] == [] for stage in GOVERNOR_STAGES)
 
 
 # the policy guard implementations, tested in isolation (one guard, one

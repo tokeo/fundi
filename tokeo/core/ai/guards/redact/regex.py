@@ -40,7 +40,7 @@ ai:
 
 import re
 
-from tokeo.core.ai.guard import GUARD_STAGE_ON_CALL, GUARD_STAGE_ON_RETURN
+from tokeo.core.ai.governor import GOVERNOR_STAGE_ON_CALL, GOVERNOR_STAGE_ON_RETURN
 from tokeo.core.ai.tool import create_tool_result
 from tokeo.core.ai.guards.redact.base import TokeoAiRedactGuard
 from tokeo.core.ai.guards.redact.exc import TokeoAiRedactGuardError
@@ -225,7 +225,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         hits = 0
         for key, value in invocation.arguments.items():
             if isinstance(value, str):
-                masked, count = self._mask(value, GUARD_STAGE_ON_CALL)
+                masked, count = self._mask(value, GOVERNOR_STAGE_ON_CALL)
                 if count:
                     invocation.arguments[key] = masked
                     hits += count
@@ -256,10 +256,10 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         value = invocation.result.value
         # the text view is always masked, even when it is the tool's own wording
         # rather than a copy of the data, so both are cleaned on their own terms
-        masked_str, hits = self._mask(value.as_str or '', GUARD_STAGE_ON_RETURN)
+        masked_str, hits = self._mask(value.as_str or '', GOVERNOR_STAGE_ON_RETURN)
         masked_data = value.as_data
-        if self._config(GUARD_STAGE_ON_RETURN).get('sanitize_data') and value.as_data is not None:
-            masked_data, data_hits = self._mask_data(value.as_data, GUARD_STAGE_ON_RETURN)
+        if self._config(GOVERNOR_STAGE_ON_RETURN).get('sanitize_data') and value.as_data is not None:
+            masked_data, data_hits = self._mask_data(value.as_data, GOVERNOR_STAGE_ON_RETURN)
             hits += data_hits
         if not hits:
             return

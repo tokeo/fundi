@@ -16,7 +16,8 @@ from dataclasses import dataclass
 
 from tokeo.core.utils.base import as_list
 from tokeo.core.ai import TokeoAiError
-from tokeo.core.ai.guard import GUARD_STAGES, GUARD_STAGE_ANY, TokeoAiGuard
+from tokeo.core.ai.guard import TokeoAiGuard
+from tokeo.core.ai.governor import GOVERNOR_STAGES, GOVERNOR_STAGE_ANY
 from tokeo.core.ai.config.guards import parse_entry, resolve_guards
 from tokeo.core.ai.config.tools import find_cycles
 
@@ -43,7 +44,7 @@ _PROFILE_KEYS = {
 _ITEM_KEYS = {'type', 'options'}
 # a guard item also accepts a per-stage on_<stage> block (its own options
 # override for that station); agents and tools have no stages, so they do not
-_GUARD_ITEM_KEYS = _ITEM_KEYS | set(GUARD_STAGES)
+_GUARD_ITEM_KEYS = _ITEM_KEYS | set(GOVERNOR_STAGES)
 _SANDBOX_KEYS = {'type', 'tools', 'except', 'options'}
 
 
@@ -298,7 +299,7 @@ class TokeoAiLinter:
                 cls = self.app.ai.resolve('guard', type_value)
         except TokeoAiError:
             return None
-        return {stage for stage in GUARD_STAGES if getattr(cls, stage) is not getattr(TokeoAiGuard, stage)}
+        return {stage for stage in GOVERNOR_STAGES if getattr(cls, stage) is not getattr(TokeoAiGuard, stage)}
 
     def _lint_guard_composition(self, path, guards, chain_path=None):
         # validate a guards composition list: each entry is a bare name
@@ -340,7 +341,7 @@ class TokeoAiLinter:
                 class_stages = self._guard_class_stages(identity)
                 if class_stages is not None:
                     for stage in stages:
-                        if stage != GUARD_STAGE_ANY and stage not in class_stages:
+                        if stage != GOVERNOR_STAGE_ANY and stage not in class_stages:
                             self._add(path, f'guard {identity!r} cannot run at stage {stage!r} (its class does not)')
 
     def _lint_guard_omit(self, path, omit):

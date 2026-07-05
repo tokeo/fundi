@@ -33,7 +33,7 @@ wins (chain brought in vs. agent direct) deciding a contradicting stage list.
 """
 
 from tokeo.core.ai.exc import TokeoAiError
-from tokeo.core.ai.guard import GUARD_STAGE_ANY
+from tokeo.core.ai.governor import GOVERNOR_STAGE_ANY
 
 
 class GuardConfigEntry:
@@ -109,11 +109,11 @@ def _resolve_stages(identity, stages, stages_of):
     # not implement is dropped here and flagged by the linter, not raised, so a
     # run is not blocked by a stale stage name)
     class_stages = frozenset(stages_of(identity))
-    if stages is None or list(stages) == [GUARD_STAGE_ANY]:
+    if stages is None or list(stages) == [GOVERNOR_STAGE_ANY]:
         return class_stages
     named = set()
     for stage in stages:
-        if stage == GUARD_STAGE_ANY:
+        if stage == GOVERNOR_STAGE_ANY:
             named |= class_stages
         else:
             named.add(stage)

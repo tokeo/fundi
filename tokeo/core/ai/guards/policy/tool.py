@@ -22,7 +22,7 @@ ai:
 """
 
 from tokeo.core.ai import Invocation
-from tokeo.core.ai.guard import GUARD_STAGE_ON_CALL
+from tokeo.core.ai.governor import GOVERNOR_STAGE_ON_CALL
 from tokeo.core.ai.guards.policy.base import TokeoAiPolicyGuard
 
 
@@ -64,7 +64,7 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
             ```decision``` is set to ```deny``` with a ```reason```
 
         """
-        config = self._config(GUARD_STAGE_ON_CALL)
+        config = self._config(GOVERNOR_STAGE_ON_CALL)
         name = invocation.name
         denied = name in (config.get('deny') or [])
         if not denied and config.get('allow') is not None:

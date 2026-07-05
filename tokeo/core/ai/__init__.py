@@ -81,6 +81,7 @@ from tokeo.core.ai.context import TokeoAiContext
 from tokeo.core.ai.provider import TokeoAiProvider
 from tokeo.core.ai.tool import TokeoAiTool
 from tokeo.core.ai.agent import TokeoAiAgent, TokeoAiFundiAgent
+from tokeo.core.ai.governor import TokeoAiGovernor
 from tokeo.core.ai.guard import TokeoAiGuard
 from tokeo.core.ai.sandbox import TokeoAiSandbox
 
@@ -103,6 +104,7 @@ __all__ = [
     'TokeoAiTool',
     'TokeoAiAgent',
     'TokeoAiFundiAgent',
+    'TokeoAiGovernor',
     'TokeoAiGuard',
     'TokeoAiSandbox',
 ]

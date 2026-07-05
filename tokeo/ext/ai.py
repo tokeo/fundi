@@ -85,14 +85,14 @@ from tokeo.core.ai import (
     TokeoAiFundiAgent,
     TokeoAiResult,
 )
-from tokeo.core.ai.guard import (
-    GUARD_STAGES,
-    GUARD_STAGE_ON_BEGIN,
-    GUARD_STAGE_ON_PROMPT,
-    GUARD_STAGE_ON_ANSWER,
-    GUARD_STAGE_ON_CALL,
-    GUARD_STAGE_ON_RETURN,
-    GUARD_STAGE_ON_CLOSE,
+from tokeo.core.ai.governor import (
+    GOVERNOR_STAGES,
+    GOVERNOR_STAGE_ON_BEGIN,
+    GOVERNOR_STAGE_ON_PROMPT,
+    GOVERNOR_STAGE_ON_ANSWER,
+    GOVERNOR_STAGE_ON_CALL,
+    GOVERNOR_STAGE_ON_RETURN,
+    GOVERNOR_STAGE_ON_CLOSE,
 )
 from tokeo.core.ai.config.guards import resolve_guards
 from tokeo.core.ai.config.tools import resolve_tools
@@ -509,7 +509,7 @@ class TokeoAi(MetaMixin):
         # own has_stage over its on_* methods). used by the composition resolver
         # to intersect a declared stage list with what the class implements
         guard = self._guard(identity)
-        return [stage for stage in GUARD_STAGES if guard.has_stage(stage)]
+        return [stage for stage in GOVERNOR_STAGES if guard.has_stage(stage)]
 
     def _resolve_guards(self, agent_obj):
         # resolve the agent's guard composition: expand chains, parse the
@@ -538,7 +538,7 @@ class TokeoAi(MetaMixin):
         # round), the guard instances are already cached in _guard_objs, and the
         # build is microseconds against an LLM call's hundreds of milliseconds
         entries = self._resolve_guards(agent_obj)
-        return {stage: [self._guard(entry.identity) for entry in entries if stage in entry.stages] for stage in GUARD_STAGES}
+        return {stage: [self._guard(entry.identity) for entry in entries if stage in entry.stages] for stage in GOVERNOR_STAGES}
 
     def _sandbox(self, name):
         # build the sandbox configured under ```ai.sandboxes[name]``` once and
@@ -645,7 +645,7 @@ class TokeoAi(MetaMixin):
         # step), one that mutates in place or returns nothing leaves it (an
         # unchanged step -- the guard is still on the trace, attributable)
         for guard in call_guards:
-            invocation = ctx.supersede(guard, guard.on_call(ctx, invocation), invocation, stage=GUARD_STAGE_ON_CALL)
+            invocation = ctx.supersede(guard, guard.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
             if invocation.decision == Invocation.DENY:
                 break
         if invocation.decision != Invocation.DENY:
@@ -669,7 +669,7 @@ class TokeoAi(MetaMixin):
                 # loop continues, instead of crashing the whole call
                 invocation.error = f'{type(err).__name__}: {err}'
         for guard in return_guards:
-            invocation = ctx.supersede(guard, guard.on_return(ctx, invocation), invocation, stage=GUARD_STAGE_ON_RETURN)
+            invocation = ctx.supersede(guard, guard.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
         # the text fed back to the model for this call; the invocation is
         # returned too, so the loop reads the outcome off the object it has
         if invocation.decision == Invocation.DENY:
@@ -776,12 +776,12 @@ class TokeoAi(MetaMixin):
         # the per-stage running order: each stage's ordered guard list. the loop
         # asks each stage for its list and runs the guards in that order
         by_stage = self._guards_by_stage(agent_obj)
-        at_begin = by_stage[GUARD_STAGE_ON_BEGIN]
-        at_prompt = by_stage[GUARD_STAGE_ON_PROMPT]
-        at_answer = by_stage[GUARD_STAGE_ON_ANSWER]
-        at_call = by_stage[GUARD_STAGE_ON_CALL]
-        at_return = by_stage[GUARD_STAGE_ON_RETURN]
-        at_close = by_stage[GUARD_STAGE_ON_CLOSE]
+        at_begin = by_stage[GOVERNOR_STAGE_ON_BEGIN]
+        at_prompt = by_stage[GOVERNOR_STAGE_ON_PROMPT]
+        at_answer = by_stage[GOVERNOR_STAGE_ON_ANSWER]
+        at_call = by_stage[GOVERNOR_STAGE_ON_CALL]
+        at_return = by_stage[GOVERNOR_STAGE_ON_RETURN]
+        at_close = by_stage[GOVERNOR_STAGE_ON_CLOSE]
         # the guarded path runs when any guard touches a tool stage; the lean
         # path stays for an agent with no tool-stage guards (and no guards)
         tool_guarded = bool(at_call or at_return)
@@ -797,15 +797,15 @@ class TokeoAi(MetaMixin):
         # ctx.messages in place (returning None) or hand back a fresh
         # conversation, and refine_messages records the step either way
         for guard in at_begin:
-            ctx.refine_messages(guard, guard.on_begin(ctx), stage=GUARD_STAGE_ON_BEGIN)
+            ctx.refine_messages(guard, guard.on_begin(ctx), stage=GOVERNOR_STAGE_ON_BEGIN)
         # on_prompt: before each model call, on the outgoing messages
         for guard in at_prompt:
-            ctx.refine_messages(guard, guard.on_prompt(ctx), stage=GUARD_STAGE_ON_PROMPT)
+            ctx.refine_messages(guard, guard.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
         result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
         # on_answer: after each model call, on the model answer -- the result is
         # the handed-in work object, so the step is recorded through supersede
         for guard in at_answer:
-            result = ctx.supersede(guard, guard.on_answer(ctx, result), result, stage=GUARD_STAGE_ON_ANSWER)
+            result = ctx.supersede(guard, guard.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
         while result.tool_calls:
             # max_steps caps the tool rounds of one request; 0 is unlimited.
             # reaching it aborts loudly: a silent empty answer hides the cause
@@ -859,14 +859,14 @@ class TokeoAi(MetaMixin):
                 raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
             # on_prompt again before the follow-up model call
             for guard in at_prompt:
-                ctx.refine_messages(guard, guard.on_prompt(ctx), stage=GUARD_STAGE_ON_PROMPT)
+                ctx.refine_messages(guard, guard.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
             result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
             # on_answer again after the follow-up model call
             for guard in at_answer:
-                result = ctx.supersede(guard, guard.on_answer(ctx, result), result, stage=GUARD_STAGE_ON_ANSWER)
+                result = ctx.supersede(guard, guard.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
         # on_close: once, on the final result, after the loop
         for guard in at_close:
-            result = ctx.supersede(guard, guard.on_close(ctx, result), result, stage=GUARD_STAGE_ON_CLOSE)
+            result = ctx.supersede(guard, guard.on_close(ctx, result), result, stage=GOVERNOR_STAGE_ON_CLOSE)
         # the run result: the final answer (a ChatResult), plus the run's
         # history and counters lifted off the context (which ends here). the
         # answer is just the model answer; the trace and status ride alongside
