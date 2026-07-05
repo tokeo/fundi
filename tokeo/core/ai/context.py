@@ -8,7 +8,7 @@ because it carries behaviour (```track```, ```tracked```, the typed-view
 properties), not just fields.
 """
 
-from tokeo.core.ai.data import ChatMessage, Invocation, ChatResult, TraceStep, TokeoAiStatus
+from tokeo.core.ai.data import ChatMessage, Invocation, ChatResult, TraceStep, TokeoAiLoopData
 from tokeo.core.ai.exc import TokeoAiError
 
 
@@ -84,7 +84,7 @@ class TokeoAiContext:
         # the typed views, one list per cached kind, by exact class
         self._caches = {kind: [] for kind in self._CACHED}
         # the loop's counters
-        self.status = TokeoAiStatus()
+        self.loopdata = TokeoAiLoopData()
         # the caller's opaque carry-through value; set once, never touched by
         # the framework, constant for the run (not history, not a counter)
         self.userdata = userdata

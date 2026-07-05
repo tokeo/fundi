@@ -388,7 +388,8 @@ class TokeoAi(MetaMixin):
                 raise TokeoAiError(f'ai tool {name!r} is not configured under ai.tools')
             settings = item.get('options') or {}
             obj = self.resolve('tool', item['type'])(self.app, **settings)
-            obj._setup(self.app)
+            # the object carries its configured name (the ```ai.tools``` key)
+            obj._configured_name = name
             # WHY: a sandbox that runs the tool in another process (subprocess,
             # docker) rebuilds it there. the import path comes from the tool's
             # class itself (so a registry shortname in the config crosses the
@@ -396,6 +397,7 @@ class TokeoAi(MetaMixin):
             # them on the instance so both twins are built the same way (the
             # uniformity rule)
             obj._tokeo_parent_instance_options = dict(settings)
+            obj._setup(self.app)
             self._tool_objs[name] = obj
         return obj
 
@@ -652,7 +654,16 @@ class TokeoAi(MetaMixin):
                 # deny or an exhausted chain raises and is recorded as an error)
                 # the sandbox wraps a plain value into a ToolResult itself, so
                 # the innermost layer owns the wrap and this is always a ToolResult
-                invocation.result = self._exec_in_sandbox(invocation.name, invocation.arguments, agent_obj, profile, call_deny, invocation)
+                # hand the whole per-turn scratchpad in; the seam creates and
+                # picks this tool's slice only if the tool declares a key
+                invocation.result = self._exec_in_sandbox(
+                    invocation.name,
+                    invocation.arguments,
+                    agent_obj,
+                    profile,
+                    call_deny,
+                    invocation,
+                )
             except Exception as err:
                 # the pipeline is resilient: a failing tool is recorded and the
                 # loop continues, instead of crashing the whole call
@@ -798,7 +809,7 @@ class TokeoAi(MetaMixin):
         while result.tool_calls:
             # max_steps caps the tool rounds of one request; 0 is unlimited.
             # reaching it aborts loudly: a silent empty answer hides the cause
-            if max_steps and ctx.status.steps >= max_steps:
+            if max_steps and ctx.loopdata.steps >= max_steps:
                 raise TokeoAiError(f'ai max_steps ({max_steps}) reached, execution aborted')
             ctx.track(self, ChatMessage(self._assistant_turn(result)))
             succeeded = False
@@ -818,7 +829,13 @@ class TokeoAi(MetaMixin):
                     # chain) becomes feedback the model may correct itself on,
                     # instead of an exception killing the whole loop
                     try:
-                        tool_result = self._exec_in_sandbox(call.name, call.arguments or {}, agent_obj, profile, deny)
+                        tool_result = self._exec_in_sandbox(
+                            call.name,
+                            call.arguments or {},
+                            agent_obj,
+                            profile,
+                            deny,
+                        )
                         # the sandbox always returns a ToolResult; a tool that
                         # raised is carried in its state, not thrown here
                         if tool_result.state.exception is not None:
@@ -832,13 +849,13 @@ class TokeoAi(MetaMixin):
                         ok = False
                 succeeded = succeeded or ok
                 ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
-            ctx.status.steps += 1
+            ctx.loopdata.steps += 1
             # max_loops caps the consecutive rounds without one successful
             # call (every call denied or failing); 0 is unlimited. this stops
             # a model stuck repeating broken calls, while any successful call
             # resets the counter and lets honest work continue
-            ctx.status.failed_loops = 0 if succeeded else ctx.status.failed_loops + 1
-            if max_loops and ctx.status.failed_loops >= max_loops:
+            ctx.loopdata.failed_loops = 0 if succeeded else ctx.loopdata.failed_loops + 1
+            if max_loops and ctx.loopdata.failed_loops >= max_loops:
                 raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
             # on_prompt again before the follow-up model call
             for guard in at_prompt:
@@ -853,7 +870,7 @@ class TokeoAi(MetaMixin):
         # the run result: the final answer (a ChatResult), plus the run's
         # history and counters lifted off the context (which ends here). the
         # answer is just the model answer; the trace and status ride alongside
-        return TokeoAiResult(answer=result, trace=ctx.trace, status=ctx.status)
+        return TokeoAiResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace)
 
     def _assistant_turn(self, result):
         # rebuild the assistant message that requested the tool calls, in the

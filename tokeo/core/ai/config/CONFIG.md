@@ -447,7 +447,7 @@ result = app.ai.chat(
 
 result.answer      # the model's ChatResult (result.answer.text is the text)
 result.trace       # the ordered step history (empty if ai.trace is false)
-result.status      # the run's status
+result.loopdata        # the run's loop counters
 ```
 
 The call arguments and where each is resolved:

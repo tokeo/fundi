@@ -280,13 +280,14 @@ class TraceStep:
 
 
 @dataclass
-class TokeoAiStatus:
+class TokeoAiLoopData:
     """
-    The loop's own counters for one run.
+    The loop's own live counters for one turn.
 
     Separated from the run's data (the trace and its views) so the bookkeeping
-    that bounds the loop has its own small home and can grow (a future stop
-    reason, a final flag) without crowding the data.
+    that bounds the loop has its own small home. Created fresh for every turn and
+    owned by the loop -- never seeded by the caller, so a turn always starts at
+    zero and no caller can preset a counter.
 
     ### Args
 
@@ -313,23 +314,23 @@ class TokeoAiResult:
         reasoning, tool_calls, usage, raw). The answer is not always plain text
         -- a refusal is distinct from empty text -- so the full ```ChatResult```
         is kept, not a flattened string.
+    - the **loopdata**: the loop's counters (```steps```, ```failed_loops```).
     - the **trace**: the ordered ```TraceStep``` history of the run (every
         model round, tool call, and guard that ran).
-    - the **status**: the loop's counters (```steps```, ```failed_loops```).
 
-    The trace and status live on the context during the run; ```chat``` hands
-    them out here so the caller has them without reaching into the context (now
-    gone) -- and without the answer carrying its own trace, which made the
+    The trace and loop counters live on the context during the run; ```chat```
+    hands them out here so the caller has them without reaching into the context
+    (now gone) -- and without the answer carrying its own trace, which made the
     answer enclose itself.
 
     ### Args
 
     - **answer** (ChatResult): The final model reply in full
+    - **loopdata** (TokeoAiLoopData): The loop's live counters for the run
     - **trace** (list): The run's ```TraceStep``` history, in order
-    - **status** (TokeoAiStatus): The loop's counters for the run
 
     """
 
     answer: ChatResult = field(default_factory=ChatResult)
+    loopdata: TokeoAiLoopData = field(default_factory=TokeoAiLoopData)
     trace: list = field(default_factory=list)
-    status: TokeoAiStatus = field(default_factory=TokeoAiStatus)

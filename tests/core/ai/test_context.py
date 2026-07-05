@@ -11,7 +11,7 @@ them is exercised by the Spiral tests.
 """
 
 import copy
-from tokeo.core.ai import TokeoAiContext, TokeoAiStatus, TraceStep, ChatMessage, Invocation, ChatResult, ToolResult, TokeoAiError
+from tokeo.core.ai import TokeoAiContext, TokeoAiLoopData, TraceStep, ChatMessage, Invocation, ChatResult, ToolResult, TokeoAiError
 
 
 def test_invocation_decision_constants_carry_the_expected_values():
@@ -53,9 +53,9 @@ def test_context_empty_when_unseeded():
     assert ctx.invocations == []
     assert ctx.results == []
     assert ctx.cur_invocation is None
-    assert isinstance(ctx.status, TokeoAiStatus)
-    assert ctx.status.steps == 0
-    assert ctx.status.failed_loops == 0
+    assert isinstance(ctx.loopdata, TokeoAiLoopData)
+    assert ctx.loopdata.steps == 0
+    assert ctx.loopdata.failed_loops == 0
 
 
 def test_track_records_a_step_and_caches_the_bare_object():
@@ -194,10 +194,10 @@ def test_status_counters_are_mutable_in_place():
     # the loop advances the counters on the status struct; they live there, not
     # on the context directly
     ctx = TokeoAiContext()
-    ctx.status.steps += 1
-    ctx.status.failed_loops += 2
-    assert ctx.status.steps == 1
-    assert ctx.status.failed_loops == 2
+    ctx.loopdata.steps += 1
+    ctx.loopdata.failed_loops += 2
+    assert ctx.loopdata.steps == 1
+    assert ctx.loopdata.failed_loops == 2
 
 
 def test_userdata_defaults_to_none():
