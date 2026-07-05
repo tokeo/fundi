@@ -10,8 +10,8 @@ class loading; the handler passes in what it needs), so the handler and the
 its own.
 
 The modules are imported directly where needed (no re-export proxy here), so a
-consumer states which resolver it uses: ```from tokeo.core.ai.config.guards
-import resolve_guards```. The ```linter``` (the ```ai lint``` command and the
+consumer states which resolver it uses: ```from tokeo.core.ai.config.governors
+import resolve_governors```. The ```linter``` (the ```ai lint``` command and the
 pre-run check) lives here too; ```tokeo.core.ai.linter``` re-exports it for the
 short path.
 

@@ -94,7 +94,7 @@ from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_RETURN,
     GOVERNOR_STAGE_ON_CLOSE,
 )
-from tokeo.core.ai.config.guards import resolve_guards
+from tokeo.core.ai.config.governors import resolve_governors
 from tokeo.core.ai.config.tools import resolve_tools
 from tokeo.core.ai.config.sandboxes import sandbox_contains_tool, sandbox_for
 from tokeo.core.ai.config.profiles import resolve_profile, resolve_agent_name, selectable_names
@@ -199,7 +199,7 @@ class TokeoAi(MetaMixin):
         self._provider_objs = {}
         self._tool_objs = {}
         self._agent_objs = {}
-        self._guard_objs = {}
+        self._governor_objs = {}
         self._sandbox_objs = {}
         # an app-wide sandbox override set via ```set_sandbox```; when set it
         # replaces the agent's sandbox chain for every tool (a deliberate,
@@ -229,7 +229,15 @@ class TokeoAi(MetaMixin):
         self._defaults = self._config('defaults', fallback={}) or {}
         self._profiles = self._config('profiles', fallback={}) or {}
         self._agents = self._config('agents', fallback={}) or {}
-        self._guards = self._config('guards', fallback={}) or {}
+        # the three governor sections merge into one registry, keyed by name;
+        # a name must be unique across guards/transformers/conductors, so a
+        # collision is a hard config error (the linter also flags it early)
+        self._governors = {}
+        for section in ('guards', 'transformers', 'conductors'):
+            for name, item in (self._config(section, fallback={}) or {}).items():
+                if name in self._governors:
+                    raise TokeoAiError(f'ai governor {name!r} is declared more than once across guards, transformers and conductors')
+                self._governors[name] = item
         # whether runs record their trace; read once, passed to each context
         self._trace_enabled = bool(self._config('trace', fallback=True))
         # the ```ai.sandboxes``` map uses the uniform item form: a dict value is
@@ -475,7 +483,7 @@ class TokeoAi(MetaMixin):
         denied = self._deny_set(agent_obj, profile, call_deny)
         return [name for name in active if name not in denied]
 
-    def _guard(self, identity):
+    def _governor(self, identity):
         # build the guard for an identity (the name as written) once and
         # reuse it; guards hold no per-call state, so one cached instance is
         # fine. two forms: a dotted class at the point of use (a '.' in the
@@ -484,61 +492,61 @@ class TokeoAi(MetaMixin):
         # built-in short name or a dotted path) resolves to a class, built with
         # the application and the declaration's ```options``` as keyword
         # arguments (the keys override the guard's Meta defaults)
-        obj = self._guard_objs.get(identity)
+        obj = self._governor_objs.get(identity)
         if obj is None:
             if '.' in identity:
                 # dotted class at the point of use: resolve and build with class
                 # defaults; it carries no declaration, so no options/per-stage
-                obj = self.resolve('guard', identity)(self.app)
+                obj = self.resolve('governor', identity)(self.app)
                 obj._setup(self.app)
             else:
-                item = self._guards.get(identity)
+                item = self._governors.get(identity)
                 if not isinstance(item, dict) or not item.get('type'):
-                    raise TokeoAiError(f'ai guard {identity!r} is not configured under ai.guards')
+                    raise TokeoAiError(f'ai governor {identity!r} is not configured under ai guards, transformers or conductors')
                 settings = item.get('options') or {}
-                obj = self.resolve('guard', item['type'])(self.app, **settings)
+                obj = self.resolve('governor', item['type'])(self.app, **settings)
                 # hand the guard its raw ai.guards[name] declaration; the guard
                 # parses its own per-stage options out of it (see guard._config)
                 obj._declaration = item
                 obj._setup(self.app)
-            self._guard_objs[identity] = obj
+            self._governor_objs[identity] = obj
         return obj
 
     def _stages_of(self, identity):
         # the stages a guard identity's class can do, by reflection (the guard's
         # own has_stage over its on_* methods). used by the composition resolver
         # to intersect a declared stage list with what the class implements
-        guard = self._guard(identity)
-        return [stage for stage in GOVERNOR_STAGES if guard.has_stage(stage)]
+        governor = self._governor(identity)
+        return [stage for stage in GOVERNOR_STAGES if governor.has_stage(stage)]
 
-    def _resolve_guards(self, agent_obj):
+    def _resolve_governors(self, agent_obj):
         # resolve the agent's guard composition: expand chains, parse the
         # per-guard stage lists, union per identity with nearest-wins, apply
-        # omit. returns GuardConfigEntry list in first-appearance order. with no
+        # omit. returns GovernorConfigEntry list in first-appearance order. with no
         # agent (or none selected) there is no pipeline
         if agent_obj is None:
             return []
-        return resolve_guards(
-            self._guards,
-            agent_obj._config('guards') or [],
+        return resolve_governors(
+            self._governors,
+            agent_obj._config('governors') or [],
             agent_obj._config('omit') or [],
             self._stages_of,
         )
 
-    def _guards_by_stage(self, agent_obj):
+    def _governors_by_stage(self, agent_obj):
         # build the per-stage running order: one ordered guard list per stage.
         # the stage is the fixed band; within a stage the guards run in agent
-        # list order. each resolved entry (GuardConfigEntry) carries the stages
+        # list order. each resolved entry (GovernorConfigEntry) carries the stages
         # it runs at -- the intersection of its declared composition stages
         # and what its class implements -- so a guard runs at a stage only
         # when both the composition AND the class include it. with no guards
         # every list is empty and the loop runs as before.
         #
         # built fresh each call on purpose: it runs once per chat() (not per
-        # round), the guard instances are already cached in _guard_objs, and the
+        # round), the guard instances are already cached in _governor_objs, and the
         # build is microseconds against an LLM call's hundreds of milliseconds
-        entries = self._resolve_guards(agent_obj)
-        return {stage: [self._guard(entry.identity) for entry in entries if stage in entry.stages] for stage in GOVERNOR_STAGES}
+        entries = self._resolve_governors(agent_obj)
+        return {stage: [self._governor(entry.identity) for entry in entries if stage in entry.stages] for stage in GOVERNOR_STAGES}
 
     def _sandbox(self, name):
         # build the sandbox configured under ```ai.sandboxes[name]``` once and
@@ -623,7 +631,7 @@ class TokeoAi(MetaMixin):
             invocation.sandbox = getattr(sandbox, '_configured_name', None)
         return sandbox.exec(tool, arguments or {})
 
-    def _exec_guarded(self, call, call_guards, return_guards, ctx, agent_obj, profile, call_deny=None):
+    def _exec_governed(self, call, call_governors, return_governors, ctx, agent_obj, profile, call_deny=None):
         # run one tool call through the guard pipeline: the on_call guards may
         # deny it, the tool runs (inside its sandbox) unless denied, and the
         # on_return guards always run (so a denial is recorded too). the guards
@@ -644,8 +652,8 @@ class TokeoAi(MetaMixin):
         # that returns a fresh copy supersedes the working invocation (changed
         # step), one that mutates in place or returns nothing leaves it (an
         # unchanged step -- the guard is still on the trace, attributable)
-        for guard in call_guards:
-            invocation = ctx.supersede(guard, guard.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
+        for governor in call_governors:
+            invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
             if invocation.decision == Invocation.DENY:
                 break
         if invocation.decision != Invocation.DENY:
@@ -668,8 +676,8 @@ class TokeoAi(MetaMixin):
                 # the pipeline is resilient: a failing tool is recorded and the
                 # loop continues, instead of crashing the whole call
                 invocation.error = f'{type(err).__name__}: {err}'
-        for guard in return_guards:
-            invocation = ctx.supersede(guard, guard.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
+        for governor in return_governors:
+            invocation = ctx.supersede(governor, governor.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
         # the text fed back to the model for this call; the invocation is
         # returned too, so the loop reads the outcome off the object it has
         if invocation.decision == Invocation.DENY:
@@ -775,7 +783,7 @@ class TokeoAi(MetaMixin):
         # participates at the stations whose method it overrides. partition once
         # the per-stage running order: each stage's ordered guard list. the loop
         # asks each stage for its list and runs the guards in that order
-        by_stage = self._guards_by_stage(agent_obj)
+        by_stage = self._governors_by_stage(agent_obj)
         at_begin = by_stage[GOVERNOR_STAGE_ON_BEGIN]
         at_prompt = by_stage[GOVERNOR_STAGE_ON_PROMPT]
         at_answer = by_stage[GOVERNOR_STAGE_ON_ANSWER]
@@ -784,7 +792,7 @@ class TokeoAi(MetaMixin):
         at_close = by_stage[GOVERNOR_STAGE_ON_CLOSE]
         # the guarded path runs when any guard touches a tool stage; the lean
         # path stays for an agent with no tool-stage guards (and no guards)
-        tool_guarded = bool(at_call or at_return)
+        tool_governed = bool(at_call or at_return)
         # the context manages the run: it tracks every object onto one trace and
         # keeps the typed views (messages, invocations, results) in step. the
         # incoming messages are tracked at construction, so ctx.messages is the
@@ -796,16 +804,16 @@ class TokeoAi(MetaMixin):
         # work object), so they refine the messages: a guard may mutate
         # ctx.messages in place (returning None) or hand back a fresh
         # conversation, and refine_messages records the step either way
-        for guard in at_begin:
-            ctx.refine_messages(guard, guard.on_begin(ctx), stage=GOVERNOR_STAGE_ON_BEGIN)
+        for governor in at_begin:
+            ctx.refine_messages(governor, governor.on_begin(ctx), stage=GOVERNOR_STAGE_ON_BEGIN)
         # on_prompt: before each model call, on the outgoing messages
-        for guard in at_prompt:
-            ctx.refine_messages(guard, guard.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
+        for governor in at_prompt:
+            ctx.refine_messages(governor, governor.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
         result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
         # on_answer: after each model call, on the model answer -- the result is
         # the handed-in work object, so the step is recorded through supersede
-        for guard in at_answer:
-            result = ctx.supersede(guard, guard.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
+        for governor in at_answer:
+            result = ctx.supersede(governor, governor.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
         while result.tool_calls:
             # max_steps caps the tool rounds of one request; 0 is unlimited.
             # reaching it aborts loudly: a silent empty answer hides the cause
@@ -814,10 +822,10 @@ class TokeoAi(MetaMixin):
             ctx.track(self, ChatMessage(self._assistant_turn(result)))
             succeeded = False
             for call in result.tool_calls:
-                if tool_guarded:
-                    # the invocation is tracked inside _exec_guarded at creation
+                if tool_governed:
+                    # the invocation is tracked inside _exec_governed at creation
                     # and handed back, so the outcome is read off the object
-                    invocation, content = self._exec_guarded(call, at_call, at_return, ctx, agent_obj, profile, deny)
+                    invocation, content = self._exec_governed(call, at_call, at_return, ctx, agent_obj, profile, deny)
                     ok = (
                         invocation.decision != Invocation.DENY
                         and invocation.error is None
@@ -858,15 +866,15 @@ class TokeoAi(MetaMixin):
             if max_loops and ctx.loopdata.failed_loops >= max_loops:
                 raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
             # on_prompt again before the follow-up model call
-            for guard in at_prompt:
-                ctx.refine_messages(guard, guard.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
+            for governor in at_prompt:
+                ctx.refine_messages(governor, governor.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
             result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
             # on_answer again after the follow-up model call
-            for guard in at_answer:
-                result = ctx.supersede(guard, guard.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
+            for governor in at_answer:
+                result = ctx.supersede(governor, governor.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
         # on_close: once, on the final result, after the loop
-        for guard in at_close:
-            result = ctx.supersede(guard, guard.on_close(ctx, result), result, stage=GOVERNOR_STAGE_ON_CLOSE)
+        for governor in at_close:
+            result = ctx.supersede(governor, governor.on_close(ctx, result), result, stage=GOVERNOR_STAGE_ON_CLOSE)
         # the run result: the final answer (a ChatResult), plus the run's
         # history and counters lifted off the context (which ends here). the
         # answer is just the model answer; the trace and status ride alongside
@@ -1336,19 +1344,19 @@ def ai_extend_app(app):
     # built-in guard: the ready-to-use trace audit, logging every step at every
     # stage so the whole chain is visible. the audit *type* (TokeoAiAuditGuard)
     # is not registered -- it is a base to derive from in python, not selected
-    app.ai.register('guard', 'trace_audit', TokeoAiTraceAuditGuard)
+    app.ai.register('governor', 'trace_audit', TokeoAiTraceAuditGuard)
     # built-in policy guards: the type (TokeoAiPolicyGuard) is not registered --
     # it is a base to derive from in python. the implementations: tool_policy
     # (allow/deny by tool name), and two debugging guards -- deny_policy (always
     # a soft denial at the tool stages) and abort_policy (always a hard stop)
-    app.ai.register('guard', 'abort_policy', TokeoAiAbortPolicyGuard)
-    app.ai.register('guard', 'deny_policy', TokeoAiDenyPolicyGuard)
-    app.ai.register('guard', 'tool_policy', TokeoAiToolPolicyGuard)
+    app.ai.register('governor', 'abort_policy', TokeoAiAbortPolicyGuard)
+    app.ai.register('governor', 'deny_policy', TokeoAiDenyPolicyGuard)
+    app.ai.register('governor', 'tool_policy', TokeoAiToolPolicyGuard)
     # built-in guard: the argument-schema check before a tool runs
-    app.ai.register('guard', 'tool_schema_validate', TokeoAiToolSchemaValidator)
+    app.ai.register('governor', 'tool_schema_validate', TokeoAiToolSchemaValidator)
     # built-in guard: masks secret-looking spans by regex at the tool stages
     # (the redact *type* TokeoAiRedactGuard is a base to derive from, unregistered)
-    app.ai.register('guard', 'regex_redact', TokeoAiRegexRedactGuard)
+    app.ai.register('governor', 'regex_redact', TokeoAiRegexRedactGuard)
     app.ai._setup(app)
 
 

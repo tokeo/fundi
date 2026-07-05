@@ -17,8 +17,10 @@ from dataclasses import dataclass
 from tokeo.core.utils.base import as_list
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.guard import TokeoAiGuard
-from tokeo.core.ai.governor import GOVERNOR_STAGES, GOVERNOR_STAGE_ANY
-from tokeo.core.ai.config.guards import parse_entry, resolve_guards
+from tokeo.core.ai.transformer import TokeoAiTransformer
+from tokeo.core.ai.conductor import TokeoAiConductor
+from tokeo.core.ai.governor import TokeoAiGovernor, GOVERNOR_STAGES, GOVERNOR_STAGE_ANY
+from tokeo.core.ai.config.governors import parse_entry, resolve_governors
 from tokeo.core.ai.config.tools import find_cycles
 
 
@@ -28,7 +30,19 @@ from tokeo.core.ai.config.tools import find_cycles
 # here, agent option contents by the built-in element validators below.
 # max_steps/max_loops are the handler's base loop budgets (config_defaults),
 # settable at the ai section level; trace toggles recording the step history
-_AI_KEYS = {'defaults', 'profiles', 'tools', 'agents', 'guards', 'sandboxes', 'max_steps', 'max_loops', 'trace'}
+_AI_KEYS = {
+    'defaults',
+    'profiles',
+    'tools',
+    'agents',
+    'guards',
+    'transformers',
+    'conductors',
+    'sandboxes',
+    'max_steps',
+    'max_loops',
+    'trace',
+}
 _DEFAULTS_KEYS = {'profile', 'agent'}
 _PROFILE_KEYS = {
     'type',
@@ -45,6 +59,12 @@ _ITEM_KEYS = {'type', 'options'}
 # a guard item also accepts a per-stage on_<stage> block (its own options
 # override for that station); agents and tools have no stages, so they do not
 _GUARD_ITEM_KEYS = _ITEM_KEYS | set(GOVERNOR_STAGES)
+# the three governor sections and, per section, the role base a declared type
+# must derive from -- so the linter keeps each section pure (a guard type only
+# in ai.guards, a transformer only in ai.transformers, ...)
+_GOVERNOR_SECTIONS = ('guards', 'transformers', 'conductors')
+_ROLE_BASE = {'guards': TokeoAiGuard, 'transformers': TokeoAiTransformer, 'conductors': TokeoAiConductor}
+_ROLE_NAME = {'guards': 'guard', 'transformers': 'transformer', 'conductors': 'conductor'}
 _SANDBOX_KEYS = {'type', 'tools', 'except', 'options'}
 
 
@@ -98,7 +118,9 @@ class TokeoAiLinter:
         # options)
         self.add_validator('agents', self._validate_item_form)
         self.add_validator('agents', self._validate_agent_options)
-        self.add_validator('guards', self._validate_guard_entry)
+        self.add_validator('guards', self._validate_governor_entry)
+        self.add_validator('transformers', self._validate_governor_entry)
+        self.add_validator('conductors', self._validate_governor_entry)
         self.add_validator('sandboxes', self._validate_sandbox)
 
     def add_validator(self, section, validator):
@@ -142,6 +164,7 @@ class TokeoAiLinter:
         self._lint_tools(tools)
         self._lint_profiles(profiles, tools)
         self._lint_defaults(defaults, profiles, agents)
+        self._lint_governor_uniqueness()
         for section in self._validators:
             self._run_validators(section)
         return self.issues
@@ -169,7 +192,7 @@ class TokeoAiLinter:
                     continue
                 self.issues.extend(issues or [])
 
-    def _validate_guard_entry(self, section, name, value):
+    def _validate_governor_entry(self, section, name, value):
         # an ai.guards entry is distinguished by the form of its value:
         # a map is a declaration (type, options, the six per-stage blocks); a
         # string is the short form name: module.X (= {type: module.X}); a list
@@ -178,17 +201,64 @@ class TokeoAiLinter:
         path = f'ai.{section}.{name}'
         if isinstance(value, str):
             # short form: the string is the type; resolve it like a declaration
-            self._lint_type('guard', path, {'type': value})
+            self._lint_type('governor', path, {'type': value})
+            self._lint_governor_purity(section, path, value)
         elif isinstance(value, list):
-            # a chain: a composition, the same notation as an agent's guards list
+            # a chain: a composition, the same notation as an agent's governors list
             self._lint_guard_composition(path, value, [name])
         elif isinstance(value, dict):
             # a declaration: the uniform item form plus the per-stage blocks
             self._lint_keys(path, value, _GUARD_ITEM_KEYS)
             self._lint_options(path, value)
-            self._lint_type('guard', path, value)
+            self._lint_type('governor', path, value)
+            self._lint_governor_purity(section, path, value.get('type'))
         else:
             self._add(path, 'must be a declaration (map), a short form (string), or a chain (list)')
+
+    def _governors_merged(self):
+        # the one governor registry the handler builds at load: the three
+        # sections merged by name. a name duplicated across sections is reported
+        # by _lint_governor_uniqueness; here a plain merge resolves references
+        merged = {}
+        for section in _GOVERNOR_SECTIONS:
+            merged.update(self._value(section) or {})
+        return merged
+
+    def _lint_governor_uniqueness(self):
+        # a governor name must be unique across guards/transformers/conductors
+        # (they merge into one registry). report a name that appears in more
+        # than one section, so the collision is caught before the merge
+        seen = {}
+        for section in _GOVERNOR_SECTIONS:
+            for name in self._value(section) or {}:
+                seen.setdefault(name, []).append(section)
+        for name, sections in seen.items():
+            if len(sections) > 1:
+                where = ', '.join(sections)
+                self._add(
+                    f'ai.{sections[-1]}.{name}',
+                    f'governor name {name!r} is declared in more than one section ({where}); '
+                    'names are unique across guards/transformers/conductors',
+                )
+
+    def _lint_governor_purity(self, section, path, type_value):
+        # section purity: a type in a section must resolve to a class deriving
+        # from that section's role base (guards -> TokeoAiGuard, ...). the handler
+        # resolves uniformly under one 'governor' kind, so this is the only place
+        # the guard/transformer/conductor distinction is enforced at build time
+        if not isinstance(type_value, str):
+            return
+        try:
+            cls = self.app.ai.resolve('governor', type_value)
+        except TokeoAiError:
+            # an unresolved type is already reported by _lint_type
+            return
+        expected = _ROLE_BASE.get(section)
+        if expected is None or not isinstance(cls, type):
+            return
+        if not issubclass(cls, expected):
+            where = f'{cls.__module__}.{cls.__qualname__}'
+            self._add(path, f'class {where} can not be used as {_ROLE_NAME[section]}')
 
     def _validate_item_form(self, section, name, item):
         # the uniform item form shared by agents and guards: a mapping with a
@@ -223,7 +293,7 @@ class TokeoAiLinter:
         # the guards composition: each entry is a bare name or a one-key
         # {name: [stages]} mapping; chains (a list value under ai.guards) may be
         # referenced too. omit is a sibling field, not a list entry
-        self._lint_guard_composition(f'{path}.guards', options.get('guards'))
+        self._lint_guard_composition(f'{path}.governors', options.get('governors'))
         self._lint_guard_omit(f'{path}.omit', options.get('omit'))
         for key in ('max_steps', 'max_loops'):
             value = options.get(key)
@@ -253,8 +323,8 @@ class TokeoAiLinter:
         # notes (agent wins over chain) become note issues and a not-decidable
         # conflict becomes an error issue. a resolution that cannot even build
         # (an unknown name, already reported by the form check) is skipped here
-        guards = options.get('guards')
-        if not isinstance(guards, list):
+        governors = options.get('governors')
+        if not isinstance(governors, list):
             return
 
         notes = self
@@ -262,19 +332,19 @@ class TokeoAiLinter:
         class _NoteLogger:
 
             def warning(self, message):
-                notes._add(f'{path}.guards', message, level='note')
+                notes._add(f'{path}.governors', message, level='note')
 
         try:
-            resolve_guards(
-                self._value('guards') or {},
-                guards,
+            resolve_governors(
+                self._governors_merged(),
+                governors,
                 options.get('omit') or [],
                 self._guard_class_stages_or_empty,
                 logger=_NoteLogger(),
             )
         except TokeoAiError as err:
             # a not-decidable conflict (or a chain cycle) -- an error issue
-            self._add(f'{path}.guards', str(err))
+            self._add(f'{path}.governors', str(err))
 
     def _guard_class_stages_or_empty(self, identity):
         # the resolver's stages_of: the class stages, or empty when the class
@@ -290,16 +360,16 @@ class TokeoAiLinter:
         # None when the class cannot be resolved (a separate error is reported)
         try:
             if '.' in identity:
-                cls = self.app.ai.resolve('guard', identity)
+                cls = self.app.ai.resolve('governor', identity)
             else:
-                declaration = (self._value('guards') or {}).get(identity)
+                declaration = self._governors_merged().get(identity)
                 type_value = declaration.get('type') if isinstance(declaration, dict) else declaration
                 if not isinstance(type_value, str):
                     return None
-                cls = self.app.ai.resolve('guard', type_value)
+                cls = self.app.ai.resolve('governor', type_value)
         except TokeoAiError:
             return None
-        return {stage for stage in GOVERNOR_STAGES if getattr(cls, stage) is not getattr(TokeoAiGuard, stage)}
+        return {stage for stage in GOVERNOR_STAGES if getattr(cls, stage) is not getattr(TokeoAiGovernor, stage)}
 
     def _lint_guard_composition(self, path, guards, chain_path=None):
         # validate a guards composition list: each entry is a bare name
@@ -312,7 +382,7 @@ class TokeoAiLinter:
         if not isinstance(guards, list):
             self._add(path, 'must be a list of guard names')
             return
-        known = set(self._value('guards') or {})
+        known = set(self._governors_merged())
         chain_path = chain_path or []
         for entry in guards:
             try:
@@ -320,7 +390,7 @@ class TokeoAiLinter:
             except TokeoAiError as err:
                 self._add(path, str(err))
                 continue
-            value = (self._value('guards') or {}).get(identity) if isinstance(identity, str) else None
+            value = self._governors_merged().get(identity) if isinstance(identity, str) else None
             # a list value under ai.guards is a chain: walk it (a chain entry
             # carries no stage list of its own)
             if isinstance(value, list):
@@ -334,7 +404,7 @@ class TokeoAiLinter:
                 continue
             # an identity must be a declared short name or a dotted class
             if '.' not in identity and identity not in known:
-                self._add(path, _unknown('guard', identity, known))
+                self._add(path, _unknown('governor', identity, known))
                 continue
             # a named stage must be one the class can do
             if stages is not None:
@@ -353,12 +423,12 @@ class TokeoAiLinter:
         if not isinstance(omit, list):
             self._add(path, 'must be a list of guard names')
             return
-        known = set(self._value('guards') or {})
+        known = set(self._governors_merged())
         for entry in omit:
             if not isinstance(entry, str):
                 self._add(path, f'omit entry must be a guard name, got {entry!r}')
             elif '.' not in entry and entry not in known:
-                self._add(path, _unknown('guard', entry, known))
+                self._add(path, _unknown('governor', entry, known))
 
     def _validate_sandbox(self, section, name, item):
         # a sandbox item: a resolvable ```type```, the required ```tools```

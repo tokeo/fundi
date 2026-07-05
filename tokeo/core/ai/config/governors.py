@@ -36,7 +36,7 @@ from tokeo.core.ai.exc import TokeoAiError
 from tokeo.core.ai.governor import GOVERNOR_STAGE_ANY
 
 
-class GuardConfigEntry:
+class GovernorConfigEntry:
     """
     One resolved guard participation: an identity and the stages it runs at.
 
@@ -60,7 +60,7 @@ class GuardConfigEntry:
         self.source = source
 
     def __repr__(self):
-        return f'GuardConfigEntry({self.identity!r}, {sorted(self.stages)}, {self.source!r})'
+        return f'GovernorConfigEntry({self.identity!r}, {sorted(self.stages)}, {self.source!r})'
 
 
 def parse_entry(entry):
@@ -120,7 +120,7 @@ def _resolve_stages(identity, stages, stages_of):
     return frozenset(named) & class_stages
 
 
-def resolve_guards(guards_section, agent_guards, agent_omit, stages_of, logger=None):
+def resolve_governors(governors_section, agent_governors, agent_omit, stages_of, logger=None):
     """
     Resolve an agent's guard composition into an ordered participation list.
 
@@ -140,9 +140,9 @@ def resolve_guards(guards_section, agent_guards, agent_omit, stages_of, logger=N
 
     ### Args
 
-    - **guards_section** (dict): The raw ```ai.guards``` mapping (declarations,
+    - **governors_section** (dict): The raw ```ai.guards``` mapping (declarations,
         short forms, and chains share this namespace)
-    - **agent_guards** (list): The agent's ```guards``` composition list
+    - **agent_governors** (list): The agent's ```guards``` composition list
     - **agent_omit** (list): The agent's ```omit``` list (identities to drop)
     - **stages_of** (callable): ```identity -> iterable of stage names``` the
         class can do (the handler passes a reflection-backed lookup)
@@ -152,7 +152,7 @@ def resolve_guards(guards_section, agent_guards, agent_omit, stages_of, logger=N
 
     ### Returns
 
-    - **list**: ```GuardConfigEntry``` in first-appearance order, one per
+    - **list**: ```GovernorConfigEntry``` in first-appearance order, one per
         identity, omitted identities removed
 
     ### Raises
@@ -179,7 +179,7 @@ def resolve_guards(guards_section, agent_guards, agent_omit, stages_of, logger=N
     def walk(entries, source, chain_path):
         for entry in entries or []:
             identity, stages = parse_entry(entry)
-            value = guards_section.get(identity) if isinstance(identity, str) else None
+            value = governors_section.get(identity) if isinstance(identity, str) else None
             # a list value under ai.guards is a chain: import it (a chain
             # entry carries no stage list of its own -- it is a name)
             if isinstance(value, list):
@@ -191,7 +191,7 @@ def resolve_guards(guards_section, agent_guards, agent_omit, stages_of, logger=N
             else:
                 record(identity, stages, source)
 
-    walk(agent_guards, 'agent', [])
+    walk(agent_governors, 'agent', [])
 
     omit = set(agent_omit or [])
     resolved = []
@@ -221,8 +221,8 @@ def _decide(identity, appears, logger):
             if logger is not None and frozenset(agent_stages) != frozenset(chain_stages):
                 agent_desc = 'bare entry (all stages)' if agent_bare else _fmt(agent_stages)
                 logger.warning(f"guard {identity!r}: the agent's {agent_desc} overrides the chain's {_fmt(chain_stages)}")
-        return GuardConfigEntry(identity, agent_stages, 'agent')
-    return GuardConfigEntry(identity, chain_forms[0][0], 'chain')
+        return GovernorConfigEntry(identity, agent_stages, 'agent')
+    return GovernorConfigEntry(identity, chain_forms[0][0], 'chain')
 
 
 def _fmt(stages):

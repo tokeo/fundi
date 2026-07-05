@@ -106,7 +106,20 @@ A profile or an agent then activates a single item or a whole group by name.
     A group that transitively contains itself is a configuration error; `ai lint`
     reports it. The resolver breaks the cycle, but the lint fails the run.
 
-## 4. `guards` — the per-call pipeline
+## 4. the `govenor` pipeline
+
+`guards`, `transformers`, and `conductors` are three **1:1 sections** with the
+same notation (declarations and chains). At load they merge into **one** governor
+registry, so a **name is unique across all three** (a collision is a config
+error). An agent composes them by name under `governors:` (see 4.3). The three
+roles share the same mechanic; they differ only in contract (a guard may deny, a
+transformer only reshapes, a conductor steers). The linter enforces **section
+purity**: a `type` in `transformers` must resolve to a `TokeoAiTransformer`
+subclass, in `conductors` to a `TokeoAiConductor`, in `guards` to a
+`TokeoAiGuard` -- otherwise ``class <path> can not be used as <role>``. The rest
+of this section uses `guards` as the example; `transformers`/`conductors` are
+identical in form.
+
 
 A guard acts at one or more **stages** of a tool call. The six stages, in order:
 
@@ -156,17 +169,17 @@ guards:
         limit: 200          # but cap the final answer harder
 ```
 
-### 4.3 Composing guards on an agent
+### 4.3 Composing governors on an agent
 
-An agent's `guards:` list is a **composition** — *where and in what order*
-guards run. Each entry is a bare name or a `name: [stages]` stage list.
+An agent's `governors:` list is a **composition** — *where and in what order*
+its governors (guards, transformers, conductors) run. Each entry is a bare name or a `name: [stages]` stage list.
 
 ```yaml
 agents:
   demo:
     type: fundi
     options:
-      guards:
+      governors:
         - trace_audit           # bare name: runs at all the class's stages
         - truncate: [on_close]  # stage list: runs at on_close only
         - regex_redact          # bare name
@@ -198,15 +211,15 @@ ai:
   agents:
     demo:
       options:
-        guards:
-          - secure              # imports the chain's guards in order
+        governors:
+          - secure              # imports the chain's governors in order
           - truncate: [on_close]
         omit:
           - trace_audit         # drop one guard the chain brought in
 ```
 
-`omit` is a sibling field of `guards`; it drops a named guard from *this*
-agent's composition.
+`omit` is a sibling field of `governors`; it drops a named governor from
+*this* agent's composition.
 
 ### 4.5 Union and conflict (nearest wins)
 
@@ -275,7 +288,7 @@ agents:
       tools:                    # the tools this agent contributes
         - mathematics
         - filesystem
-      guards:                   # the pipeline (a composition, see the guards section)
+      governors:                # the pipeline (a composition, see the governors sections)
         - secure                # a chain (brings trace_audit + regex_redact)
         - truncate: [on_close]
       sandboxes:                # the chain (see the sandboxes section)
@@ -292,10 +305,10 @@ agents:
 | Option | Meaning |
 |--------|---------|
 | `tools` | the tools/groups this agent contributes (the active set of a call) |
-| `guards` | the guard composition (the guards section) |
+| `governors` | the governor composition (guards + transformers + conductors) |
 | `sandboxes` | the ordered sandbox chain (the sandboxes section) |
 | `deny` | tools/groups forbidden outright, before any sandbox lookup |
-| `omit` | guard identities to drop from the composition (chains) |
+| `omit` | governor identities to drop from the composition (chains) |
 | `max_steps` / `max_loops` | per-agent budget overrides (nearest wins) |
 
 .. note::

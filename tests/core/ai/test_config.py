@@ -18,7 +18,7 @@ import pytest
 
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.governor import GOVERNOR_STAGE_ANY
-from tokeo.core.ai.config.guards import resolve_guards, parse_entry
+from tokeo.core.ai.config.governors import resolve_governors, parse_entry
 from tokeo.core.ai.config.tools import resolve_tools, find_cycles
 from tokeo.core.ai.config.sandboxes import sandbox_contains_tool, sandbox_for
 from tokeo.core.ai.config.profiles import resolve_profile, find_profile, resolve_agent_name
@@ -31,7 +31,7 @@ def _stages_of(identity):
 
 
 def _resolve(guards_section, agent_guards, agent_omit=None):
-    return resolve_guards(guards_section, agent_guards, agent_omit or [], _stages_of)
+    return resolve_governors(guards_section, agent_guards, agent_omit or [], _stages_of)
 
 
 def test_bare_name_runs_all_class_stages():
@@ -129,7 +129,7 @@ def test_agent_over_chain_logs_a_note_and_agent_wins():
         def warning(self, message):
             notes.append(message)
 
-    entries = resolve_guards(section, ['chainA', {'alpha': ['on_return']}], [], _stages_of, logger=_Log())
+    entries = resolve_governors(section, ['chainA', {'alpha': ['on_return']}], [], _stages_of, logger=_Log())
     assert len(entries) == 1
     assert entries[0].stages == frozenset({'on_return'})
     assert len(notes) == 1 and 'overrides' in notes[0]

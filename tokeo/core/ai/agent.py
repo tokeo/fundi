@@ -46,16 +46,17 @@ class TokeoAiAgent(MetaMixin):
 
         # the configurable defaults, as one dict; the agent entry's options
         # overlay this, read at runtime via _config. tools: the tool selection
-        # (item or group names), merged with the profile's. guards: the guard
-        # selection (guard names) for the tool-call pipeline. sandboxes: the
+        # (item or group names), merged with the profile's. governors: the
+        # governor composition (guard/transformer/conductor names) for the loop
+        # pipeline, in order. sandboxes: the
         # ordered sandbox chain (sandbox names) -- a tool runs in the first
         # sandbox whose tools contain it; when none does the call is denied, so
         # an in_process sandbox with tools: _all placed last is the opt-in
         # catch-all. deny: tools (item or group names) forbidden outright before
         # any sandbox lookup, a hard exclusion unlike a sandbox except.
-        # omit: guard identities to drop from this agent's composition (a local
-        # leaving-out, e.g. one a chain brought in), next to guards so it
-        # never collides with a guard or chain name.
+        # omit: governor identities to drop from this agent's composition (a
+        # local leaving-out, e.g. one a chain brought in), next to governors so
+        # it never collides with a governor or chain name.
         # max_steps: per-agent cap on tool rounds (0 = unlimited). max_loops:
         # per-agent cap on consecutive rounds without one successful call
         # (0 = unlimited). both resolve in three levels, nearest wins: a chat()
@@ -65,7 +66,7 @@ class TokeoAiAgent(MetaMixin):
         # of the default numbers
         config_defaults = dict(
             tools=[],
-            guards=[],
+            governors=[],
             sandboxes=[],
             deny=[],
             omit=[],
