@@ -19,10 +19,6 @@ dependencies = [
     # packages necessary to run fundi
     "prompt_toolkit",
     "httpx",
-    "numpy",
-    "numba",
-    "torch",
-    "wasmtime",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +32,11 @@ dev = [
     "wheel>=0.40.0",
     "pyink>=25.0.0",
     "flake8>=7.0.0",
+    # packages necessary to run all macros
+    "numpy",
+    "numba",
+    "torch",
+    "wasmtime",
 ]
 
 [tool.setuptools]
