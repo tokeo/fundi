@@ -29,7 +29,6 @@ clean:
 	rm -rf tmp
 	rm -rf build/
 	mkdir -p tmp/tests
-	touch tmp/tests/.gitkeep
 
 venv:
 	@if [ "0${VIRTUAL_ENV}" != "0" ]; then echo "Please deactivate venv before continue!"; exit 1; fi
@@ -100,7 +99,6 @@ test:
 	@if [ "0${VIRTUAL_ENV}"${no_venv} == "0" ]; then echo "No venv activated! Add no_venv=1 to enforce make."; exit 1; fi
 	rm -rf tmp/tests
 	mkdir -p tmp/tests
-	touch tmp/tests/.gitkeep
 	CEMENT_LOG=0 \
 	python -m pytest \
 		-${verbosity} \
