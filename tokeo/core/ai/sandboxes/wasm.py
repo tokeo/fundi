@@ -457,10 +457,15 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         wasi.env = [(key, value) for key, value in env.items()]
         store.set_wasi(wasi)
         module = wasmtime.Module.from_file(engine, self._runtime)
+        if timeout:
+            # set the deadline before any wasm code runs: with epoch
+            # interruption enabled the store starts at deadline 0, and
+            # instantiate already executes module start code -- newer
+            # wasmtime checks the epoch there and traps 'interrupt' at once
+            store.set_epoch_deadline(1)
         instance = linker.instantiate(store, module)
         start = instance.exports(store)['_start']
         if timeout:
-            store.set_epoch_deadline(1)
             import threading
 
             ticker = threading.Timer(timeout, engine.increment_epoch)
@@ -478,7 +483,13 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                     detail = open(stderr_path).read().strip()[-400:]
                 raise TokeoAiError(f'tool {dotted!r} crashed in the wasm sandbox: {detail or exit_trap}')
         except wasmtime.Trap as trap:
-            if timeout and 'epoch' in str(trap).lower():
+            # newer wasmtime marks the epoch trap by code and words it as
+            # 'interrupt'; older builds only say 'epoch' in the message --
+            # match the code first, the text as the fallback
+            trap_code = getattr(wasmtime, 'TrapCode', None)
+            code_hit = trap_code is not None and getattr(trap, 'trap_code', None) == trap_code.INTERRUPT
+            text_hit = any(word in str(trap).lower() for word in ('epoch', 'interrupt'))
+            if timeout and (code_hit or text_hit):
                 raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the wasm sandbox')
             # a trap with a written reply is the tool's own error (handled by
             # the caller); a trap without one is a guest-level failure -- the
