@@ -148,7 +148,7 @@ guards:
     options:
       patterns: [bearer, sk-key]  # required: no built-in list
   truncate:                       # a project guard by dotted path
-    type: myapp.core.ai.guards.truncate.MyAppAiTruncateGuard
+    type: myapp.core.ai.transformers.truncate.MyAppAiTruncateTransformer
     options:
       limit: 500
 ```
@@ -161,7 +161,7 @@ block. The stage block overlays the base `options`:
 ```yaml
 guards:
   truncate:
-    type: myapp.core.ai.guards.truncate.MyAppAiTruncateGuard
+    type: myapp.core.ai.transformers.truncate.MyAppAiTruncateTransformer
     options:
       limit: 2000           # the default for every stage
     on_close:

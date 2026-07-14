@@ -18,6 +18,13 @@ base versions are no-ops, so an unoverridden stage simply does not run. The
 handler finds participation by reflection (a method that differs from the base),
 so there is no separate phase declaration. Like a provider, a governor holds no
 mutable per-call state.
+
+The full reference for writing a governor -- the stages, what each hands you, the
+write contract for a result-changing step, coherence and the memory note -- is the
+included guide below. Each role adds only its own contract on top
+(`TokeoAiGuard`, `TokeoAiTransformer`, `TokeoAiConductor`).
+
+.. include:: ./GOVERNORS.md
 """
 
 import copy
