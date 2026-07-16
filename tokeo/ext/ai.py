@@ -94,6 +94,9 @@ from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_RETURN,
     GOVERNOR_STAGE_ON_CLOSE,
 )
+from tokeo.core.ai.guard import TokeoAiGuard
+from tokeo.core.ai.transformer import TokeoAiTransformer
+from tokeo.core.ai.conductor import TokeoAiConductor
 from tokeo.core.ai.config.governors import resolve_governors
 from tokeo.core.ai.config.tools import resolve_tools
 from tokeo.core.ai.config.sandboxes import sandbox_contains_tool, sandbox_for
@@ -382,6 +385,16 @@ class TokeoAi(MetaMixin):
             self._provider_objs[provider_type] = obj
         return obj
 
+    def _governor_label(self, governor):
+        # the class carries the character (guard secures, transformer
+        # reshapes, conductor directs); the name as written lives in the
+        # cache, read back here -- the objects stay bare like the tools
+        name = next((key for key, obj in self._governor_objs.items() if obj is governor), governor.__class__.__name__)
+        for cls, role in ((TokeoAiGuard, 'guard'), (TokeoAiTransformer, 'transformer'), (TokeoAiConductor, 'conductor')):
+            if isinstance(governor, cls):
+                return f'{role} {name!r}'
+        return f'governor {name!r}'
+
     def _tool(self, name):
         # instantiate the tool configured under ```ai.tools[name]``` once and
         # reuse it; the item has the uniform form: ```type``` (a built-in short
@@ -483,8 +496,8 @@ class TokeoAi(MetaMixin):
         denied = self._deny_set(agent_obj, profile, call_deny)
         return [name for name in active if name not in denied]
 
-    def _governor(self, identity):
-        # build the guard for an identity (the name as written) once and
+    def _governor(self, name):
+        # build the guard for an name (the name as written) once and
         # reuse it; guards hold no per-call state, so one cached instance is
         # fine. two forms: a dotted class at the point of use (a '.' in the
         # name) runs with class defaults, not configurable (no declaration); a
@@ -492,24 +505,24 @@ class TokeoAi(MetaMixin):
         # built-in short name or a dotted path) resolves to a class, built with
         # the application and the declaration's ```options``` as keyword
         # arguments (the keys override the guard's Meta defaults)
-        obj = self._governor_objs.get(identity)
+        obj = self._governor_objs.get(name)
         if obj is None:
-            if '.' in identity:
+            if '.' in name:
                 # dotted class at the point of use: resolve and build with class
                 # defaults; it carries no declaration, so no options/per-stage
-                obj = self.resolve('governor', identity)(self.app)
+                obj = self.resolve('governor', name)(self.app)
                 obj._setup(self.app)
             else:
-                item = self._governors.get(identity)
+                item = self._governors.get(name)
                 if not isinstance(item, dict) or not item.get('type'):
-                    raise TokeoAiError(f'ai governor {identity!r} is not configured under ai guards, transformers or conductors')
+                    raise TokeoAiError(f'ai governor {name!r} is not configured under ai guards, transformers or conductors')
                 settings = item.get('options') or {}
                 obj = self.resolve('governor', item['type'])(self.app, **settings)
                 # hand the guard its raw ai.guards[name] declaration; the guard
                 # parses its own per-stage options out of it (see guard._config)
                 obj._declaration = item
                 obj._setup(self.app)
-            self._governor_objs[identity] = obj
+            self._governor_objs[name] = obj
         return obj
 
     def _stages_of(self, identity):
@@ -655,6 +668,8 @@ class TokeoAi(MetaMixin):
         for governor in call_governors:
             invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
             if invocation.decision == Invocation.DENY:
+                if not invocation.reason:
+                    invocation.reason = f'blocked by {self._governor_label(governor)}'
                 break
         if invocation.decision != Invocation.DENY:
             try:
@@ -678,10 +693,13 @@ class TokeoAi(MetaMixin):
                 invocation.error = f'{type(err).__name__}: {err}'
         for governor in return_governors:
             invocation = ctx.supersede(governor, governor.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
+            if invocation.decision == Invocation.DENY:
+                if not invocation.reason:
+                    invocation.reason = f'blocked by {self._governor_label(governor)}'
         # the text fed back to the model for this call; the invocation is
         # returned too, so the loop reads the outcome off the object it has
         if invocation.decision == Invocation.DENY:
-            content = f'denied: {invocation.reason or "blocked by a guard"}'
+            content = f'denied: {invocation.reason or "blocked by a governor"}'
         elif invocation.error is not None:
             # a sandbox-machinery error (timeout, transport, an exhausted chain)
             content = f'error: {invocation.error}'

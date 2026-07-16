@@ -24,6 +24,10 @@ from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_RETURN,
     GOVERNOR_STAGE_ON_PROMPT,
 )
+from tokeo.core.ai.context import TokeoAiContext
+from tokeo.core.ai.transformer import TokeoAiTransformer
+from tokeo.core.ai.conductor import TokeoAiConductor
+from tokeo.core.ai.data import Invocation, ToolCall
 
 
 class AiTest(TokeoTest):
@@ -145,3 +149,61 @@ def test_no_governors_gives_empty_lists_for_every_stage():
     with AiTest() as app:
         by_stage = _by_stage(app, [])
         assert all(by_stage[stage] == [] for stage in GOVERNOR_STAGES)
+
+
+# --- deny stamps: trace and feedback name who decided (T-00015/17) ---
+
+
+class DenyingSilently(TokeoAiTransformer):
+
+    def on_call(self, ctx, invocation):
+        # denies without naming a reason: the loop stamps the actor
+        invocation.decision = Invocation.DENY
+
+
+class DenyingOnReturn(TokeoAiConductor):
+
+    def on_return(self, ctx, invocation):
+        invocation.decision = Invocation.DENY
+        invocation.reason = 'result rejected'
+
+
+def test_call_deny_without_reason_is_stamped_with_the_actor():
+    # the deny is honoured (roles are characters, the implementation
+    # decides) and the stamped reason names role + name -- never 'a guard'
+    with AiTest() as app:
+        governor = DenyingSilently(app)
+        governor._setup(app)
+        app.ai._governor_objs['shredder'] = governor
+        ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
+        call = ToolCall(id='t1', name='calc', arguments={'expr': '1+1'})
+        invocation, content = app.ai._exec_governed(call, [governor], [], ctx, None, None)
+        assert invocation.decision == Invocation.DENY
+        assert invocation.reason == "blocked by transformer 'shredder'"
+        assert content == "denied: blocked by transformer 'shredder'"
+        assert invocation.result is None  # the tool never ran
+
+
+def test_return_deny_keeps_a_named_reason_untouched():
+    # a governor-provided reason IS the text; the stamp only fills silence
+    with AiTest() as app:
+        governor = DenyingOnReturn(app)
+        governor._setup(app)
+        app.ai._governor_objs['rejector'] = governor
+        ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
+        call = ToolCall(id='t2', name='missing_tool', arguments={})
+        invocation, content = app.ai._exec_governed(call, [], [governor], ctx, None, None)
+        assert invocation.decision == Invocation.DENY
+        assert invocation.reason == 'result rejected'
+        assert content == 'denied: result rejected'
+
+
+def test_governor_label_reads_class_character_and_cached_name():
+    # the role comes from the class (isinstance), the name from the
+    # cache; an uncached object reads as its class name
+    with AiTest() as app:
+        governor = DenyingSilently(app)
+        app.ai._governor_objs['truncate'] = governor
+        assert app.ai._governor_label(governor) == "transformer 'truncate'"
+        stray = DenyingOnReturn(app)
+        assert app.ai._governor_label(stray) == "conductor 'DenyingOnReturn'"

@@ -1,13 +1,20 @@
 # Building a transformer
 
-A transformer is a governor that **reshapes** the run and **never denies**. It
+A transformer is a governor whose character is **reshaping**. It
 shares the whole governor mechanic with the guard and the conductor -- the stages,
 the write contract for a result-changing step, keeping the views coherent, and
 stopping the run by ```raise```. That mechanic is one guide: the
 `tokeo.core.ai.governor.TokeoAiGovernor` class documentation. This page states only
 what is specific to the **transformer role**.
 
-## The one contract: reshape, never deny
+## Character, not law: reshaping
+
+The three roles describe characters in thought: a transformer
+*reshapes*, a guard *secures*, a conductor *directs*. Everything is
+determined by the implementation -- the loop honours what any governor
+does, and when one denies without naming a reason, the loop stamps role
+and name of the actor into the reason, so trace and feedback always
+show who decided.
 
 A transformer may inspect and refine what a stage hands it -- mask, rewrite, enrich,
 shorten -- and return either ```None``` (refined in place) or a fresh object of the

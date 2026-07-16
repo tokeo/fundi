@@ -200,3 +200,27 @@ unwanted.
 
 A guard has, in addition, a **soft denial** that skips only one call -- that is the
 guard's own power, described on `TokeoAiGuard`.
+
+## Ordering and roles
+
+Two axes order a run, and only two. The **stages** are the time axis
+(begin, prompt, answer, call, return, close): a governor runs at a
+stage when its class implements it and its composition includes it.
+The **agent's one flat governor list** is the order within every
+stage -- each stage list is a projection of that one list, in list
+order. There is no third axis: no role bands, no priority numbers.
+
+A governor class derives from its role class -- ```TokeoAiGuard```,
+```TokeoAiTransformer```, or ```TokeoAiConductor``` -- never from
+```TokeoAiGovernor``` directly: the role class carries the character,
+the base class only the mechanics.
+
+The config sections ```guards```, ```transformers```, and
+```conductors``` declare governors in one shared namespace (a name may
+appear in only one of them). The section names the declared role --
+characters in thought: a guard *secures*, a transformer *reshapes*, a
+conductor *directs*. Everything is determined by the implementation;
+the author of the agent list is the composition root and orders it
+deliberately. When a governor denies without a reason, the loop stamps
+role and name of the actor into the reason -- trace and feedback
+always show who decided.
