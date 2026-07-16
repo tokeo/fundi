@@ -1,5 +1,5 @@
 """
-Transformer derivations: reshape the run, never deny.
+Transformer derivations: governors whose character is reshaping.
 
 The base transformer exception ```TokeoAiTransformerError``` is re-exported here
 for the short import path ```tokeo.core.ai.transformers```.

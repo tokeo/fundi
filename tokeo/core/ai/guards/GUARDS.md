@@ -14,8 +14,8 @@ A guard alone may refuse. It refuses in one of two ways, very different in reach
 - **Soft denial** -- at ```on_call```, set ```invocation.decision = Invocation.DENY```
     with a ```reason```. This skips *that one* tool call; the loop continues and the
     model is told (```denied: <reason>```), so it can correct itself
-    (deny-and-continue). This soft denial is the guard's own -- a transformer or a
-    conductor never denies.
+    (deny-and-continue). Denying is the guard's character; the loop honours a deny
+    from any governor and names the one that decided in the reason it feeds back.
 - **Hard abort** -- ```raise``` a typed ```TokeoAiGuardError``` at any stage. The loop
     does not catch it and the run ends at once (the shared stop-the-run mechanic on
     `tokeo.core.ai.governor.TokeoAiGovernor`). Use the typed error of the guard's
@@ -26,7 +26,7 @@ A guard alone may refuse. It refuses in one of two ways, very different in reach
 
 Write a guard by deriving from one of the guard *types*, not from ```TokeoAiGuard```
 itself. The type states the sub-role on the agent's governor list and on the trace,
-and sets the contract your subclass keeps.
+and says what your subclass is *for*.
 
 ## The guard types
 

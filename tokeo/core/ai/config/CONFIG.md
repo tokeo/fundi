@@ -112,8 +112,9 @@ A profile or an agent then activates a single item or a whole group by name.
 same notation (declarations and chains). At load they merge into **one** governor
 registry, so a **name is unique across all three** (a collision is a config
 error). An agent composes them by name under `governors:` (see 4.3). The three
-roles share the same mechanic; they differ only in contract (a guard may deny, a
-transformer only reshapes, a conductor steers). The linter enforces **section
+roles share the same mechanic; they differ in character (a guard secures, a
+transformer reshapes, a conductor directs the run) -- what a governor does is
+determined by its implementation. The linter enforces **section
 purity**: a `type` in `transformers` must resolve to a `TokeoAiTransformer`
 subclass, in `conductors` to a `TokeoAiConductor`, in `guards` to a
 `TokeoAiGuard` -- otherwise ``class <path> can not be used as <role>``. The rest

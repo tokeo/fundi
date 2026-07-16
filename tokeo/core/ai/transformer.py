@@ -1,13 +1,15 @@
 """
-The transformer role: a governor that regulates by reshaping, never denies.
+The transformer role: a governor whose character is reshaping.
 
 A transformer is a governor (see ```TokeoAiGovernor``` for the shared mechanic:
 the stages, override-to-participate, the per-stage config, reflection). It shares
-that mechanic with the guard and the conductor and narrows the contract to
-**reshaping**: it may inspect and refine the running state at its stages -- mask,
-rewrite, enrich, replace an object with a fresh one of the same kind -- but it
-never denies a tool call. Denial is the guard's power; steering is the
-conductor's. A transformer only reshapes what passes through.
+that mechanic with the guard and the conductor; its character is
+**reshaping**: it inspects and refines the running state at its stages -- mask,
+rewrite, enrich, replace an object with a fresh one of the same kind. Securing
+is the guard's character, directing the conductor's -- characters in thought,
+not fences: what a governor does is determined by its implementation, and the
+loop honours it (a deny is honoured from any role, and the trace and the
+feedback name the governor that decided).
 
 ## Do not derive from this class directly
 
@@ -24,10 +26,11 @@ class TokeoAiTransformer(TokeoAiGovernor):
     """
     The transformer role: a governor that regulates by reshaping.
 
-    A transformer shares the whole governor mechanic and narrows the contract to
-    reshaping: it may inspect and refine like any governor -- return ```None```
-    to refine in place, or a fresh object of the same kind to replace it -- but it
-    never denies a call and never steers the run. Derive from a transformer
-    *type*, not from this class directly; see the module docstring.
+    A transformer shares the whole governor mechanic; its character is
+    reshaping: it inspects and refines like any governor -- return ```None```
+    to refine in place, or a fresh object of the same kind to replace it.
+    Reshaping is what it is *for*; the implementation decides what it does.
+    Derive from a transformer *type*, not from this class directly; see the
+    module docstring.
 
     """

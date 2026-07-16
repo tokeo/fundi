@@ -1,5 +1,5 @@
 """
-The guard role: a governor that regulates by checking, and may deny a call.
+The guard role: a governor whose character is securing by checking.
 
 A guard is a governor (see ```TokeoAiGovernor``` for the shared mechanic: the
 stages, override-to-participate, the per-stage config, reflection). It adds the
@@ -11,9 +11,9 @@ role whose job is to check and, where a call is not allowed, refuse it.
 Write a guard by deriving from one of the guard *types* -- ```TokeoAiAuditGuard```,
 ```TokeoAiPolicyGuard```, ```TokeoAiRedactGuard```, ... -- not from
 ```TokeoAiGuard``` itself. The type states the guard's sub-role (observe, govern,
-mask) on the agent's guard list and on the trace, and sets the contract your
-subclass keeps (an audit guard observes and changes nothing; a policy guard may
-deny; a redact guard masks but never denies). Deriving straight from
+mask) on the agent's guard list and on the trace, and says what your subclass
+is *for* (an audit guard observes; a policy guard denies; a redact guard
+masks) -- the implementation decides. Deriving straight from
 ```TokeoAiGuard``` makes a guard with no declared type -- avoid it.
 
 ## Soft denial: skip one call
@@ -33,13 +33,13 @@ from tokeo.core.ai.governor import TokeoAiGovernor
 
 class TokeoAiGuard(TokeoAiGovernor):
     """
-    The guard role: a governor that regulates by checking, and may deny.
+    The guard role: a governor whose character is securing by checking.
 
-    A guard shares the whole governor mechanic and narrows the contract to
-    checking: it may inspect and refine like any governor, and it alone may soft-
-    deny a tool call (```invocation.decision = Invocation.DENY``` at ```on_call```,
-    with a ```reason```) to skip that one call while the loop continues. Derive
-    from a guard *type* (audit, policy, redact), not from this class directly; see
-    the module docstring.
+    A guard shares the whole governor mechanic; its character is checking: it
+    inspects and refines like any governor, and denying is what it is *for*
+    (```invocation.decision = Invocation.DENY``` at ```on_call```, with a
+    ```reason```) to skip that one call while the loop continues. Derive from a
+    guard *type* (audit, policy, redact), not from this class directly; see the
+    module docstring.
 
     """

@@ -13,7 +13,7 @@ class TokeoAiTruncateTransformerError(TokeoAiTransformerError):
     """
     Raised by a truncate transformer that needs to stop the run.
 
-    A truncate transformer only shortens text and never denies; this exists so a
+    A truncate transformer is there to shorten text; this exists so a
     derived truncate transformer that *does* need to abort (e.g. a required
     shortening step cannot be applied and the run must not carry the oversized
     payload on) has a typed error to raise, distinct from other governors' aborts.

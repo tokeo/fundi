@@ -221,6 +221,10 @@ appear in only one of them). The section names the declared role --
 characters in thought: a guard *secures*, a transformer *reshapes*, a
 conductor *directs*. Everything is determined by the implementation;
 the author of the agent list is the composition root and orders it
-deliberately. When a governor denies without a reason, the loop stamps
+deliberately. What the linter does check is **section purity**: a
+```type``` declared in a section must resolve to that role class -- the
+declaration and the class agree on which character you are writing, but
+neither narrows what the implementation may do. When a governor denies
+without a reason, the loop stamps
 role and name of the actor into the reason -- trace and feedback
 always show who decided.

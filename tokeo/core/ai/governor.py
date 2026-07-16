@@ -8,10 +8,12 @@ run ordered and safe. At its stage it receives the running ```TokeoAiContext```
 one, a reference to that object (the ```ChatResult``` of a model answer, the
 ```Invocation``` of a tool call). It may inspect and refine what it sees.
 
-The three roles built on it share this whole mechanic and differ only in their
-contract: a ```guard``` regulates by checking (and may deny a call), a
-```transformer``` regulates by reshaping (never denies), a ```conductor```
-regulates by steering the run. All are governors; each narrows the contract.
+The three roles built on it share this whole mechanic and differ in their
+character: a ```guard``` secures by checking, a ```transformer``` reshapes,
+a ```conductor``` directs the run. Those are characters in thought, not
+fences -- everything a governor does is determined by its implementation,
+and the loop honours it: a deny is honoured from any role, and the trace
+and the feedback name the governor that decided.
 
 A governor participates at a stage by **overriding** that stage's method; the
 base versions are no-ops, so an unoverridden stage simply does not run. The
@@ -83,9 +85,9 @@ class TokeoAiGovernor(MetaMixin):
 
     This is the *master* base. Write a governor by deriving from a role and, under
     it, from one of that role's *types* -- not from ```TokeoAiGovernor``` itself.
-    The role states whether it may deny (guard), only reshape (transformer), or
-    steer (conductor); the type states the sub-role and contract your subclass is
-    expected to keep. Deriving straight from ```TokeoAiGovernor``` makes a step
+    The role states the character -- securing (guard), reshaping (transformer),
+    directing (conductor) -- and the type states the sub-role your subclass is
+    written for. Deriving straight from ```TokeoAiGovernor``` makes a step
     with no declared role -- avoid it.
 
     ## The stages: what each one hands you, and how to use it
@@ -93,8 +95,8 @@ class TokeoAiGovernor(MetaMixin):
     A governor participates in a stage by **overriding** that stage's method. Each
     method receives the running ```TokeoAiContext``` (always) and, at the answer,
     tool, and close stages, the one object in hand. What you may do with it differs
-    per stage; the rules below hold for every role (a role narrows *which* changes
-    are appropriate -- e.g. a transformer reshapes but never denies).
+    per stage; the rules below hold for every role (the role says what a governor
+    is *for* -- e.g. a transformer is there to reshape -- not what it can do).
 
     - **```on_begin(ctx)```** -- once, on the raw incoming request, before the
         first model call. There is no single work object; the conversation is

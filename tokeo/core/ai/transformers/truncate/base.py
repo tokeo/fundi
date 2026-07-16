@@ -29,8 +29,8 @@ class TokeoAiTruncateTransformer(TokeoAiTransformer):
 
     Derive from it when you want a transformer that shortens the text the run
     carries on -- a long tool result, a large final answer -- keeping a head and
-    marking what was cut. Like every transformer it reshapes and never denies: it
-    shapes the text, it does not allow or deny a call.
+    marking what was cut. Like every transformer it is there to reshape: it
+    shapes the text rather than allowing or denying a call.
 
     Always derive from this type (```TokeoAiTruncateTransformer```), not from
     ```TokeoAiTransformer```: it states the transformer's role -- shortening -- on

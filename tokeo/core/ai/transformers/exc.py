@@ -14,7 +14,7 @@ class TokeoAiTransformerError(TokeoAiError):
     """
     Base for errors raised by a transformer.
 
-    A transformer reshapes and never denies a call; it raises this (or a typed
+    A transformer is there to reshape; it raises this (or a typed
     subclass) only to stop the run hard at its stage, when a required reshaping
     cannot be applied and proceeding would be wrong. Catch
     ```TokeoAiTransformerError``` to handle any transformer abort; catch a typed
