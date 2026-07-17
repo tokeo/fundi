@@ -241,37 +241,41 @@ class TokeoAiGovernor(MetaMixin):
             self._config_name = config_name
         self._stage_config_options = self._build_stage_config_options(config or {})
 
-    def _config(self, stage=None):
+    def _config(self, key, *, stage=None, fallback=None):
         """
-        Return the effective settings for a stage, merged and complete.
+        Return the effective value of an option key, honouring the stage.
 
-        Reads the views setup built. The default view
-        (```_any```) is the governor's ```Meta.config_defaults``` overlaid with
-        the declaration's top-level ```options```; each stage that carries an
-        ```on_<stage>.options``` override gets its own view, the default deep-
-        merged with that override (so every stage view is complete -- a partial
-        override fills in the rest from the default, never a hole). A stage with
-        no override, or no stage at all, returns the default view.
+        Reads the views setup built: the ```_any``` default view
+        (```Meta.config_defaults``` overlaid with the declaration's top-level
+        ```options```), or the stage's own view where the declaration carries
+        an ```on_<stage>.options``` override -- every stage view is complete
+        (a partial override fills in the rest from the default, never a hole).
+        The same ```key -> value``` contract as every other ai class; the
+        stage is the governor's extra axis.
 
         ### Args
 
-        - **stage** (str, optional): The stage name (e.g. ```on_call```); None,
-            ```''``` or an unknown/non-overridden stage returns the default view
+        - **key** (str): The option key
+        - **stage** (str, optional): The stage name (e.g. ```on_call```);
+            None, ```''``` or a non-overridden stage reads the default view
+        - **fallback** (any, optional): Returned when the key is absent
 
         ### Returns
 
-        - **dict**: The complete settings for the stage (read with ```.get()```)
+        - **any**: The effective value for the key at that stage
 
         ### Raises
 
         - **TokeoAiError**: If config options were not set by setup
 
         """
-        if self._stage_config_options is None:
+        stage_config_options = self._stage_config_options
+        if stage_config_options is None:
             raise TokeoAiError(f'{type(self).__name__}: config options were not set by setup')
-        if not stage or stage not in self._stage_config_options:
-            return self._stage_config_options[GOVERNOR_STAGE_ANY]
-        return self._stage_config_options[stage]
+        config_options = stage_config_options.get(stage) if stage else None
+        if config_options is None:
+            config_options = stage_config_options[GOVERNOR_STAGE_ANY]
+        return config_options.get(key, fallback)
 
     def _build_stage_config_options(self, declaration):
         """

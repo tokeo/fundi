@@ -139,7 +139,7 @@ class TokeoAiToolSchemaValidator(TokeoAiValidateGuard):
         # turns it into a deny (the loop stops this call), otherwise the call
         # runs and the problems are only surfaced (a warning in the log)
         invocation.reason = reason
-        if self._config(GOVERNOR_STAGE_ON_CALL).get('strict'):
+        if self._config('strict', stage=GOVERNOR_STAGE_ON_CALL):
             invocation.decision = Invocation.DENY
         else:
             self.app.log.warning(f'tool {invocation.name!r} called with {reason}')

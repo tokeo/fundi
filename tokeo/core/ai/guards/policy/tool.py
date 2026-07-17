@@ -64,11 +64,11 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
             ```decision``` is set to ```deny``` with a ```reason```
 
         """
-        config = self._config(GOVERNOR_STAGE_ON_CALL)
         name = invocation.name
-        denied = name in (config.get('deny') or [])
-        if not denied and config.get('allow') is not None:
-            denied = name not in config.get('allow')
+        denied = name in (self._config('deny', stage=GOVERNOR_STAGE_ON_CALL) or [])
+        allow = self._config('allow', stage=GOVERNOR_STAGE_ON_CALL)
+        if not denied and allow is not None:
+            denied = name not in allow
         if denied:
             invocation.decision = Invocation.DENY
             invocation.reason = f'tool {name!r} is not permitted by policy'

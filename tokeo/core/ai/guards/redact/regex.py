@@ -141,7 +141,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
 
         """
         if stage not in self._compiled_by_stage:
-            patterns = self._config(stage).get('patterns')
+            patterns = self._config('patterns', stage=stage)
             # the patterns are required wherever the guard runs: no built-in
             # list exists, and deep merge would only append to one, so a missing
             # or empty list is a misconfiguration, not "mask nothing". raise so
@@ -173,7 +173,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         - **(str, int)**: The masked text and how many spans were replaced
 
         """
-        replacement = self._config(stage).get('replacement')
+        replacement = self._config('replacement', stage=stage)
         hits = 0
         for pattern in self._compiled(stage):
             text, count = pattern.subn(replacement, text)
@@ -262,7 +262,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         # rather than a copy of the data, so both are cleaned on their own terms
         masked_str, hits = self._mask(value.as_str or '', GOVERNOR_STAGE_ON_RETURN)
         masked_data = value.as_data
-        if self._config(GOVERNOR_STAGE_ON_RETURN).get('sanitize_data') and value.as_data is not None:
+        if self._config('sanitize_data', stage=GOVERNOR_STAGE_ON_RETURN) and value.as_data is not None:
             masked_data, data_hits = self._mask_data(value.as_data, GOVERNOR_STAGE_ON_RETURN)
             hits += data_hits
         if not hits:

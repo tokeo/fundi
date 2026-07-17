@@ -196,6 +196,27 @@ def test_return_deny_keeps_a_named_reason_untouched():
         assert content == 'denied: result rejected'
 
 
+def test_governor_config_reads_a_key_honouring_the_stage():
+    # the same key -> value contract as every other ai class; the stage is the
+    # governor's extra axis: an on_<stage> override wins there, the default
+    # view answers everywhere else, fallback covers an absent key
+    with AiTest() as app:
+        governor = DenyingSilently(app)
+        governor._setup(
+            app,
+            'truncate',
+            {
+                'options': {'limit': 10, 'marker': '...'},
+                'on_close': {'options': {'limit': 99}},
+            },
+        )
+        assert governor._config('limit') == 10
+        assert governor._config('limit', stage='on_close') == 99
+        assert governor._config('marker', stage='on_close') == '...'
+        assert governor._config('limit', stage='on_return') == 10
+        assert governor._config('missing', fallback='x') == 'x'
+
+
 def test_governor_label_reads_class_character_and_config_name():
     # the role comes from the class (isinstance), the name from the config
     # name _setup handed it; an object built without one reports as its full

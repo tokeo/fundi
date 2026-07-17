@@ -136,7 +136,7 @@ class TokeoAiAgent(MetaMixin):
             copy.deepcopy((config or {}).get('options') or {}),
         )
 
-    def _config(self, key, fallback=None):
+    def _config(self, key, *, fallback=None):
         """
         Return the effective value of a composition key.
 
