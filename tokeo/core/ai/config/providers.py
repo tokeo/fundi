@@ -24,7 +24,7 @@ def provider_type_of(name, profile):
 
     ### Returns
 
-    - **str**: The provider type (a built-in short name or a dotted path)
+    - **str**: The provider type (a built-in alias or a dotted path)
 
     ### Raises
 

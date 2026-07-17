@@ -34,6 +34,7 @@ import copy
 from cement.core.meta import MetaMixin
 
 from tokeo.core.utils.dict import deep_merge
+from tokeo.core.ai.exc import TokeoAiError
 
 
 # the stage method names, as constants so call sites and config use a name, not
@@ -77,9 +78,11 @@ class TokeoAiGovernor(MetaMixin):
     methods (cached per governor, see ```has_stage```), so there is no phase field.
 
     Its class is resolved from the role's registry item ```type``` (a built-in
-    short name or a dotted path) and instantiated with the application and the
-    item's ```options``` as Meta overrides by the ```app.ai``` handler. Like a
-    provider, it holds no mutable per-call state.
+    alias or a dotted path) and instantiated with the application by the
+    ```app.ai``` handler, which then sets it up with its config name and its raw
+    declaration -- setup builds the per-stage ```options``` views out of it
+    once, and ```_config``` serves them. Like a provider, it holds no mutable
+    per-call state.
 
     ## Do not derive from this class directly
 
@@ -197,30 +200,52 @@ class TokeoAiGovernor(MetaMixin):
         # the set of stages this governor participates in, filled lazily on the
         # first has_stage call (reflection once per governor, then cached)
         self._stages = None
-        # the raw registry declaration, set by the handler after build (the
-        # governor parses its own per-stage options out of it); None when built
-        # without a declaration (e.g. directly in a test)
-        self._declaration = None
-        # the per-stage merged settings, built lazily by _config and cached;
-        # a dict {stage: full settings dict} plus the '_any' default view
-        self._stage_configs = None
+        self._config_name = None
+        self._stage_config_options = None
 
-    def _setup(self, app):
+    @property
+    def config_name(self):
         """
-        Set up the governor after instantiation.
+        The name this governor answers to. Never ```None``` or empty.
+
+        The declared config key -- or the dotted class as written at the
+        point of use -- once setup handed one in, the dotted class
+        (```module.Class```) until then.
+
+        ### Returns
+
+        - **str**: The declared key, or the dotted class
+
+        """
+        if self._config_name:
+            return self._config_name
+        return f'{type(self).__module__}.{type(self).__name__}'
+
+    def _setup(self, app, config_name=None, config=None):
+        """
+        Set up the governor with its config.
+
+        Called by the handler right after the build. An override must call
+        ```super()._setup(...)``` first -- it builds the views ```_config```
+        reads.
 
         ### Args
 
         - **app**: The Tokeo application instance
+        - **config_name** (str, optional): The key the governor is declared
+            under (```shredder```), or the dotted class at the point of use
+        - **config** (dict, optional): The raw registry declaration
 
         """
-        pass
+        if config_name:
+            self._config_name = config_name
+        self._stage_config_options = self._build_stage_config_options(config or {})
 
     def _config(self, stage=None):
         """
         Return the effective settings for a stage, merged and complete.
 
-        The view is built once, lazily, and cached. The default view
+        Reads the views setup built. The default view
         (```_any```) is the governor's ```Meta.config_defaults``` overlaid with
         the declaration's top-level ```options```; each stage that carries an
         ```on_<stage>.options``` override gets its own view, the default deep-
@@ -237,16 +262,20 @@ class TokeoAiGovernor(MetaMixin):
 
         - **dict**: The complete settings for the stage (read with ```.get()```)
 
-        """
-        if self._stage_configs is None:
-            self._stage_configs = self._build_stage_configs()
-        if not stage or stage not in self._stage_configs:
-            return self._stage_configs[GOVERNOR_STAGE_ANY]
-        return self._stage_configs[stage]
+        ### Raises
 
-    def _build_stage_configs(self):
+        - **TokeoAiError**: If config options were not set by setup
+
         """
-        Build the per-stage settings views from Meta defaults and the declaration.
+        if self._stage_config_options is None:
+            raise TokeoAiError(f'{type(self).__name__}: config options were not set by setup')
+        if not stage or stage not in self._stage_config_options:
+            return self._stage_config_options[GOVERNOR_STAGE_ANY]
+        return self._stage_config_options[stage]
+
+    def _build_stage_config_options(self, declaration):
+        """
+        Build the per-stage settings views from config_defaults and a declaration.
 
         The base (```_any```) is ```Meta.config_defaults``` deep-merged with the
         declaration's ```options```. For each of the six stages that carries an
@@ -262,14 +291,17 @@ class TokeoAiGovernor(MetaMixin):
         list. A governor that wants a stage to use a different list must account
         for this (e.g. keep the default list empty and add per stage).
 
+        ### Args
+
+        - **declaration** (dict): The raw registry item (```{}``` for none)
+
         ### Returns
 
         - **dict**: ```{'_any': <default view>, <stage>: <full view>, ...}```
 
         """
         defaults = self._meta.config_defaults or {}
-        declaration = self._declaration or {}
-        # the default view: Meta defaults deep-merged with the declaration options
+        # the default view: config_defaults deep-merged with the declared options
         # (deepcopy so the class-level config_defaults is never mutated)
         base = deep_merge(copy.deepcopy(defaults), copy.deepcopy(declaration.get('options') or {}))
         configs = {GOVERNOR_STAGE_ANY: base}

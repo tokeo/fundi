@@ -8,6 +8,7 @@ import copy
 from cement.core.meta import MetaMixin
 
 from tokeo.core.utils.dict import deep_merge
+from tokeo.core.ai.exc import TokeoAiError
 
 
 class TokeoAiSandbox(MetaMixin):
@@ -25,9 +26,11 @@ class TokeoAiSandbox(MetaMixin):
     ```exec``` (never ```run```).
 
     Its class is resolved from the ```ai.sandboxes``` item ```type``` (a built-in
-    short name or a dotted path) and instantiated with the application and the
-    item's ```options``` as Meta overrides by the ```app.ai``` handler. Like a
-    provider, it holds no mutable per-call state.
+    alias or a dotted path) and instantiated with the application by the
+    ```app.ai``` handler, which then sets it up with its config name and its raw
+    declaration -- setup reads the ```options``` out of it once, and
+    ```_config``` serves the merged view. Like a provider, it holds no mutable
+    per-call state.
 
     ### Notes
 
@@ -68,32 +71,56 @@ class TokeoAiSandbox(MetaMixin):
         """
         super(TokeoAiSandbox, self).__init__(*args, **kw)
         self.app = app
-        # the raw ai.sandboxes[name] declaration, set by the handler after build
-        # (the sandbox reads its own options out of it); None when built without
-        # a declaration (e.g. directly in a test)
-        self._declaration = None
-        # the effective options (config_defaults overlaid with the declaration's
-        # options), built lazily by _config and cached
-        self._options = None
+        self._config_name = None
+        self._config_options = None
 
-    def _setup(self, app):
+    @property
+    def config_name(self):
         """
-        Set up the sandbox after instantiation.
+        The name this sandbox answers to. Never ```None``` or empty.
+
+        The declared config key once setup handed one in, the dotted class
+        (```module.Class```) until then.
+
+        ### Returns
+
+        - **str**: The declared key, or the dotted class
+
+        """
+        if self._config_name:
+            return self._config_name
+        return f'{type(self).__module__}.{type(self).__name__}'
+
+    def _setup(self, app, config_name=None, config=None):
+        """
+        Set up the sandbox with its config.
+
+        Called by the handler right after the build. An override must call
+        ```super()._setup(...)``` first -- it builds the view ```_config```
+        reads.
 
         ### Args
 
         - **app**: The Tokeo application instance
+        - **config_name** (str, optional): The key the sandbox is declared
+            under (```jailed```)
+        - **config** (dict, optional): The raw ```ai.sandboxes``` declaration
 
         """
-        pass
+        if config_name:
+            self._config_name = config_name
+        # deepcopy keeps the class-level config_defaults untouched
+        self._config_options = deep_merge(
+            copy.deepcopy(self._meta.config_defaults or {}),
+            copy.deepcopy((config or {}).get('options') or {}),
+        )
 
     def _config(self, key, fallback=None):
         """
         Return the effective value of an option key.
 
-        Built once, lazily, and cached: ```Meta.config_defaults``` deep-merged
-        with the declaration's ```options``` (the Tokeo config rule -- lists
-        append, dicts merge, scalars replace).
+        Reads the view setup built: ```Meta.config_defaults``` with the
+        declared ```options``` laid over.
 
         ### Args
 
@@ -104,13 +131,14 @@ class TokeoAiSandbox(MetaMixin):
 
         - **any**: The effective value for the key
 
+        ### Raises
+
+        - **TokeoAiError**: If config options were not set by setup
+
         """
-        if self._options is None:
-            defaults = self._meta.config_defaults or {}
-            options = (self._declaration or {}).get('options') or {}
-            # deepcopy so the class-level config_defaults is never mutated
-            self._options = deep_merge(copy.deepcopy(defaults), copy.deepcopy(options))
-        return self._options.get(key, fallback)
+        if self._config_options is None:
+            raise TokeoAiError(f'{type(self).__name__}: config options were not set by setup')
+        return self._config_options.get(key, fallback)
 
     def exec(self, tool, arguments):
         """

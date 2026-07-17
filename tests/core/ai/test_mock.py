@@ -49,7 +49,7 @@ def test_mock_codeact_len_and_synonyms():
 
 
 def test_mock_codeact_targets_the_code_tool_by_shape():
-    # the synthesized call names the offered tool whatever its alias is
+    # the synthesized call names the offered tool whatever its config name is
     provider = TokeoAiMockProvider(None)
     call = provider._codeact_synthesis('text upper hi', [_CODE_TOOL])
     assert call is not None and call.name == 'coding'

@@ -182,7 +182,7 @@ default** -- the core extension registers only the framework built-ins
 (```in_process```, ```subprocess```, the guards, ```fundi```, ```mock```).
 Optional and security-sensitive components like these are referenced by their
 full dotted class path in ```type```, which the resolver imports on demand. (A
-project that uses them often can register a short name itself in a
+project that uses them often can register an alias itself in a
 ```post_setup``` hook; the examples here use the dotted path so they work
 without that.)
 

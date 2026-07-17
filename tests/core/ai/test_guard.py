@@ -38,7 +38,7 @@ def test_tool_policy_denies_a_tool_on_the_denylist():
     # decision becomes DENY with a reason, the loop would continue
     with AiTest() as app:
         guard = TokeoAiToolPolicyGuard(app)
-        guard._declaration = {'options': {'deny': ['append_file']}}
+        guard._setup(app, 'policy', {'options': {'deny': ['append_file']}})
         invocation = Invocation(id='t1', name='append_file', arguments={})
         guard.on_call(ctx=None, invocation=invocation)
         assert invocation.decision == Invocation.DENY
@@ -50,7 +50,7 @@ def test_tool_policy_allows_a_tool_not_denied():
     # run: decision stays ALLOW
     with AiTest() as app:
         guard = TokeoAiToolPolicyGuard(app)
-        guard._declaration = {'options': {'deny': ['append_file']}}
+        guard._setup(app, 'policy', {'options': {'deny': ['append_file']}})
         invocation = Invocation(id='t1', name='calc', arguments={})
         guard.on_call(ctx=None, invocation=invocation)
         assert invocation.decision == Invocation.ALLOW
@@ -61,7 +61,7 @@ def test_tool_policy_allowlist_restricts_to_its_members():
     # restriction; deny would still win over allow)
     with AiTest() as app:
         guard = TokeoAiToolPolicyGuard(app)
-        guard._declaration = {'options': {'allow': ['calc']}}
+        guard._setup(app, 'policy', {'options': {'allow': ['calc']}})
         permitted = Invocation(id='t1', name='calc', arguments={})
         guard.on_call(ctx=None, invocation=permitted)
         assert permitted.decision == Invocation.ALLOW

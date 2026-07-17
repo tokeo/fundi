@@ -74,7 +74,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         ### Args
 
         - **tool** (TokeoAiTool): The instantiated tool; the child rebuild
-            imports by the canonical path of its class (registry shortnames
+            imports by the canonical path of its class (registry aliases
             work too) and reuses its ```_tokeo_parent_instance_options```
         - **arguments** (dict): The parsed, JSON-able call arguments
 
@@ -89,7 +89,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         """
         # WHY canonical path: the child imports by module path. deriving it
         # from the loaded class (not the config string) lets a registry
-        # shortname cross the boundary too -- the parent already resolved it
+        # alias cross the boundary too -- the parent already resolved it
         dotted = _importable_path(type(tool), 'tool')
         timeout = self._config('timeout')
         memory_mb = self._config('memory_mb')

@@ -13,7 +13,7 @@ The job has the shape::
     {
       "tool": "dotted.path.To.ToolClass",
       "arguments": { ... },          # the parsed call arguments
-      "options": { ... },            # the tool item's options (Meta overrides)
+      "options": { ... },            # the tool item's options, as declared
       "caps": { "memory_mb": 256 }   # caps to enforce in this process
     }
 
@@ -97,13 +97,13 @@ def _set_caps(caps):
 
 
 def _load_tool(dotted, options):
-    # resolve "module.path.Class" to the class exactly as the handler does
-    # (rpartition on the last dot), then build it with no app (a child has
-    # none) and the item's options as the cement Meta overrides
+    # resolve "module.path.Class" exactly as the handler does (rpartition on
+    # the last dot), build with no app (a child has none) and set up with the
+    # options as the declaration; the config name does not cross the boundary
     module_path, _, attr = dotted.rpartition('.')
     cls = getattr(importlib.import_module(module_path), attr)
-    tool = cls(None, **(options or {}))
-    tool._setup(None)
+    tool = cls(None)
+    tool._setup(None, None, {'options': options or {}})
     return tool
 
 

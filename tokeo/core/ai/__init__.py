@@ -29,7 +29,7 @@ The building blocks, each a class you configure or derive from:
 A run returns a ```TokeoAiResult``` (the answer, the trace, and the status).
 Providers, tools, agents, guards and sandboxes are registered as classes; the
 handler instantiates them with the application. A ```type``` in the config is
-either a short name from tokeo's registry or a dotted ```module.Class``` path
+either an alias from tokeo's registry or a dotted ```module.Class``` path
 imported on demand.
 
 ```yaml

@@ -122,14 +122,17 @@ def test_wasm_missing_mount_path_names_the_path(tmp):
     stdlib = os.path.join(tmp.dir, 'lib')
     os.makedirs(stdlib)
     sandbox = TokeoAiWasmSandbox(None)
-    sandbox._declaration = dict(
-        options=dict(
-            runtime=runtime,
-            stdlib=stdlib,
-            mounts={'/app': '/no/such/host/path'},
-        )
+    sandbox._setup(
+        None,
+        'wasm_untrusted',
+        dict(
+            options=dict(
+                runtime=runtime,
+                stdlib=stdlib,
+                mounts={'/app': '/no/such/host/path'},
+            )
+        ),
     )
-    sandbox._setup(None)
     tool = TokeoAiPythonUntrustedExecTool(None)
     with pytest.raises(TokeoAiError, match=r'/no/such/host/path'):
         sandbox.exec(tool, dict(code='1'))

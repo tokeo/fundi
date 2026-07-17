@@ -105,7 +105,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # on offer, build a tool call whose code computes the value. returns a
         # ToolCall or None (so the normal tool/echo paths still apply). the tool
         # is matched by SHAPE -- it takes a single ```code``` parameter -- not by
-        # a fixed name, since the config alias is the project's to choose
+        # a fixed name, since the config name is the project's to choose
         if not prompt or not tools:
             return None
         coder = self._code_tool(tools)
@@ -125,7 +125,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
 
     def _code_tool(self, tools):
         # the code-running tool is the one whose only/first parameter is
-        # ```code``` -- a stable shape, independent of the config alias name
+        # ```code``` -- a stable shape, independent of the config name
         for tool in tools:
             names, _ = self._tool_params(tool)
             if names and names[0] == 'code':

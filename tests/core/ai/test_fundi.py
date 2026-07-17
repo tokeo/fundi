@@ -11,10 +11,13 @@ exercised by the Spiral tests; here the focus is the mechanics in isolation.
 
 import os
 import sys
+import inspect
 import pytest
 from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError, TokeoAiFundiAgent, TokeoAiAgent
+from tokeo.core.ai import TokeoAiProvider, TokeoAiSandbox, TokeoAiTool, TokeoAiGovernor
+from tests.core.ai.tools import GreetTool
 from tokeo.core.ai.sandboxes._common import expand_env
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
@@ -24,6 +27,7 @@ from tokeo.core.ai.linter import TokeoAiLinter
 # dotted paths to the importable test tools the worker loads in a child
 ECHO = 'tests.core.ai.tools.EchoTool'
 CWD = 'tests.core.ai.tools.CwdTool'
+GREET = 'tests.core.ai.tools.GreetTool'
 ENV = 'tests.core.ai.tools.EnvTool'
 
 # the jailed options every platform can enforce; the memory cap is added on
@@ -60,6 +64,10 @@ def ai_config():
             'cwd': dict(type=CWD),
             'env': dict(type=ENV),
             'sleep': dict(type=SLEEP),
+            # a tool with options: the declaration overlays its config_defaults
+            'greeter': dict(type=GREET, options=dict(prefix='moin')),
+            # the same class without options: it runs on its config_defaults
+            'plain_greeter': dict(type=GREET),
             'bundle': ['echo', 'cwd'],
         },
         sandboxes={
@@ -116,7 +124,7 @@ def test_fundi_agent_is_the_concrete_default():
     assert issubclass(TokeoAiFundiAgent, TokeoAiAgent)
     with FundiTest(config_defaults=ai_config()) as app:
         assert app.ai.resolve('agent', 'fundi') is TokeoAiFundiAgent
-        # the old short name is gone
+        # the old alias is gone
         with pytest.raises(TokeoAiError):
             app.ai.resolve('agent', 'default')
 
@@ -400,9 +408,9 @@ def test_runner_memory_cap_refuses_a_sham_setting(monkeypatch):
         runner._set_caps({'memory_mb': 64})
 
 
-def test_subprocess_resolves_registry_shortname_tools():
+def test_subprocess_resolves_registry_alias_tools():
     # the import path crosses the boundary as the canonical path of the
-    # LOADED class, so a registry shortname in the config simply works
+    # LOADED class, so a registry alias in the config simply works
     from tests.core.ai.tools import EchoTool
 
     cfg = ai_config()
@@ -435,3 +443,102 @@ def test_subprocess_keeps_a_user_pythonpath_in_the_lead():
     with FundiTest(config_defaults=cfg) as app:
         out = run(app, 'env', 'mixed', name='PYTHONPATH')
         assert out.startswith('/user/extra' + os.pathsep)
+
+
+# --------------------------------------------------------------------------------------
+# the config surface: every ai class is set up the same way
+# --------------------------------------------------------------------------------------
+
+
+def test_setup_is_one_form_across_the_ai_classes():
+    # one way to hand a class what the config says about it: its key and its
+    # raw declaration. the handler writes no attributes from outside
+    for cls in (TokeoAiProvider, TokeoAiSandbox, TokeoAiAgent, TokeoAiTool, TokeoAiGovernor):
+        params = list(inspect.signature(cls._setup).parameters)
+        assert params == ['self', 'app', 'config_name', 'config'], cls.__name__
+
+
+def test_a_tool_reads_its_declared_options_through_config():
+    # the declaration's options overlay the class's config_defaults, read
+    # lazily through the tool's own _config -- the agent/sandbox pattern
+    with FundiTest(config_defaults=ai_config()) as app:
+        assert run(app, 'greeter', 'plain', name='ada') == 'moin ada'
+        tool = app.ai._tool('greeter')
+        assert tool.config_name == 'greeter'
+        assert tool._config('prefix') == 'moin'
+
+
+def test_a_tool_without_options_runs_on_its_config_defaults():
+    # no options declared: the Meta defaults stand, no None leaks through
+    with FundiTest(config_defaults=ai_config()) as app:
+        assert run(app, 'plain_greeter', 'plain', name='ada') == 'hello ada'
+        assert app.ai._tool('plain_greeter')._config('prefix') == 'hello'
+
+
+def test_two_declarations_of_one_class_stay_separate():
+    # the same class under two keys is two objects with two config names and
+    # two option sets -- the class-level config_defaults is never mutated
+    with FundiTest(config_defaults=ai_config()) as app:
+        greeter, plain = app.ai._tool('greeter'), app.ai._tool('plain_greeter')
+        assert greeter is not plain
+        assert (greeter.config_name, plain.config_name) == ('greeter', 'plain_greeter')
+        assert (greeter._config('prefix'), plain._config('prefix')) == ('moin', 'hello')
+        assert TokeoAiTool.Meta.config_defaults == {}
+        assert GreetTool.Meta.config_defaults == {'prefix': 'hello'}
+
+
+def test_options_do_not_reach_the_class_meta():
+    # options are config, description and parameters are code: an option key
+    # that happens to match a Meta key no longer rewrites the model-facing
+    # spec, because options are not spread onto the Meta any more
+    cfg = ai_config()
+    cfg['ai']['tools']['greeter']['options'] = dict(prefix='moin', description='REWRITTEN')
+    with FundiTest(config_defaults=cfg) as app:
+        spec = app.ai._tool_specs(['greeter'])[0]['function']
+        assert spec['description'] == 'greet the given name'
+        assert spec['name'] == 'greeter'
+        # it stays reachable as what it is: an option
+        assert app.ai._tool('greeter')._config('description') == 'REWRITTEN'
+
+
+def test_setup_reads_the_declaration_once_and_is_idempotent():
+    # the declaration is consumed at setup time (the extension rule: read the
+    # config once, then work off the attributes). a second setup with another
+    # declaration takes effect -- nothing stale survives it
+    tool = GreetTool(None)
+    tool._setup(None, 'greeter', dict(options=dict(prefix='eins')))
+    assert tool._config('prefix') == 'eins'
+    tool._setup(None, 'greeter', dict(options=dict(prefix='zwei')))
+    assert tool._config('prefix') == 'zwei'
+
+
+def test_an_object_without_setup_is_not_initialized():
+    # construction alone is not a lifecycle: setup IS the initialization. an
+    # object that never saw one fails on the first _config read with a named
+    # error instead of running on silently guessed settings; only _setup can
+    # hand in a config name (the property has no setter)
+    tool = GreetTool(None)
+    assert tool.config_name == 'tests.core.ai.tools.GreetTool'
+    with pytest.raises(TokeoAiError, match='GreetTool: config options were not set by setup'):
+        tool._config('prefix')
+    with pytest.raises(AttributeError):
+        tool.config_name = 'poked'
+
+
+def test_a_setup_without_a_config_yields_the_class_defaults():
+    # _setup with no declaration (the dotted-governor and unit-test path):
+    # the view is the class's config_defaults -- and it is a deep copy, so a
+    # write into it can never bleed into the class-level dict
+    tool = GreetTool(None)
+    tool._setup(None)
+    assert tool.config_name == 'tests.core.ai.tools.GreetTool'
+    assert tool._config('prefix') == 'hello'
+    tool._config_options['prefix'] = 'poked'
+    assert GreetTool.Meta.config_defaults == {'prefix': 'hello'}
+
+
+def test_the_sandbox_carries_its_config_name_to_the_invocation():
+    # the sandbox knows the key it is declared under, so a caller can record
+    # WHERE a tool ran without threading the name alongside the object
+    with FundiTest(config_defaults=ai_config()) as app:
+        assert app.ai._sandbox('jailed').config_name == 'jailed'

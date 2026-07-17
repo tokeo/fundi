@@ -64,8 +64,8 @@ with open('/io/task.json') as f:
 def _load(dotted, options):
     module_path, _, attr = dotted.rpartition('.')
     cls = getattr(importlib.import_module(module_path), attr)
-    tool = cls(None, **(options or {}))
-    tool._setup(None)
+    tool = cls(None)
+    tool._setup(None, None, {'options': options or {}})
     return tool
 
 
@@ -242,7 +242,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         self._runtime = None
         self._stdlib = None
 
-    def _setup(self, app):
+    def _setup(self, app, config_name=None, config=None):
         """
         Set up the wasm sandbox after instantiation.
 
@@ -253,9 +253,12 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         ### Args
 
         - **app**: The Tokeo application instance
+        - **config_name** (str, optional): The key the sandbox is declared under
+        - **config** (dict, optional): The raw declaration
 
         """
-        super(TokeoAiWasmSandbox, self)._setup(app)
+        # super first: builds the view the _config below reads
+        super(TokeoAiWasmSandbox, self)._setup(app, config_name, config)
         # proxied: runtime and stdlib are each used at more than one place
         self._runtime = self._config('runtime')
         self._stdlib = self._config('stdlib')

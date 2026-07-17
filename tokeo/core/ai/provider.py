@@ -10,7 +10,7 @@ class TokeoAiProvider:
 
     A provider receives an already-resolved profile and returns a
     ```ChatResult```. Its class is resolved from the profile ```type``` (a built-in
-    short name or a dotted path) and instantiated with the application by the
+    alias or a dotted path) and instantiated with the application by the
     ```app.ai``` handler. It must not keep mutable per-call state, so that it can
     be called concurrently without locking.
 
@@ -31,17 +31,42 @@ class TokeoAiProvider:
 
         """
         self.app = app
+        # never declared under a config key; the property reports the class
+        self._config_name = None
 
-    def _setup(self, app):
+    @property
+    def config_name(self):
         """
-        Set up the provider after instantiation.
+        The name this provider answers to. Never ```None``` or empty.
+
+        A provider is never declared under a config key (one object serves
+        every profile of its type), so this reports the dotted class.
+
+        ### Returns
+
+        - **str**: The dotted class
+
+        """
+        if self._config_name:
+            return self._config_name
+        return f'{type(self).__module__}.{type(self).__name__}'
+
+    def _setup(self, app, config_name=None, config=None):
+        """
+        Set up the provider.
+
+        Same form as every other ai class; a provider has nothing to receive --
+        its settings come from the profile it is handed per chat call.
 
         ### Args
 
         - **app**: The Tokeo application instance
+        - **config_name** (str, optional): Never handed in for a provider
+        - **config** (dict, optional): Never handed in for a provider
 
         """
-        pass
+        if config_name:
+            self._config_name = config_name
 
     def chat(self, profile, messages, tools=None, model_params=None):
         """

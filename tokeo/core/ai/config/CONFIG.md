@@ -6,8 +6,8 @@ resolvers that read it live next to this file (`tokeo/core/ai/config/`), one per
 component kind; this document describes the shapes they accept.
 
 All examples are YAML under a top-level `ai:` key. Where a value reads
-`module.Class`, it is a full dotted import path to a class; where it reads a
-short name, it is a built-in registered under that name.
+`module.Class`, it is a full dotted import path to a class; where it reads an
+alias, it is a built-in registered under that name.
 
 ## 1. The shape of `ai:`
 
@@ -57,16 +57,16 @@ for a single element, the **item**:
 
 ```yaml
 some_name:
-  type: short_name              # a built-in, OR
+  type: alias                   # a built-in, OR
   type: module.path.SomeClass   # a full dotted class path
-  options:                      # the class's own settings (its Meta keys)
+  options:                      # the class's own settings (its config_defaults)
     some_setting: value
 ```
 
 A bare string is the short form of an item with no options:
 
 ```yaml
-some_name: short_name           # == { type: short_name }
+some_name: alias                # == { type: alias }
 ```
 
 .. tip::
@@ -224,11 +224,11 @@ ai:
 
 ### 4.5 Union and conflict (nearest wins)
 
-When the same guard identity appears more than once, the rules are:
+When the same guard config name appears more than once, the rules are:
 
 ```mermaid
 flowchart TD
-    Q{"same identity<br/>appears twice"} --> Same{"same stages?"}
+    Q{"same config name<br/>appears twice"} --> Same{"same stages?"}
     Same -->|yes| Collapse["collapse to one<br/>(silent)"]
     Same -->|no| Level{"same level?"}
     Level -->|"yes (two chains,<br/>or two agent entries)"| Err["ERROR<br/>not decidable"]
@@ -309,7 +309,7 @@ agents:
 | `governors` | the governor composition (guards + transformers + conductors) |
 | `sandboxes` | the ordered sandbox chain (the sandboxes section) |
 | `deny` | tools/groups forbidden outright, before any sandbox lookup |
-| `omit` | governor identities to drop from the composition (chains) |
+| `omit` | governor config names to drop from the composition (chains) |
 | `max_steps` / `max_loops` | per-agent budget overrides (nearest wins) |
 
 .. note::

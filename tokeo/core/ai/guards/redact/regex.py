@@ -103,7 +103,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         # pre-declared here so masking never depends on _setup having run
         self._compiled_by_stage = {}
 
-    def _setup(self, app):
+    def _setup(self, app, config_name=None, config=None):
         """
         Reset the per-stage compiled-pattern cache.
 
@@ -114,8 +114,12 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         ### Args
 
         - **app**: The Tokeo application instance
+        - **config_name** (str, optional): The key the guard is declared under
+        - **config** (dict, optional): The raw declaration
 
         """
+        # super first: builds the stage views the patterns read
+        super(TokeoAiRegexRedactGuard, self)._setup(app, config_name, config)
         self._compiled_by_stage = {}
 
     def _compiled(self, stage):

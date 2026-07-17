@@ -80,19 +80,19 @@ def _by_stage(app, governors):
     # drive _governors_by_stage with a fixed flat governor list, so the test
     # targets the ordering logic (flat list -> per-stage lists), not agent
     # resolution. _governors_by_stage consumes resolved GovernorConfigEntry items
-    # (identity + the stages it runs at) and looks each identity up via _governor;
-    # here each governor object is its own identity, its stages are the class
+    # (config_name + the stages it runs at) and looks each one up via _governor;
+    # here each governor object is its own config_name, its stages are the class
     # stages it implements
     from tokeo.core.ai.config.governors import GovernorConfigEntry
 
     entries, objs = [], {}
     for index, governor in enumerate(governors):
-        identity = f'g{index}'
-        objs[identity] = governor
+        config_name = f'g{index}'
+        objs[config_name] = governor
         stages = frozenset(stage for stage in GOVERNOR_STAGES if governor.has_stage(stage))
-        entries.append(GovernorConfigEntry(identity, stages, 'agent'))
+        entries.append(GovernorConfigEntry(config_name, stages, 'agent'))
     app.ai._resolve_governors = lambda agent_obj: entries
-    app.ai._governor = lambda identity: objs[identity]
+    app.ai._governor = lambda config_name: objs[config_name]
     return app.ai._governors_by_stage(agent_obj=object())
 
 
@@ -173,8 +173,7 @@ def test_call_deny_without_reason_is_stamped_with_the_actor():
     # decides) and the stamped reason names role + name -- never 'a guard'
     with AiTest() as app:
         governor = DenyingSilently(app)
-        governor._setup(app)
-        app.ai._governor_objs['shredder'] = governor
+        governor._setup(app, 'shredder')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
         call = ToolCall(id='t1', name='calc', arguments={'expr': '1+1'})
         invocation, content = app.ai._exec_governed(call, [governor], [], ctx, None, None)
@@ -188,8 +187,7 @@ def test_return_deny_keeps_a_named_reason_untouched():
     # a governor-provided reason IS the text; the stamp only fills silence
     with AiTest() as app:
         governor = DenyingOnReturn(app)
-        governor._setup(app)
-        app.ai._governor_objs['rejector'] = governor
+        governor._setup(app, 'rejector')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
         call = ToolCall(id='t2', name='missing_tool', arguments={})
         invocation, content = app.ai._exec_governed(call, [], [governor], ctx, None, None)
@@ -198,12 +196,17 @@ def test_return_deny_keeps_a_named_reason_untouched():
         assert content == 'denied: result rejected'
 
 
-def test_governor_label_reads_class_character_and_cached_name():
-    # the role comes from the class (isinstance), the name from the
-    # cache; an uncached object reads as its class name
+def test_governor_label_reads_class_character_and_config_name():
+    # the role comes from the class (isinstance), the name from the config
+    # name _setup handed it; an object built without one reports as its full
+    # dotted class -- the same form a point-of-use declaration writes
     with AiTest() as app:
         governor = DenyingSilently(app)
-        app.ai._governor_objs['truncate'] = governor
+        governor._setup(app, 'truncate')
         assert app.ai._governor_label(governor) == "transformer 'truncate'"
         stray = DenyingOnReturn(app)
-        assert app.ai._governor_label(stray) == "conductor 'DenyingOnReturn'"
+        # computed, not hard-coded: the module of a class defined inside a
+        # test file depends on how pytest imported it; the rule under test is
+        # the FORM (module.Class), not one specific path
+        dotted = f'{type(stray).__module__}.{type(stray).__name__}'
+        assert app.ai._governor_label(stray) == f'conductor {dotted!r}'

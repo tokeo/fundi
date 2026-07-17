@@ -28,6 +28,25 @@ class EchoTool(TokeoAiTool):
         return create_tool_result(str(arguments.get('text', '')))
 
 
+class GreetTool(TokeoAiTool):
+    """Greet with a configurable prefix; proves a tool reads its own options."""
+
+    class Meta:
+        description = 'greet the given name'
+        parameters = {
+            'type': 'object',
+            'properties': {'name': {'type': 'string'}},
+            'required': ['name'],
+        }
+        # the tool's outward surface: what a project may set under ```options```
+        config_defaults = dict(
+            prefix='hello',
+        )
+
+    def exec(self, **arguments):
+        return create_tool_result(f"{self._config('prefix')} {arguments.get('name', '')}")
+
+
 class CwdTool(TokeoAiTool):
     """Return the process working directory, to prove cwd took effect."""
 

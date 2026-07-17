@@ -4,10 +4,13 @@ tool decides its own app need in __init__ (none by default) and yields
 the same app class everywhere (the uniformity rule).
 """
 
+import copy
 from dataclasses import fields
 
 from cement.core.meta import MetaMixin
 
+from tokeo.core.utils.dict import deep_merge
+from tokeo.core.ai.exc import TokeoAiError
 from tokeo.core.ai.data import ToolResult, ToolValue, ToolStates
 from tokeo.core.utils.json import json_dump, TokeoJsonUnknownNoneEncoder
 
@@ -17,9 +20,11 @@ class TokeoAiTool(MetaMixin):
     Base class for agent tools.
 
     A tool's class is resolved from its ```ai.tools``` item ```type``` (a built-in
-    short name or a dotted path) and instantiated with the application and the
-    item's ```options``` as Meta overrides by the ```app.ai``` handler, so it can
-    read configuration, use ```app.db```, the vault, and hold resources.
+    alias or a dotted path) and instantiated with the application by the
+    ```app.ai``` handler, which then sets it up with its config name and its raw
+    declaration -- setup reads the ```options``` out of it once, and
+    ```_config``` serves the merged view. It can use ```app.db```, the vault,
+    and hold resources.
     ```Meta``` declares the ```description``` and the JSON-schema ```parameters```
     sent to the model, plus any setting of the tool's own (overridden per
     item by its ```options```); a subclass overrides those keys and ```exec```
@@ -58,17 +63,74 @@ class TokeoAiTool(MetaMixin):
         """
         super(TokeoAiTool, self).__init__(*args, **kw)
         self.app = app
+        self._config_name = None
+        self._config_options = None
 
-    def _setup(self, app):
+    @property
+    def config_name(self):
         """
-        Set up the tool after instantiation.
+        The name this tool answers to. Never ```None``` or empty.
+
+        The declared config key once setup handed one in, the dotted class
+        (```module.Class```) until then.
+
+        ### Returns
+
+        - **str**: The declared key, or the dotted class
+
+        """
+        if self._config_name:
+            return self._config_name
+        return f'{type(self).__module__}.{type(self).__name__}'
+
+    def _setup(self, app, config_name=None, config=None):
+        """
+        Set up the tool with its config.
+
+        Called by the handler right after the build. An override must call
+        ```super()._setup(...)``` first -- it builds the view ```_config```
+        reads.
 
         ### Args
 
         - **app**: The Tokeo application instance
+        - **config_name** (str, optional): The key the tool is declared
+            under (```calc```)
+        - **config** (dict, optional): The raw ```ai.tools``` declaration
 
         """
-        pass
+        if config_name:
+            self._config_name = config_name
+        # deepcopy keeps the class-level config_defaults untouched
+        self._config_options = deep_merge(
+            copy.deepcopy(self._meta.config_defaults or {}),
+            copy.deepcopy((config or {}).get('options') or {}),
+        )
+
+    def _config(self, key, fallback=None):
+        """
+        Return the effective value of an option key.
+
+        Reads the view setup built: ```Meta.config_defaults``` with the
+        declared ```options``` laid over.
+
+        ### Args
+
+        - **key** (str): The option key
+        - **fallback** (any, optional): Returned when the key is absent
+
+        ### Returns
+
+        - **any**: The effective value for the key
+
+        ### Raises
+
+        - **TokeoAiError**: If config options were not set by setup
+
+        """
+        if self._config_options is None:
+            raise TokeoAiError(f'{type(self).__name__}: config options were not set by setup')
+        return self._config_options.get(key, fallback)
 
     def exec(self, **arguments):
         """

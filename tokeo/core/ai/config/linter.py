@@ -346,23 +346,23 @@ class TokeoAiLinter:
             # a not-decidable conflict (or a chain cycle) -- an error issue
             self._add(f'{path}.governors', str(err))
 
-    def _guard_class_stages_or_empty(self, identity):
+    def _guard_class_stages_or_empty(self, config_name):
         # the resolver's stages_of: the class stages, or empty when the class
         # cannot be resolved (the unknown name is reported by the form check, so
         # here an empty set just yields an empty participation, no second error)
-        stages = self._guard_class_stages(identity)
+        stages = self._guard_class_stages(config_name)
         return stages or set()
 
-    def _guard_class_stages(self, identity):
-        # the stages a guard identity can do, by reflection over the resolved
-        # class (its on_* methods vs the base). a short name resolves through its
+    def _guard_class_stages(self, config_name):
+        # the stages a governor's class can do, by reflection over the resolved
+        # class (its on_* methods vs the base). an alias resolves through its
         # ai.guards declaration type; a dotted class resolves directly. returns
         # None when the class cannot be resolved (a separate error is reported)
         try:
-            if '.' in identity:
-                cls = self.app.ai.resolve('governor', identity)
+            if '.' in config_name:
+                cls = self.app.ai.resolve('governor', config_name)
             else:
-                declaration = self._governors_merged().get(identity)
+                declaration = self._governors_merged().get(config_name)
                 type_value = declaration.get('type') if isinstance(declaration, dict) else declaration
                 if not isinstance(type_value, str):
                     return None
@@ -375,7 +375,7 @@ class TokeoAiLinter:
         # validate a guards composition list: each entry is a bare name
         # or a one-key {name: [stages]}; a referenced chain (list value under
         # ai.guards) is walked too. a named stage must be one the guard's class
-        # can do; an unknown short name (not a dotted class, not declared) is an
+        # can do; an unknown alias (not a dotted class, not declared) is an
         # error; an empty/null/[] stage list is an error
         if guards is None:
             return
@@ -386,36 +386,36 @@ class TokeoAiLinter:
         chain_path = chain_path or []
         for entry in guards:
             try:
-                identity, stages = parse_entry(entry)
+                config_name, stages = parse_entry(entry)
             except TokeoAiError as err:
                 self._add(path, str(err))
                 continue
-            value = self._governors_merged().get(identity) if isinstance(identity, str) else None
+            value = self._governors_merged().get(config_name) if isinstance(config_name, str) else None
             # a list value under ai.guards is a chain: walk it (a chain entry
             # carries no stage list of its own)
             if isinstance(value, list):
                 if stages is not None:
-                    self._add(path, f'chain {identity!r} cannot take a stage list; stages belong to its guards')
+                    self._add(path, f'chain {config_name!r} cannot take a stage list; stages belong to its guards')
                     continue
-                if identity in chain_path:
-                    self._add(path, f'guard chain {identity!r} imports itself (cycle)')
+                if config_name in chain_path:
+                    self._add(path, f'guard chain {config_name!r} imports itself (cycle)')
                     continue
-                self._lint_guard_composition(path, value, chain_path + [identity])
+                self._lint_guard_composition(path, value, chain_path + [config_name])
                 continue
-            # an identity must be a declared short name or a dotted class
-            if '.' not in identity and identity not in known:
-                self._add(path, _unknown('governor', identity, known))
+            # a config name must be a declared name or a dotted class
+            if '.' not in config_name and config_name not in known:
+                self._add(path, _unknown('governor', config_name, known))
                 continue
             # a named stage must be one the class can do
             if stages is not None:
-                class_stages = self._guard_class_stages(identity)
+                class_stages = self._guard_class_stages(config_name)
                 if class_stages is not None:
                     for stage in stages:
                         if stage != GOVERNOR_STAGE_ANY and stage not in class_stages:
-                            self._add(path, f'guard {identity!r} cannot run at stage {stage!r} (its class does not)')
+                            self._add(path, f'guard {config_name!r} cannot run at stage {stage!r} (its class does not)')
 
     def _lint_guard_omit(self, path, omit):
-        # omit is a list of guard identities to drop from the composition;
+        # omit is a list of governor config names to drop from the composition;
         # it is a sibling field, not a list entry, so it never collides with a
         # guard or chain name. each name should be a known guard or chain
         if omit is None:
@@ -519,13 +519,13 @@ class TokeoAiLinter:
 
     def _lint_type(self, kind, path, item):
         # every item names a class by ```type```; resolving it on ```app.ai```
-        # imports a dotted path or looks up a built-in short name
+        # imports a dotted path or looks up a built-in alias
         type_value = item.get('type')
         if not type_value:
             self._add(path, f'missing {kind} "type"')
             return
         if not isinstance(type_value, str):
-            self._add(f'{path}.type', 'must be a short name or a dotted path')
+            self._add(f'{path}.type', 'must be an alias or a dotted path')
             return
         try:
             self.app.ai.resolve(kind, type_value)

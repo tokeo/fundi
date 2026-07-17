@@ -10,7 +10,7 @@ The technical namespace and the command group are both ```ai``` (this module,
 the ```tokeo.core.ai``` package, and the ```ai``` config section).
 
 Every configured component is an item in the uniform form ```{type, options}```:
-```type``` names the class (a built-in short name or a dotted path), ```options```
+```type``` names the class (a built-in alias or a dotted path), ```options```
 carries the component's own settings. Profiles add their documented top-level
 params (purpose, tools, enabled) around that form.
 
@@ -282,7 +282,7 @@ class TokeoAi(MetaMixin):
 
     def register(self, kind, name, cls):
         """
-        Register a class under a short name within a kind.
+        Register a class under an alias within a kind.
 
         ### Args
 
@@ -297,14 +297,14 @@ class TokeoAi(MetaMixin):
         """
         Resolve a config ```type``` to a class.
 
-        A dotted ```type``` (one containing a ```.```) is imported on demand, so a
-        project or third-party class needs no registration; a bare short name
-        is looked up in the kind's registry (the built-ins tokeo ships).
+        A dotted ```type``` (one containing a ```.```) is imported on demand, so
+        a project or third-party class needs no registration; a bare alias is
+        looked up in the kind's registry (the built-ins tokeo ships).
 
         ### Args
 
         - **kind** (str): The component kind, e.g. ```provider``` or ```tool```
-        - **type_value** (str): A short name or a dotted ```module.Class``` path
+        - **type_value** (str): An alias or a dotted ```module.Class``` path
 
         ### Returns
 
@@ -312,7 +312,7 @@ class TokeoAi(MetaMixin):
 
         ### Raises
 
-        - **TokeoAiError**: If a short name is unknown, or a dotted path cannot
+        - **TokeoAiError**: If an alias is unknown, or a dotted path cannot
             be imported
 
         """
@@ -387,39 +387,35 @@ class TokeoAi(MetaMixin):
 
     def _governor_label(self, governor):
         # the class carries the character (guard secures, transformer
-        # reshapes, conductor directs); the name as written lives in the
-        # cache, read back here -- the objects stay bare like the tools
-        name = next((key for key, obj in self._governor_objs.items() if obj is governor), governor.__class__.__name__)
+        # reshapes, conductor directs); config_name is the name as written, or
+        # the dotted class for a governor never set up
         for cls, role in ((TokeoAiGuard, 'guard'), (TokeoAiTransformer, 'transformer'), (TokeoAiConductor, 'conductor')):
             if isinstance(governor, cls):
-                return f'{role} {name!r}'
-        return f'governor {name!r}'
+                return f'{role} {governor.config_name!r}'
+        return f'governor {governor.config_name!r}'
 
-    def _tool(self, name):
-        # instantiate the tool configured under ```ai.tools[name]``` once and
-        # reuse it; the item has the uniform form: ```type``` (a built-in short
-        # name or a full dotted path) resolves to a class, built with the
-        # application and the item's ```options``` as keyword arguments (the
-        # keys override the tool's Meta defaults, like an agent or a guard).
-        # the same statelessness argument as for providers applies
-        obj = self._tool_objs.get(name)
+    def _tool(self, config_name):
+        # instantiate the tool configured under ```ai.tools[config_name]``` once
+        # and reuse it; ```type``` (a built-in alias or a dotted path) resolves
+        # to a class, built with the application and set up with its key and
+        # its raw declaration. the same statelessness argument as for providers
+        # applies
+        obj = self._tool_objs.get(config_name)
         if obj is None:
-            item = self._tool_items.get(name)
+            item = self._tool_items.get(config_name)
             if not item or not item.get('type'):
-                raise TokeoAiError(f'ai tool {name!r} is not configured under ai.tools')
+                raise TokeoAiError(f'ai tool {config_name!r} is not configured under ai.tools')
             settings = item.get('options') or {}
-            obj = self.resolve('tool', item['type'])(self.app, **settings)
-            # the object carries its configured name (the ```ai.tools``` key)
-            obj._configured_name = name
+            obj = self.resolve('tool', item['type'])(self.app)
             # WHY: a sandbox that runs the tool in another process (subprocess,
             # docker) rebuilds it there. the import path comes from the tool's
-            # class itself (so a registry shortname in the config crosses the
+            # class itself (so a registry alias in the config crosses the
             # boundary too); only the configured options must travel -- carry
             # them on the instance so both twins are built the same way (the
             # uniformity rule)
             obj._tokeo_parent_instance_options = dict(settings)
-            obj._setup(self.app)
-            self._tool_objs[name] = obj
+            obj._setup(self.app, config_name, item)
+            self._tool_objs[config_name] = obj
         return obj
 
     def _resolve_tools(self, names):
@@ -428,20 +424,21 @@ class TokeoAi(MetaMixin):
         # order preserved, duplicates dropped (see config.tools.resolve_tools)
         return resolve_tools(names, self._tool_groups)
 
-    def _tool_specs(self, names):
-        # build openai-style function specs from the tools' merged Meta;
-        # unknown names are skipped, an empty or missing list yields no specs
+    def _tool_specs(self, config_names):
+        # build openai-style function specs from the tools' Meta; the model-
+        # facing function name IS the config name (that is what comes back as
+        # ToolCall.name); unknown names are skipped, an empty list yields none
         specs = []
-        for name in names or []:
+        for config_name in config_names or []:
             try:
-                tool = self._tool(name)
+                tool = self._tool(config_name)
             except TokeoAiError:
                 continue
             specs.append(
                 dict(
                     type='function',
                     function=dict(
-                        name=name,
+                        name=config_name,
                         description=tool._meta.description,
                         parameters=tool._meta.parameters,
                     ),
@@ -449,23 +446,19 @@ class TokeoAi(MetaMixin):
             )
         return specs
 
-    def _agent(self, name):
-        # build the agent configured under ```ai.agents[name]``` once and reuse
-        # it; the entry has the uniform item form: ```type``` (a built-in short
-        # name or a dotted path) resolves to an agent class, built with the
-        # application. the agent reads its own composition (tools, guards, ...)
-        # from the declaration via _config
-        obj = self._agent_objs.get(name)
+    def _agent(self, config_name):
+        # build the agent configured under ```ai.agents[config_name]``` once and
+        # reuse it; ```type``` (a built-in alias or a dotted path) resolves to
+        # an agent class, built with the application and set up with its key
+        # and its raw declaration
+        obj = self._agent_objs.get(config_name)
         if obj is None:
-            config = self._agents.get(name)
-            if not isinstance(config, dict) or not config.get('type'):
-                raise TokeoAiError(f'ai agent {name!r} is not configured under ai.agents')
-            obj = self.resolve('agent', config['type'])(self.app)
-            # hand the agent its raw ai.agents[name] declaration; the agent reads
-            # its own options out of it (see agent._config)
-            obj._declaration = config
-            obj._setup(self.app)
-            self._agent_objs[name] = obj
+            item = self._agents.get(config_name)
+            if not isinstance(item, dict) or not item.get('type'):
+                raise TokeoAiError(f'ai agent {config_name!r} is not configured under ai.agents')
+            obj = self.resolve('agent', item['type'])(self.app)
+            obj._setup(self.app, config_name, item)
+            self._agent_objs[config_name] = obj
         return obj
 
     def _agent_or_default(self, agent, profile=None):
@@ -496,45 +489,40 @@ class TokeoAi(MetaMixin):
         denied = self._deny_set(agent_obj, profile, call_deny)
         return [name for name in active if name not in denied]
 
-    def _governor(self, name):
-        # build the guard for an name (the name as written) once and
-        # reuse it; guards hold no per-call state, so one cached instance is
+    def _governor(self, config_name):
+        # build the governor for a config name (the name as written) once and
+        # reuse it; governors hold no per-call state, so one cached instance is
         # fine. two forms: a dotted class at the point of use (a '.' in the
-        # name) runs with class defaults, not configurable (no declaration); a
-        # short name is built from its ai.guards declaration -- ```type``` (a
-        # built-in short name or a dotted path) resolves to a class, built with
-        # the application and the declaration's ```options``` as keyword
-        # arguments (the keys override the guard's Meta defaults)
-        obj = self._governor_objs.get(name)
+        # name) runs with class defaults, not configurable; a declared name is
+        # built from its ai.guards item -- ```type``` (a built-in alias or a
+        # dotted path) resolves to a class, set up with its key and its raw
+        # declaration
+        obj = self._governor_objs.get(config_name)
         if obj is None:
-            if '.' in name:
-                # dotted class at the point of use: resolve and build with class
-                # defaults; it carries no declaration, so no options/per-stage
-                obj = self.resolve('governor', name)(self.app)
-                obj._setup(self.app)
+            if '.' in config_name:
+                # dotted class at the point of use: class defaults, no
+                # declaration; the dotted string is its config name
+                obj = self.resolve('governor', config_name)(self.app)
+                obj._setup(self.app, config_name)
             else:
-                item = self._governors.get(name)
+                item = self._governors.get(config_name)
                 if not isinstance(item, dict) or not item.get('type'):
-                    raise TokeoAiError(f'ai governor {name!r} is not configured under ai guards, transformers or conductors')
-                settings = item.get('options') or {}
-                obj = self.resolve('governor', item['type'])(self.app, **settings)
-                # hand the guard its raw ai.guards[name] declaration; the guard
-                # parses its own per-stage options out of it (see guard._config)
-                obj._declaration = item
-                obj._setup(self.app)
-            self._governor_objs[name] = obj
+                    raise TokeoAiError(f'ai governor {config_name!r} is not configured under ai guards, transformers or conductors')
+                obj = self.resolve('governor', item['type'])(self.app)
+                obj._setup(self.app, config_name, item)
+            self._governor_objs[config_name] = obj
         return obj
 
-    def _stages_of(self, identity):
-        # the stages a guard identity's class can do, by reflection (the guard's
+    def _stages_of(self, config_name):
+        # the stages a governor's class can do, by reflection (the governor's
         # own has_stage over its on_* methods). used by the composition resolver
         # to intersect a declared stage list with what the class implements
-        governor = self._governor(identity)
+        governor = self._governor(config_name)
         return [stage for stage in GOVERNOR_STAGES if governor.has_stage(stage)]
 
     def _resolve_governors(self, agent_obj):
         # resolve the agent's guard composition: expand chains, parse the
-        # per-guard stage lists, union per identity with nearest-wins, apply
+        # per-guard stage lists, union per config name with nearest-wins, apply
         # omit. returns GovernorConfigEntry list in first-appearance order. with no
         # agent (or none selected) there is no pipeline
         if agent_obj is None:
@@ -559,30 +547,23 @@ class TokeoAi(MetaMixin):
         # round), the guard instances are already cached in _governor_objs, and the
         # build is microseconds against an LLM call's hundreds of milliseconds
         entries = self._resolve_governors(agent_obj)
-        return {stage: [self._governor(entry.identity) for entry in entries if stage in entry.stages] for stage in GOVERNOR_STAGES}
+        return {stage: [self._governor(entry.config_name) for entry in entries if stage in entry.stages] for stage in GOVERNOR_STAGES}
 
-    def _sandbox(self, name):
-        # build the sandbox configured under ```ai.sandboxes[name]``` once and
-        # reuse it; the entry has the uniform item form: ```type``` (a built-in
-        # short name or a dotted path) resolves to a sandbox class, built with
-        # the application. the sandbox reads its own options from the declaration
-        # via _config. like a provider it holds no per-call state, so one cached
-        # instance is fine
-        obj = self._sandbox_objs.get(name)
+    def _sandbox(self, config_name):
+        # build the sandbox configured under ```ai.sandboxes[config_name]``` once
+        # and reuse it; ```type``` (a built-in alias or a dotted path) resolves
+        # to a sandbox class, built with the application and set up with its key
+        # and its raw declaration. it carries its key so callers can record
+        # WHERE a tool ran. like a provider it holds no per-call state, so one
+        # cached instance is fine
+        obj = self._sandbox_objs.get(config_name)
         if obj is None:
-            item = self._sandboxes.get(name)
+            item = self._sandboxes.get(config_name)
             if not isinstance(item, dict) or not item.get('type'):
-                raise TokeoAiError(f'ai sandbox {name!r} is not configured under ai.sandboxes')
+                raise TokeoAiError(f'ai sandbox {config_name!r} is not configured under ai.sandboxes')
             obj = self.resolve('sandbox', item['type'])(self.app)
-            # hand the sandbox its raw ai.sandboxes[name] declaration; it reads
-            # its own options out of it (see sandbox._config)
-            obj._declaration = item
-            obj._setup(self.app)
-            # the object carries its configured name (the ```ai.sandboxes``` key,
-            # e.g. ```jailed```, ```wasm_untrusted```) so callers can record
-            # WHERE a tool ran without threading the name alongside the object
-            obj._configured_name = name
-            self._sandbox_objs[name] = obj
+            obj._setup(self.app, config_name, item)
+            self._sandbox_objs[config_name] = obj
         return obj
 
     def set_sandbox(self, name):
@@ -641,7 +622,7 @@ class TokeoAi(MetaMixin):
         if sandbox is None:
             raise TokeoAiError(f'tool {tool_name!r} has no sandbox in the agent chain (denied)')
         if invocation is not None:
-            invocation.sandbox = getattr(sandbox, '_configured_name', None)
+            invocation.sandbox = sandbox.config_name
         return sandbox.exec(tool, arguments or {})
 
     def _exec_governed(self, call, call_governors, return_governors, ctx, agent_obj, profile, call_deny=None):
@@ -1345,7 +1326,7 @@ def ai_extend_app(app):
 
     """
     app.extend('ai', TokeoAi(app))
-    # built-in provider, available by short name without any configuration:
+    # built-in provider, available by alias without any configuration:
     # mock is the neutral test double the framework needs for its own loop.
     # core ships no tools and no domain models; a project names its own
     # tools and providers by a dotted ```type```

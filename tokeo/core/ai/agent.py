@@ -9,6 +9,7 @@ import copy
 from cement.core.meta import MetaMixin
 
 from tokeo.core.utils.dict import deep_merge
+from tokeo.core.ai.exc import TokeoAiError
 
 
 class TokeoAiAgent(MetaMixin):
@@ -20,9 +21,10 @@ class TokeoAiAgent(MetaMixin):
     and how many model calls the loop may take. The model itself is not part
     of the agent; it is bound late through the selected profile, so the same
     agent can run against the mock, a local model, or a hosted one. The class
-    is resolved from the ```ai.agents``` item ```type``` (a built-in short name or
-    a dotted path) by the ```app.ai``` handler, which passes the agent's
-    configuration entry as keyword arguments.
+    is resolved from the ```ai.agents``` item ```type``` (a built-in alias or
+    a dotted path) by the ```app.ai``` handler, which sets it up with its config
+    name and its raw declaration -- setup reads the composition out of it
+    once, and ```_config``` serves the merged view.
 
     This base is declarative only: it carries the composition (```Meta```) and
     the lifecycle, and is not used directly. tokeo ships exactly one concrete
@@ -54,7 +56,7 @@ class TokeoAiAgent(MetaMixin):
         # an in_process sandbox with tools: _all placed last is the opt-in
         # catch-all. deny: tools (item or group names) forbidden outright before
         # any sandbox lookup, a hard exclusion unlike a sandbox except.
-        # omit: governor identities to drop from this agent's composition (a
+        # omit: governor config names to drop from this agent's composition (a
         # local leaving-out, e.g. one a chain brought in), next to governors so
         # it never collides with a governor or chain name.
         # max_steps: per-agent cap on tool rounds (0 = unlimited). max_loops:
@@ -90,33 +92,56 @@ class TokeoAiAgent(MetaMixin):
         """
         super(TokeoAiAgent, self).__init__(*args, **kw)
         self.app = app
-        # the raw ai.agents[name] declaration, set by the handler after build
-        # (the agent reads its own options out of it); None when built without
-        # a declaration (e.g. directly in a test)
-        self._declaration = None
-        # the effective composition (config_defaults overlaid with the
-        # declaration's options), built lazily by _config and cached
-        self._composition = None
+        self._config_name = None
+        self._config_options = None
 
-    def _setup(self, app):
+    @property
+    def config_name(self):
         """
-        Set up the agent after instantiation.
+        The name this agent answers to. Never ```None``` or empty.
+
+        The declared config key once setup handed one in, the dotted class
+        (```module.Class```) until then.
+
+        ### Returns
+
+        - **str**: The declared key, or the dotted class
+
+        """
+        if self._config_name:
+            return self._config_name
+        return f'{type(self).__module__}.{type(self).__name__}'
+
+    def _setup(self, app, config_name=None, config=None):
+        """
+        Set up the agent with its config.
+
+        Called by the handler right after the build. An override must call
+        ```super()._setup(...)``` first -- it builds the view ```_config```
+        reads.
 
         ### Args
 
         - **app**: The Tokeo application instance
+        - **config_name** (str, optional): The key the agent is declared
+            under (```assistant```)
+        - **config** (dict, optional): The raw ```ai.agents``` declaration
 
         """
-        pass
+        if config_name:
+            self._config_name = config_name
+        # deepcopy keeps the class-level config_defaults untouched
+        self._config_options = deep_merge(
+            copy.deepcopy(self._meta.config_defaults or {}),
+            copy.deepcopy((config or {}).get('options') or {}),
+        )
 
     def _config(self, key, fallback=None):
         """
         Return the effective value of a composition key.
 
-        Built once, lazily, and cached: ```Meta.config_defaults``` deep-merged
-        with the declaration's ```options``` (the same Tokeo config rule as the
-        yaml handler -- lists append, dicts merge, scalars replace). The agent
-        has no stages, so there is one effective view, not a per-stage one.
+        Reads the view setup built: ```Meta.config_defaults``` with the
+        declared ```options``` laid over.
 
         ### Args
 
@@ -127,13 +152,14 @@ class TokeoAiAgent(MetaMixin):
 
         - **any**: The effective value for the key
 
+        ### Raises
+
+        - **TokeoAiError**: If config options were not set by setup
+
         """
-        if self._composition is None:
-            defaults = self._meta.config_defaults or {}
-            options = (self._declaration or {}).get('options') or {}
-            # deepcopy so the class-level config_defaults is never mutated
-            self._composition = deep_merge(copy.deepcopy(defaults), copy.deepcopy(options))
-        return self._composition.get(key, fallback)
+        if self._config_options is None:
+            raise TokeoAiError(f'{type(self).__name__}: config options were not set by setup')
+        return self._config_options.get(key, fallback)
 
 
 class TokeoAiFundiAgent(TokeoAiAgent):

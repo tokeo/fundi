@@ -24,9 +24,9 @@ from tokeo.core.ai.config.sandboxes import sandbox_contains_tool, sandbox_for
 from tokeo.core.ai.config.profiles import resolve_profile, find_profile, resolve_agent_name
 
 
-# a stub class-stage lookup: every identity can do these three stages, so the
+# a stub class-stage lookup: every config name can do these three stages, so the
 # tests target the composition logic, not reflection
-def _stages_of(identity):
+def _stages_of(config_name):
     return ['on_prompt', 'on_call', 'on_return']
 
 
@@ -38,7 +38,7 @@ def test_bare_name_runs_all_class_stages():
     # a bare name is additive: all the stages the class can do
     entries = _resolve({}, ['alpha'])
     assert len(entries) == 1
-    assert entries[0].identity == 'alpha'
+    assert entries[0].config_name == 'alpha'
     assert entries[0].stages == frozenset({'on_prompt', 'on_call', 'on_return'})
 
 
@@ -73,18 +73,18 @@ def test_empty_stage_list_is_an_error():
 def test_order_is_first_appearance():
     # entries keep their first-appearance order
     entries = _resolve({}, ['alpha', 'beta', 'gamma'])
-    assert [e.identity for e in entries] == ['alpha', 'beta', 'gamma']
+    assert [e.config_name for e in entries] == ['alpha', 'beta', 'gamma']
 
 
-def test_same_identity_same_stages_collapses_silently():
-    # the same identity named twice with the SAME participation collapses to one
+def test_same_config_name_same_stages_collapses_silently():
+    # the same config name named twice with the SAME participation collapses to one
     entries = _resolve({}, [{'alpha': ['on_call']}, {'alpha': ['on_call']}])
     assert len(entries) == 1
     assert entries[0].stages == frozenset({'on_call'})
 
 
-def test_same_identity_different_stages_same_level_is_error():
-    # the same identity twice on one level with DIFFERENT stages is not
+def test_same_config_name_different_stages_same_level_is_error():
+    # the same config name twice on one level with DIFFERENT stages is not
     # decidable -- to run it at several stages, name them in one stage list
     with pytest.raises(TokeoAiError):
         _resolve({}, [{'alpha': ['on_call']}, {'alpha': ['on_return']}])
@@ -94,14 +94,14 @@ def test_a_chain_is_expanded_in_place():
     # a list value under ai.guards is a chain; referencing it expands its members
     section = {'my_chain': ['alpha', {'beta': ['on_call']}]}
     entries = _resolve(section, ['my_chain', 'gamma'])
-    assert [e.identity for e in entries] == ['alpha', 'beta', 'gamma']
+    assert [e.config_name for e in entries] == ['alpha', 'beta', 'gamma']
     assert entries[1].stages == frozenset({'on_call'})
 
 
 def test_a_chain_may_import_another_chain():
     section = {'inner': ['alpha'], 'outer': ['inner', 'beta']}
     entries = _resolve(section, ['outer'])
-    assert [e.identity for e in entries] == ['alpha', 'beta']
+    assert [e.config_name for e in entries] == ['alpha', 'beta']
 
 
 def test_a_chain_cycle_is_an_error():
@@ -111,7 +111,7 @@ def test_a_chain_cycle_is_an_error():
 
 
 def test_two_chains_contradicting_is_an_error():
-    # the same identity with different stages from two equal chains is not
+    # the same config name with different stages from two equal chains is not
     # decidable (no nearer form to rank them) -- an error
     section = {'chainA': [{'alpha': ['on_call']}], 'chainB': [{'alpha': ['on_return']}]}
     with pytest.raises(TokeoAiError):
@@ -119,7 +119,7 @@ def test_two_chains_contradicting_is_an_error():
 
 
 def test_agent_over_chain_logs_a_note_and_agent_wins():
-    # an agent's direct stage list overrides a chain's for the same identity
+    # an agent's direct stage list overrides a chain's for the same config name
     # (nearest wins); a logger gets a note that the agent overrode the chain
     section = {'chainA': [{'alpha': ['on_call']}]}
     notes = []
@@ -135,17 +135,17 @@ def test_agent_over_chain_logs_a_note_and_agent_wins():
     assert len(notes) == 1 and 'overrides' in notes[0]
 
 
-def test_omit_drops_an_identity():
-    # omit removes a named identity from the composition (e.g. one a chain
+def test_omit_drops_a_config_name():
+    # omit removes a named config name from the composition (e.g. one a chain
     # brought in), by the name as written
     section = {'my_chain': ['alpha', 'beta']}
     entries = _resolve(section, ['my_chain', 'gamma'], agent_omit=['beta'])
-    assert [e.identity for e in entries] == ['alpha', 'gamma']
+    assert [e.config_name for e in entries] == ['alpha', 'gamma']
 
 
-def test_agent_entry_wins_over_chain_for_same_identity():
+def test_agent_entry_wins_over_chain_for_same_config_name():
     # nearest wins: an agent's direct stage list overrides a chain's for the
-    # same identity (§8); the agent form replaces, not unions
+    # same config name (§8); the agent form replaces, not unions
     section = {'my_chain': [{'alpha': ['on_call']}]}
     entries = _resolve(section, ['my_chain', {'alpha': ['on_return']}])
     assert len(entries) == 1
