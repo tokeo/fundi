@@ -658,8 +658,6 @@ class TokeoAi(MetaMixin):
                 # deny or an exhausted chain raises and is recorded as an error)
                 # the sandbox wraps a plain value into a ToolResult itself, so
                 # the innermost layer owns the wrap and this is always a ToolResult
-                # hand the whole per-turn scratchpad in; the seam creates and
-                # picks this tool's slice only if the tool declares a key
                 invocation.result = self._exec_in_sandbox(
                     invocation.name,
                     invocation.arguments,

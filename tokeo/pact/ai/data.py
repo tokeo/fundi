@@ -280,7 +280,7 @@ class TraceStep:
 
 
 @dataclass
-class TokeoAiLoopData:
+class TokeoAiLoopdata:
     """
     The loop's own live counters for one turn.
 
@@ -326,11 +326,11 @@ class TokeoAiResult:
     ### Args
 
     - **answer** (ChatResult): The final model reply in full
-    - **loopdata** (TokeoAiLoopData): The loop's live counters for the run
+    - **loopdata** (TokeoAiLoopdata): The loop's live counters for the run
     - **trace** (list): The run's ```TraceStep``` history, in order
 
     """
 
     answer: ChatResult = field(default_factory=ChatResult)
-    loopdata: TokeoAiLoopData = field(default_factory=TokeoAiLoopData)
+    loopdata: TokeoAiLoopdata = field(default_factory=TokeoAiLoopdata)
     trace: list = field(default_factory=list)
