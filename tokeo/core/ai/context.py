@@ -8,7 +8,7 @@ because it carries behaviour (```track```, ```tracked```, the typed-view
 properties), not just fields.
 """
 
-from tokeo.core.ai.data import ChatMessage, Invocation, ChatResult, TraceStep, TokeoAiLoopdata
+from tokeo.core.ai.data import ChatMessage, Invocation, ChatResult, TraceStep, TokeoAiLoopdata, TokeoAiTurndata
 from tokeo.core.ai.exc import TokeoAiError
 
 
@@ -44,7 +44,9 @@ class TokeoAiContext:
     the cache. Apart from these it holds ```userdata```: an opaque value the
     caller may set once and the framework never touches, carried unchanged
     through the run (not history, not a counter -- a constant the caller can read
-    its own context back from).
+    its own context back from). It also holds ```turndata```: a free, shared
+    dict that lives one run for in-process participants to keep working state
+    under their own key.
 
     The cached kinds are fixed at construction (```ChatMessage```,
     ```Invocation```, ```ChatResult```), so a cache exists for each from the
@@ -85,6 +87,9 @@ class TokeoAiContext:
         self._caches = {kind: [] for kind in self._CACHED}
         # the loop's counters
         self.loopdata = TokeoAiLoopdata()
+        # a free, shared data area for this run; participants write under
+        # their own key
+        self.turndata = TokeoAiTurndata()
         # the caller's opaque carry-through value; set once, never touched by
         # the framework, constant for the run (not history, not a counter)
         self.userdata = userdata

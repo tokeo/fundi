@@ -11,7 +11,17 @@ them is exercised by the Spiral tests.
 """
 
 import copy
-from tokeo.core.ai import TokeoAiContext, TokeoAiLoopdata, TraceStep, ChatMessage, Invocation, ChatResult, ToolResult, TokeoAiError
+from tokeo.core.ai import (
+    TokeoAiContext,
+    TokeoAiLoopdata,
+    TokeoAiTurndata,
+    TraceStep,
+    ChatMessage,
+    Invocation,
+    ChatResult,
+    ToolResult,
+    TokeoAiError,
+)
 
 
 def test_invocation_decision_constants_carry_the_expected_values():
@@ -56,6 +66,8 @@ def test_context_empty_when_unseeded():
     assert isinstance(ctx.loopdata, TokeoAiLoopdata)
     assert ctx.loopdata.steps == 0
     assert ctx.loopdata.failed_loops == 0
+    assert isinstance(ctx.turndata, TokeoAiTurndata)
+    assert ctx.turndata == {}
 
 
 def test_track_records_a_step_and_caches_the_bare_object():

@@ -75,6 +75,7 @@ from tokeo.core.ai.data import (
     ChatMessage,
     TraceStep,
     TokeoAiLoopdata,
+    TokeoAiTurndata,
     TokeoAiResult,
 )
 from tokeo.core.ai.context import TokeoAiContext
@@ -101,6 +102,7 @@ __all__ = [
     'TraceStep',
     'TokeoAiContext',
     'TokeoAiLoopdata',
+    'TokeoAiTurndata',
     'TokeoAiResult',
     'TokeoAiProvider',
     'TokeoAiTool',
