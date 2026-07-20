@@ -26,9 +26,26 @@ becomes able to license, that you would infringe by using the Software.
 
 <br/>
 
-## 3. Notices
+[+++ TOKEO-FUNDI SPECIFIC ADDITION: PATENT RETALIATION +++]
 
-You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms, as well as copies of any plain-text lines beginning with `Required Notice:` that the licensor provided with the Software. For example:
+## 3. Patent Retaliation
+
+If You institute patent litigation against any entity (including a cross-claim
+or counterclaim in a lawsuit) alleging that the Software constitutes direct or
+contributory patent infringement, then any patent licenses granted to You under
+these terms for the Software shall terminate automatically as of the date such
+litigation is filed.
+
+[+++ END OF ADDITION +++]
+
+<br/>
+
+## 4. Notices
+
+You must ensure that anyone who gets a copy of any part of the software from
+you also gets a copy of these terms, as well as copies of any plain-text lines
+beginning with `Required Notice:` that the licensor provided with the Software.
+For example:
 
 > Required Notice: Copyright ACME, Inc. (https://acme.domain)
 
@@ -36,7 +53,7 @@ You must ensure that anyone who gets a copy of any part of the software from you
 
 [+++ TOKEO-FUNDI SPECIFIC ADDITION: THRESHOLD QUALIFICATION +++]
 
-## 4. Permitted Purpose and Zero-Cost Qualification
+## 5. Permitted Purpose and Zero-Cost Qualification
 
 Use of the Software for the benefit of your Company is a Permitted Purpose only
 if, at all times, your Company meets BOTH of the following conditions:
@@ -52,12 +69,12 @@ prorated based on their actual working hours or engagement, and follows the
 staff-headcount methodology of EU Recommendation 2003/361.
 
 The aggregation of related entities (the entire Company, as defined in
-Section 9) follows the "linked enterprises" methodology of EU Recommendation
+Section 11) follows the "linked enterprises" methodology of EU Recommendation
 2003/361: the figures of entities holding more than 50% of the capital or
 voting rights, directly or indirectly, are counted in full.
 
 If your Company exceeds EITHER threshold at any time, your rights under this
-zero-cost license end immediately, subject to the cure period in Section 8.
+zero-cost license end immediately, subject to the cure period in Section 10.
 You may not use subsidiaries, parent companies, or other entities to circumvent
 these limits.
 
@@ -67,9 +84,9 @@ these limits.
 
 [+++ TOKEO-FUNDI SPECIFIC ADDITION: ENTERPRISE REQUIREMENT +++]
 
-## 5. Commercial Enterprise License Requirement
+## 6. Commercial Enterprise License Requirement
 
-An entity that does not qualify under Section 3 must obtain a separate
+An entity that does not qualify under Section 5 must obtain a separate
 commercial Enterprise License directly from the Licensor before using,
 operating, or distributing the Software. The Licensor commits to offering a
 fair, reasonable, and non-discriminatory commercial license to any such entity
@@ -81,7 +98,7 @@ on written request.
 
 [+++ TOKEO-FUNDI SPECIFIC ADDITION: MACHINE LEARNING TRAINING BAN +++]
 
-## 6. Restriction on Machine Learning Training
+## 7. Restriction on Machine Learning Training
 
 You may use the Software to build, run, operate, fine-tune, or extend models
 and AI systems as part of your own application: that is the purpose of the
@@ -103,7 +120,7 @@ the Software's source code in accordance with Article 4(3) of EU Directive
 
 <br/>
 
-## 7. Distribution and Notices
+## 8. Distribution and Notices
 
 If you distribute the Software, with or without changes, you must include these
 terms and preserve all copyright, license, and attribution notices. You may not
@@ -113,14 +130,14 @@ misrepresents its origin.
 
 <br/>
 
-## 8. Fair Use
+## 9. Fair Use
 
 You may have "fair use", "fair dealing", or equivalent rights for the Software
 under applicable law. These terms do not limit them.
 
 <br/>
 
-## 9. Termination and Cure
+## 10. Termination and Cure
 
 The first time you are notified in writing that you have violated these terms or
 done anything with the Software not covered by your licenses, your licenses can
@@ -130,7 +147,7 @@ licenses end immediately.
 
 <br/>
 
-## 10. Definitions
+## 11. Definitions
 
 The "Licensor" is the individual or entity offering these terms. The "Software"
 is the software the Licensor makes available under these terms.
@@ -147,10 +164,10 @@ direct or indirect.
 "Fiscal year" means your Company's annual accounting period.
 
 "Use" means anything you do with the Software requiring one of your licenses.
-A "Permitted Purpose" is any purpose that satisfies the conditions of Section 3.
+A "Permitted Purpose" is any purpose that satisfies the conditions of Section 5.
 
 <br/>
 
-## 11. Liability and Warranty
+## 12. Liability and Warranty
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
