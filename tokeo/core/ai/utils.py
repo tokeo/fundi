@@ -7,8 +7,10 @@ a project's own code -- can use them without importing the cement extension.
 
 import yaml
 
+from dataclasses import replace
+
 from tokeo.core.ai import TokeoAiError
-from tokeo.core.ai.data import TraceStep
+from tokeo.core.ai.data import TraceStep, ToolCall
 from tokeo.core.utils.json import TokeoJsonUnknownNameEncoder
 
 
@@ -122,3 +124,51 @@ class TokeoJsonAiTraceEncoder(TokeoJsonUnknownNameEncoder):
                 del step['object']
             return step
         return super().encode(obj)
+
+
+def add_tool_call(result, name, call_id, /, **arguments):
+    """
+    Originate a tool call from the code side (the conductor pattern).
+
+    Appends a fresh ```ToolCall``` to ```result.tool_calls``` and returns a NEW
+    ```ChatResult``` (via ```replace```), because a governor's ```on_answer```
+    only counts as a change when it hands back a different object.
+
+    The id is passed in, not built here -- the caller owns it (typically
+    ```get_token_hex(4, 'inj_')``` from ```tokeo.core.utils.uid```, so it is
+    random and marked as code-originated). This keeps the helper free of any
+    context: it only shapes the result.
+
+    ### Args
+
+    - **result** (ChatResult): the answer to add the call to
+    - **name** (str): the tool to call
+    - **call_id** (str): the id for the new call, unique within the turn
+    - **arguments**: the call's arguments as keywords
+
+    ### Note
+
+    See the conductor docs for the append-vs-replace strategies (append only,
+    full replace via ```drop_tool_calls``` first, or a targeted swap).
+    """
+    call = ToolCall(id=call_id, name=name, arguments=arguments)
+    return replace(result, tool_calls=[*result.tool_calls, call])
+
+
+def drop_tool_calls(result, name=None):
+    """
+    Drop tool calls from an answer before they run (the conductor pattern).
+
+    With a ```name``` it removes every call of that name; with ```None``` it
+    removes ALL calls. Returns a NEW ```ChatResult``` (via ```replace```) for the
+    same reason as ```add_tool_call```. Together the two cover append-only,
+    full-replace (```drop_tool_calls``` then ```add_tool_call```), and targeted
+    swap.
+
+    ### Args
+
+    - **result** (ChatResult): the answer to trim
+    - **name** (str, optional): the call name to drop; ```None``` drops all
+    """
+    kept = [] if name is None else [c for c in result.tool_calls if c.name != name]
+    return replace(result, tool_calls=kept)
