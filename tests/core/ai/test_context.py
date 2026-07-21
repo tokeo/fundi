@@ -70,6 +70,22 @@ def test_context_empty_when_unseeded():
     assert ctx.turndata == {}
 
 
+def test_turndata_preset_seeds_values_one_to_one():
+    # a preset seeds the run's turndata; the type stays TokeoAiTurndata
+    src = {'chain': ['toolA'], 'depth': 1}
+    ctx = TokeoAiContext(messages=[], turndata_preset=src)
+    assert isinstance(ctx.turndata, TokeoAiTurndata)
+    assert ctx.turndata == {'chain': ['toolA'], 'depth': 1}
+    # taken 1:1, NOT deep-copied: the inner object is the same one
+    assert ctx.turndata['chain'] is src['chain']
+
+
+def test_turndata_preset_absent_starts_empty():
+    # without a preset the run still starts with an empty turndata
+    ctx = TokeoAiContext(messages=[])
+    assert ctx.turndata == {}
+
+
 def test_track_records_a_step_and_caches_the_bare_object():
     # track appends a step to the trace and the bare object to its cache; it
     # returns the same object so a caller can keep the reference

@@ -58,7 +58,7 @@ class TokeoAiContext:
     # an instance of (isinstance, so a subclass lands in its base's view too)
     _CACHED = (ChatMessage, Invocation, ChatResult)
 
-    def __init__(self, messages=None, userdata=None, trace=True):
+    def __init__(self, messages=None, turndata_preset=None, userdata=None, trace=True):
         """
         Start a run's context, optionally seeding the incoming messages.
 
@@ -66,6 +66,11 @@ class TokeoAiContext:
 
         - **messages** (list | None): The incoming conversation to seed the run
             with; each is tracked, so it is on the trace and in the messages view
+        - **turndata_preset** (dict | None): Starting values for this run's
+            ```turndata```, taken 1:1 into a fresh ```TokeoAiTurndata``` (NOT
+            deep-copied, so nested objects are shared -- copy first to protect
+            them). Lets a delegate share its caller's turndata. Defaults to
+            ```None``` (empty)
         - **userdata**: An opaque value the caller may carry through the run. The
             framework never reads, interprets, or changes it -- it only makes it
             available on the context, so a guard (or a later confirm hook) can
@@ -88,8 +93,8 @@ class TokeoAiContext:
         # the loop's counters
         self.loopdata = TokeoAiLoopdata()
         # a free, shared data area for this run; participants write under
-        # their own key
-        self.turndata = TokeoAiTurndata()
+        # their own key; a preset seeds it (see __init__ args)
+        self.turndata = TokeoAiTurndata(turndata_preset) if turndata_preset is not None else TokeoAiTurndata()
         # the caller's opaque carry-through value; set once, never touched by
         # the framework, constant for the run (not history, not a counter)
         self.userdata = userdata

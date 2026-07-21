@@ -308,7 +308,9 @@ class TokeoAiTurndata(dict):
 
     Created fresh for every turn on the context (```ctx.turndata```) and gone
     with it. It is a working state for THIS turn, not a cache: nothing is
-    persisted, and a run always starts empty.
+    persisted. A run starts empty unless the caller seeds it with a
+    ```turndata_preset``` (see the context), which lets a delegate share its
+    caller's turndata.
 
     Shared means shared: everyone sees and can overwrite every key. Among
     trusted framework code that is a convention, not a risk. Write under your

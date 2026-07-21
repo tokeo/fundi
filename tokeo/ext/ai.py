@@ -700,6 +700,7 @@ class TokeoAi(MetaMixin):
         agent=None,
         max_steps=None,
         max_loops=None,
+        turndata_preset=None,
         userdata=None,
     ):
         """
@@ -737,6 +738,8 @@ class TokeoAi(MetaMixin):
         - **max_loops** (int | None): Maximum consecutive rounds without one
             successful call, 0 for unlimited; defaults to the agent's budget,
             otherwise the framework default
+        - **turndata_preset** (dict | None): Starting values for the run's
+            ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
         - **userdata**: An opaque value carried through the run on the context,
             untouched by the framework, for a guard or confirm hook to read back
             the caller's own context; its content is the caller's concern
@@ -795,7 +798,7 @@ class TokeoAi(MetaMixin):
         # incoming messages are tracked at construction, so ctx.messages is the
         # conversation history. the current result is a local, handed to the
         # stages and tracked -- not a context field
-        ctx = TokeoAiContext(messages=messages, userdata=userdata, trace=self._trace_enabled)
+        ctx = TokeoAiContext(messages=messages, turndata_preset=turndata_preset, userdata=userdata, trace=self._trace_enabled)
         # on_begin: once, on the raw incoming request, before any model call.
         # begin/prompt act on the accumulated conversation (no single handed-in
         # work object), so they refine the messages: a guard may mutate
@@ -902,6 +905,7 @@ class TokeoAi(MetaMixin):
         model_params=None,
         purpose=None,
         agent=None,
+        turndata_preset=None,
         userdata=None,
     ):
         """
@@ -920,6 +924,8 @@ class TokeoAi(MetaMixin):
         - **purpose** (str | None): Select the first enabled profile by purpose
         - **agent** (str | None): Select an agent by name; defaults to the
             configured ```ai.defaults.agent``` when one is set
+        - **turndata_preset** (dict | None): Starting values for the run's
+            ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
         - **userdata**: An opaque value carried through the run on the context,
             untouched by the framework, for a guard or confirm hook to read back
             the caller's own context; its content is the caller's concern
@@ -938,6 +944,7 @@ class TokeoAi(MetaMixin):
             model_params=model_params,
             purpose=purpose,
             agent=agent,
+            turndata_preset=turndata_preset,
             userdata=userdata,
         )
         return result.answer.text
