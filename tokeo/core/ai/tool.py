@@ -2,6 +2,8 @@
 The tool base class: a callable capability the model may invoke. A
 tool decides its own app need in __init__ (none by default) and yields
 the same app class everywhere (the uniformity rule).
+
+.. include:: ./TOOLS.md
 """
 
 import copy
