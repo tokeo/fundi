@@ -1,19 +1,14 @@
 """
-Tests for the wasm sandbox and the python exec tools.
+Tests for the wasm sandbox itself.
 
-The enforcement mechanics (hard memory cap, epoch timeout) are proven with
-tiny WAT guests so they run anywhere wasmtime is installed. The real
-end-to-end path (the exec tools across the file bridge in a CPython-WASI guest)
-needs a user-supplied python.wasm and is skipped without one -- set
-TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB to run it.
+The runtime guarantees -- memory cap, timeout, exit status, option validation --
+and the in-process exec paths, driven directly without an app. Runs through the
+agent chain live in ```tests/ext/ai/test_ai_wasm.py```.
 """
 
-import os
 import pytest
 
-from cement.utils.misc import init_defaults
 
-from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox
 from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExecTool
@@ -111,33 +106,6 @@ def test_wasm_validate_options_rejects_unknown():
     assert issues and any('net' in m for m in issues)
 
 
-def test_wasm_missing_mount_path_names_the_path(tmp):
-    # a mount whose host path does not exist must fail with a clear message
-    # naming the path, not a bare wasmtime "failed to add preopen dir". the
-    # repo tmp fixture is used (not pytest's tmp_path) so the suite's
-    # tmp/tests/.gitkeep is not wiped by pytest's basetemp management
-    runtime = os.path.join(tmp.dir, 'python.wasm')
-    with open(runtime, 'wb') as f:
-        f.write(b'\x00asm')
-    stdlib = os.path.join(tmp.dir, 'lib')
-    os.makedirs(stdlib)
-    sandbox = TokeoAiWasmSandbox(None)
-    sandbox._setup(
-        None,
-        'wasm_untrusted',
-        dict(
-            options=dict(
-                runtime=runtime,
-                stdlib=stdlib,
-                mounts={'/app': '/no/such/host/path'},
-            )
-        ),
-    )
-    tool = TokeoAiPythonUntrustedExecTool(None)
-    with pytest.raises(TokeoAiError, match=r'/no/such/host/path'):
-        sandbox.exec(tool, dict(code='1'))
-
-
 def test_untrusted_exec_runs_in_process():
     # the tool returns the snippet's raw value now -- the sandbox layer wraps it
     # into a ToolResult, so exec itself is sandbox-agnostic and value-only
@@ -169,187 +137,3 @@ def test_untrusted_exec_without_a_value_returns_none():
     # line -- delivers nothing: the tool returns None, read as 'no value'
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert tool.exec(code='total = 0\nfor i in range(10):\n    total += i') is None
-
-
-def test_untrusted_exec_non_json_value_is_returned_raw():
-    # the tool no longer screens for json-ability -- it returns the raw object
-    # and the sandbox's encoder decides how to represent it (and flags loss)
-    tool = TokeoAiPythonUntrustedExecTool(None)
-    assert isinstance(tool.exec(code='object()'), object)
-
-
-_PYTHON_WASM = os.environ.get('TOKEO_TEST_PYTHON_WASM')
-_WASI_STDLIB = os.environ.get('TOKEO_TEST_WASI_STDLIB')
-
-# the build paths default to the documented relative spot; override via env
-_RUNTIME = _PYTHON_WASM or os.path.abspath('./wasm/python.wasm')
-_STDLIB = _WASI_STDLIB or os.path.abspath('./wasm/lib/python3.13')
-
-# the tokeo source roots, mounted into the guest for the TRUSTED tool so it can
-# be rebuilt there (the untrusted tool needs no such mount). tokeo is now a
-# PEP 420 namespace split across two repos (the fundi tree holds
-# tokeo.core.ai..., the tokeo tree holds tokeo.core.exc...), so both portions
-# must be mounted for `import tokeo` to merge in the guest as it does on the host
-import tokeo  # noqa: E402
-
-_TOKEO_ROOTS = sorted({os.path.dirname(os.path.abspath(p)) for p in tokeo.__path__})
-
-# the trusted tool's base class pulls in cement, which lives in site-packages
-# (a different tree than tokeo) -- the trusted guest must mount that too. find
-# it from the installed package so the test works on any machine
-import cement  # noqa: E402
-
-_DEPS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(cement.__file__)))
-
-# skip the build-dependent tests unless an actual build is present
-_have_build = os.path.exists(_RUNTIME) and os.path.isdir(_STDLIB)
-
-
-class WasmTest(TokeoTest):
-    """A test app with just the ai extension, like the fundi harness."""
-
-    class Meta:
-        """Load the extensions the ai handler needs."""
-
-        extensions = [
-            'tokeo.ext.yaml',
-            'tokeo.ext.appenv',
-            'tokeo.ext.print',
-            'tokeo.ext.jinja2',
-            'tokeo.ext.appshare',
-            'tokeo.ext.ai',
-        ]
-
-
-def wasm_ai_config():
-    # a self-contained ai config with BOTH built-in tools, each behind a wasm
-    # sandbox: the untrusted tool runs directly in the guest (no app mount), the
-    # trusted tool is rebuilt in the guest, so its sandbox mounts the tokeo
-    # source read-only at /app and adds it to PYTHONPATH
-    cfg = init_defaults('ai')
-    cfg['ai'] = dict(
-        defaults=dict(profile='mock', agent=None),
-        tools=dict(
-            run_untrusted=dict(type='tokeo.core.ai.tools.TokeoAiPythonUntrustedExecTool'),
-            run_trusted=dict(type='tokeo.core.ai.tools.TokeoAiPythonTrustedExecTool'),
-        ),
-        sandboxes=dict(
-            # untrusted: total isolation, the guest sees only its stdlib
-            wasm_untrusted=dict(
-                type='tokeo.core.ai.sandboxes.TokeoAiWasmSandbox',
-                tools=['run_untrusted'],
-                options=dict(runtime=_RUNTIME, stdlib=_STDLIB, memory_mb=256, timeout=10),
-            ),
-            # trusted: the app is mounted so the tool can be rebuilt in the guest
-            wasm_trusted=dict(
-                type='tokeo.core.ai.sandboxes.TokeoAiWasmSandbox',
-                tools=['run_trusted'],
-                options=dict(
-                    runtime=_RUNTIME,
-                    stdlib=_STDLIB,
-                    memory_mb=256,
-                    timeout=10,
-                    # the tool's base class needs tokeo, tokeo-fundi AND cement (a
-                    # separate site-packages tree), so mount both read-only
-                    mounts={
-                        **{f'/app{i}': root for i, root in enumerate(_TOKEO_ROOTS)},
-                        '/deps': _DEPS_ROOT,
-                    },
-                    env=dict(
-                        PYTHONPATH=':'.join(
-                            # fmt: skip
-                            [f'/app{i}' for i in range(len(_TOKEO_ROOTS))]
-                            + ['/deps']
-                        )
-                    ),
-                ),
-            ),
-        ),
-        agents=dict(
-            untrusted_coder=dict(type='fundi', options=dict(sandboxes=['wasm_untrusted'])),
-            trusted_coder=dict(type='fundi', options=dict(sandboxes=['wasm_trusted'])),
-        ),
-        profiles=dict(
-            mock=dict(type='mock', agent='untrusted_coder'),
-        ),
-    )
-    return cfg
-
-
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
-def test_untrusted_exec_through_the_agent_chain():
-    # the untrusted tool runs the snippet directly in the guest (no app
-    # mount) and the result crosses the file bridge back
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('untrusted_coder')
-        out = app.ai._exec_in_sandbox(
-            'run_untrusted',
-            dict(code='import statistics\nstatistics.median([5, 1, 9, 3, 7])'),
-            agent,
-        )
-        # value is None when the tool returned nothing, so guard the access
-        text = out.value.as_str if out.value else ''
-        assert text == '5'
-
-
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
-def test_trusted_exec_through_the_agent_chain():
-    # the trusted tool is rebuilt in the guest from the mounted tokeo source;
-    # proving the snippet can import tokeo confirms the app is reachable there
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('trusted_coder')
-        out = app.ai._exec_in_sandbox(
-            'run_trusted',
-            dict(code='import tokeo\nbool(tokeo.__name__)'),
-            agent,
-        )
-        # value is None when the tool returned nothing, so guard the access
-        text = out.value.as_str if out.value else ''
-        assert text == 'True'
-
-
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
-def test_untrusted_guest_cannot_import_the_framework():
-    # the untrusted path mounts the pact contract (tokeo.pact) but no framework,
-    # so the bare tokeo namespace and tokeo.pact resolve by design, while the
-    # framework does not: importing tokeo.core fails in the guest, recorded as a
-    # tool exception on the result (A) with no value -- the framework stays
-    # invisible to untrusted code even though the inert contract is visible
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('untrusted_coder')
-        out = app.ai._exec_in_sandbox(
-            'run_untrusted',
-            dict(code='import tokeo.core.ai\n1'),
-            agent,
-        )
-        assert out.value is None
-        assert 'ModuleNotFoundError' in (out.state.exception or '')
-
-
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
-def test_wasm_guest_has_no_network():
-    # the guest must not reach the network -- the syscalls do not exist in its
-    # world, so the resolver call fails: no value, the failure on the result's
-    # state (A). the exception type is build-specific (gaierror/OSError, or a
-    # missing socket module), so only the recorded failure is asserted
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('untrusted_coder')
-        out = app.ai._exec_in_sandbox(
-            'run_untrusted',
-            dict(code='import socket\nsocket.gethostbyname("example.com")'),
-            agent,
-        )
-        assert out.value is None
-        assert out.state.exception is not None

@@ -1,19 +1,9 @@
 """
-Tests for the governor base and its pipeline mechanics (tokeo core).
+Tests for how the ai extension resolves and runs governors.
 
-The per-stage running order lives on ```TokeoAiGovernor```, the shared base of the
-guard, transformer and conductor roles: the stage is the fixed band (a governor
-runs at a stage because it overrides that ```on_*``` method); within a stage the
-governors run in order. The order is derived from the agent's one flat governor
-list: for each stage, the governors that have it, in list order.
-```_governors_by_stage``` builds that mapping -- six ordered lists, one per stage
--- and the loop runs each stage's list in order.
-
-The fixtures derive from the bare ```TokeoAiGovernor``` on purpose: this mechanic
-is role-independent, so it is proven on the base itself, not on any one role
-(a role's own contract, e.g. the guard's deny, is tested with that role). The
-full LLM loop is exercised by the Spiral tests; here the focus is the governor
-mechanics in isolation.
+Driven through ```app.ai._governors_by_stage``` and the deny path: the flat
+governor list turning into per-stage lists in order, and the actor being stamped
+into a reason the governor left unnamed.
 """
 
 from tokeo.main import TokeoTest

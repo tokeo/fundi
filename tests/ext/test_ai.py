@@ -1,10 +1,11 @@
 """
-Tests for the tool lifecycle contracts (prepare, before, after, teardown).
+Tests for the ai extension around a tool call.
 
-These pin the CONTRACTS only -- that the four optional hooks exist on the tool,
-default to no-ops, carry the decided signatures, and that a tool can override
-them. Wiring the hooks into the loop (order, error short-circuit) is a separate
-concern and lives with the loop tests.
+Covers the four lifecycle contracts (prepare, before, after, teardown) and how
+the loop runs them around the sandboxed exec: the order, the reshaping of
+arguments and result, and what happens when any of them raises. Lives here
+because it exercises the handler in ```tokeo.ext.ai```; the tests under
+```tests/core``` stay free of the extension.
 """
 
 import inspect
