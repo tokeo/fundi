@@ -15,6 +15,7 @@ from tokeo.core.ai import (
     TokeoAiContext,
     TokeoAiLoopdata,
     TokeoAiTurndata,
+    TokeoAiTraceNote,
     TraceStep,
     ChatMessage,
     Invocation,
@@ -329,3 +330,53 @@ def test_trace_false_skips_the_trace_but_fills_the_caches():
     assert ctx.trace == []
     assert len(ctx.messages) == 1
     assert ctx.cur_invocation.name == 'calc'
+
+
+# ---- free notes on the trace (TokeoAiTraceNote) -----------------------------
+
+
+def test_track_wraps_plain_values_in_a_note():
+    ctx = TokeoAiContext(messages=[])
+    origin = object()
+    ctx.track(origin, 'policy checked')
+    ctx.track(origin, {'checked': 3})
+    ctx.track(origin, 42)
+    noted = [step.object for step in ctx.trace]
+    assert all(isinstance(obj, TokeoAiTraceNote) for obj in noted)
+    assert [obj.content for obj in noted] == ['policy checked', {'checked': 3}, 42]
+
+
+class _TrackMyKind:
+    # a class of its own: it names itself on the trace, so it passes through
+    def __init__(self, label):
+        self.label = label
+
+
+def test_track_passes_mykind_classes_through():
+    ctx = TokeoAiContext(messages=[])
+    mykind = _TrackMyKind('mine')
+    assert ctx.track(object(), mykind) is mykind
+    assert ctx.trace[0].object is mykind
+
+
+def test_track_skips_none():
+    ctx = TokeoAiContext(messages=[])
+    assert ctx.track(object(), None) is None
+    assert ctx.trace == []
+
+
+def test_note_keeps_origin_and_stage():
+    ctx = TokeoAiContext(messages=[])
+    origin = object()
+    ctx.track(origin, 'checked', stage='on_call')
+    step = ctx.trace[0]
+    assert step.origin is origin
+    assert step.stage == 'on_call'
+
+
+def test_notes_do_not_reach_the_caches():
+    # a note is history, not state -- the typed caches stay empty
+    ctx = TokeoAiContext(messages=[])
+    ctx.track(object(), 'just a note')
+    assert ctx.messages == []
+    assert ctx.invocations == []

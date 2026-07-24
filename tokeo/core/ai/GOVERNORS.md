@@ -228,3 +228,31 @@ neither narrows what the implementation may do. When a governor denies
 without a reason, the loop stamps
 role and name of the actor into the reason -- trace and feedback
 always show who decided.
+
+## Leaving a note on the trace
+
+Besides returning an object, a governor may note anything on the trace -- it has
+the context, so one call is all it takes:
+
+```python
+from tokeo.core.ai.governor import GOVERNOR_STAGE_ON_CALL
+
+ctx.track(self, 'no policy matched', stage=GOVERNOR_STAGE_ON_CALL)
+```
+
+The stage is the one you are in: note from ```on_call``` with
+```GOVERNOR_STAGE_ON_CALL```, from ```on_return``` with
+```GOVERNOR_STAGE_ON_RETURN```, and so on. It is what later tells a reader at
+which point of the round you spoke. A plain value is wrapped in a
+```TokeoAiTraceNote``` so it is named and filterable later; an object of your
+own passes through under its own type name.
+
+Notes and a changed object work together. The notes land while the governor
+works, the ```supersede``` step after it returned, so the trace reads as what it
+considered and then what it did. A governor that only notes still leaves the
+step proving it ran and changed nothing.
+
+Two things stay with the author. Pass the right object and the right stage --
+nothing checks them, and the point of a note is to reveal, not to obscure. And
+keep the roles apart: **the note describes, the return acts.** Noting "I
+rewrote the call" changes nothing; only what you hand back does.

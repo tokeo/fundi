@@ -8,7 +8,7 @@ because it carries behaviour (```track```, ```tracked```, the typed-view
 properties), not just fields.
 """
 
-from tokeo.core.ai.data import ChatMessage, Invocation, ChatResult, TraceStep, TokeoAiLoopdata, TokeoAiTurndata
+from tokeo.core.ai.data import ChatMessage, Invocation, ChatResult, TraceStep, TokeoAiLoopdata, TokeoAiTurndata, TokeoAiTraceNote
 from tokeo.core.ai.exc import TokeoAiError
 
 
@@ -144,7 +144,11 @@ class TokeoAiContext:
             fresh message/result/invocation. Recorded on the step so the history
             is attributable
         - **obj**: The run object to record (a ```ChatMessage```,
-            ```Invocation```, ```ChatResult```, or any future cached kind)
+            ```Invocation```, ```ChatResult```, or any future cached kind). A
+            plain value -- anything from ```builtins``` or ```datetime```, so a
+            str, dict, number or date -- is wrapped in a ```TokeoAiTraceNote```
+            first, because it would otherwise land on the trace nameless.
+            ```None``` is skipped: an empty note records nothing
         - **stage**: The guard stage, or ```None``` for a loop track outside any
             stage (the common case here -- the loop adds fresh objects)
 
@@ -154,6 +158,12 @@ class TokeoAiContext:
             step
 
         """
+        if obj is None:
+            return None
+        # a plain value has no type name of its own on the trace, so it gets a
+        # note as its wrapper; anything self-defined already names itself
+        if type(obj).__module__ in ('builtins', 'datetime'):
+            obj = TokeoAiTraceNote(content=obj)
         # the trace gets a step (a fresh object is always a "changed" step); the
         # caches get the bare object, filed into every kind it is an instance of
         self._append_step(origin, obj, True, stage)

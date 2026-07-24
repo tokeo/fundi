@@ -76,6 +76,7 @@ from tokeo.core.ai.data import (
     TraceStep,
     TokeoAiLoopdata,
     TokeoAiTurndata,
+    TokeoAiTraceNote,
     TokeoAiResult,
 )
 from tokeo.core.ai.context import TokeoAiContext
@@ -103,6 +104,7 @@ __all__ = [
     'TokeoAiContext',
     'TokeoAiLoopdata',
     'TokeoAiTurndata',
+    'TokeoAiTraceNote',
     'TokeoAiResult',
     'TokeoAiProvider',
     'TokeoAiTool',

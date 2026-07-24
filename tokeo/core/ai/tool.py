@@ -30,6 +30,27 @@ class TokeoAiTool(MetaMixin):
     item by its ```options```); a subclass overrides those keys and ```exec```
     does the work. The handler reads them from ```_meta```.
 
+    ### Lifecycle
+
+    Around ```exec``` a tool may implement four optional hooks, run in this
+    order: ```prepare```, ```before```, ```exec```, ```after```, ```teardown```.
+    All four run in-process, outside the sandbox, and receive the run's
+    ```turndata```, the call ```arguments``` and a ```track``` to note something
+    on the trace. A tool get's no context and no loopdata etc. ```prepare``` and
+    ```teardown``` are the outer frame (open and close a resource, note something
+    in turndata) and return nothing. ```before``` and ```after``` are the inner
+    pair that reshapes what goes in and what comes out.
+
+    Data, not instruction: because these run outside the sandbox they may read
+    and reshape arguments and results, but must not carry out what the model
+    asked for -- that stays in ```exec```, behind the wall.
+
+    A raise in ```before```, ```exec``` or ```after``` becomes the call's result
+    (carrying the exception), skipping the rest and going straight to
+    ```teardown```. ```teardown``` runs whenever ```prepare``` succeeded; if
+    ```prepare``` itself raises, nothing was set up and ```teardown``` is
+    skipped.
+
     """
 
     class Meta:
@@ -132,6 +153,46 @@ class TokeoAiTool(MetaMixin):
             raise TokeoAiError(f'{type(self).__name__}: config options were not set by setup')
         return self._config_options.get(key, fallback)
 
+    def prepare(self, turndata, arguments, track):
+        """
+        Set up before the call runs; the outer frame's opening half.
+
+        Open a resource, or note something in ```turndata``` for a later hook or
+        governor. Returns nothing and cannot steer the call -- its only way to
+        stop ```exec``` is to raise. Succeeding here is what arms ```teardown```.
+
+        ### Args
+
+        - **turndata** (TokeoAiTurndata): the run's shared data area
+        - **arguments** (dict): the parsed call arguments, read-only here
+        - **track** (func): call it with a message or data to note something
+            on the trace
+
+        """
+
+    def before(self, turndata, arguments, track):
+        """
+        Reshape the arguments just before the call; a governor at the tool.
+
+        Returns the arguments to run with, as a dict the loop passes on and
+        ```exec``` unpacks; ```None``` leaves them unchanged. What it returns
+        must stay JSON-able, like all sandbox arguments. May delegate via
+        ```self.app.ai.chat(..., turndata_preset=turndata)``` -- passing
+        ```turndata``` shares a recursion mark across that boundary.
+
+        ### Args
+
+        - **turndata** (TokeoAiTurndata): the run's shared data area
+        - **arguments** (dict): the parsed call arguments
+        - **track** (func): call it with a message or data to note something
+            on the trace
+
+        ### Returns
+
+        - **dict | None**: the arguments to run; ```None``` keeps them as-is
+
+        """
+
     def exec(self, **arguments):
         """
         Execute the tool and return its result.
@@ -147,6 +208,48 @@ class TokeoAiTool(MetaMixin):
 
         """
         raise NotImplementedError
+
+    def after(self, turndata, arguments, result, track):
+        """
+        Reshape the result after a successful call; a governor at the tool.
+
+        Runs only on the success path -- it reshapes a result that would not
+        exist otherwise. Returns the result to use; ```None``` keeps it. Enrich
+        the result here, do not re-run the call outside the sandbox.
+
+        ### Args
+
+        - **turndata** (TokeoAiTurndata): the run's shared data area
+        - **arguments** (dict): the arguments as reshaped by ```before```
+        - **result** (ToolResult): the result ```exec``` produced
+        - **track** (func): call it with a message or data to note something
+            on the trace
+
+        ### Returns
+
+        - **ToolResult | None**: the result to use; ```None``` keeps it as-is
+
+        """
+
+    def teardown(self, turndata, arguments, result, track):
+        """
+        Tear down after the call; the outer frame's closing half.
+
+        Close what ```prepare``` opened and record the outcome -- being the only
+        hook that always runs, it is the one place that sees every ending.
+        ```result``` is always a ```ToolResult```; on a failed call it carries
+        the exception in ```result.state.exception```. Raising here is recorded
+        without overturning the result the call already produced.
+
+        ### Args
+
+        - **turndata** (TokeoAiTurndata): the run's shared data area
+        - **arguments** (dict): the arguments as reshaped by ```before```
+        - **result** (ToolResult): the outcome; carries the exception on failure
+        - **track** (func): call it with a message or data to note something
+            on the trace
+
+        """
 
 
 class TokeoJsonAiToolResultEncoder(TokeoJsonUnknownNoneEncoder):

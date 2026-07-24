@@ -319,6 +319,27 @@ class TokeoAiTurndata(dict):
 
 
 @dataclass
+class TokeoAiTraceNote:
+    """
+    A free note on the trace, so a plain value gets a name.
+
+    The export renders an unknown object as its type name, but a plain value
+    (a str, a dict, a number) serializes itself and lands on the trace nameless
+    -- indistinguishable from real objects and not filterable. ```track``` wraps
+    such a value in this note; anything that is a class of its own passes
+    through untouched. For a note with more structure, define a class: it keeps
+    its own type name on the trace.
+
+    ### Attributes
+
+    - **content**: The noted value, as handed to ```track```
+
+    """
+
+    content: object = None
+
+
+@dataclass
 class TokeoAiResult:
     """
     The result of a whole ```chat``` run -- answer, history, and bookkeeping.

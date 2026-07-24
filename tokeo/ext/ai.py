@@ -81,6 +81,9 @@ from tokeo.core.ai import (
     TokeoAiError,
     Invocation,
     ChatMessage,
+    ToolResult,
+    ToolStates,
+    TokeoAiTurndata,
     TokeoAiContext,
     TokeoAiFundiAgent,
     TokeoAiResult,
@@ -609,7 +612,53 @@ class TokeoAi(MetaMixin):
         # so a model calling a carved-out tool is refused here too
         return tool_name in self._deny_set(agent_obj, profile, call_deny)
 
-    def _exec_in_sandbox(self, tool_name, arguments, agent_obj, profile=None, call_deny=None, invocation=None):
+    def _exec_lifecycle(self, tool, sandbox, arguments, ctx):
+        # run the tool's own frame around the sandboxed call: prepare/teardown
+        # open and close it, before/after reshape what goes in and comes out.
+        # all four run in-process; only ```exec``` crosses into the sandbox
+        turndata = ctx.turndata if ctx is not None else TokeoAiTurndata()
+
+        def _track(stage):
+            # bind origin and stage here, so a hook cannot name itself wrong
+            if ctx is None:
+                return lambda content: None
+            return lambda content: ctx.track(tool, content, stage=stage)
+
+        def _failed(err):
+            return ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
+
+        try:
+            tool.prepare(turndata, arguments, _track('prepare'))
+        except Exception as err:
+            # nothing was set up, so nothing is owed a teardown
+            return _failed(err)
+        result = None
+        try:
+            try:
+                arguments = tool.before(turndata, arguments, _track('before')) or arguments
+            except Exception as err:
+                # before runs outside the sandbox: its throw is the tool's own
+                result = _failed(err)
+            else:
+                # the sandbox already turns a tool throw into a result, so what
+                # comes out here is machinery (a timeout, a denial) and rises
+                result = sandbox.exec(tool, arguments)
+                # a failed call has no result to reshape, so after is skipped
+                if getattr(result.state, 'exception', None) is None:
+                    try:
+                        result = tool.after(turndata, arguments, result, _track('after')) or result
+                    except Exception as err:
+                        result = _failed(err)
+        finally:
+            # owed once prepare succeeded, even while a machinery error rises
+            try:
+                tool.teardown(turndata, arguments, result, _track('teardown'))
+            except Exception as err:
+                # a failed teardown is noted, it does not overturn the result
+                _track('teardown')(f'teardown failed: {type(err).__name__}: {err}')
+        return result
+
+    def _exec_in_sandbox(self, tool_name, arguments, agent_obj, profile, call_deny, invocation, ctx):
         # the seam: resolve the tool, choose its sandbox, and run the call
         # through it. a hard ```deny``` or an exhausted chain raises, so the
         # caller records a denial; otherwise the chosen sandbox contains the
@@ -623,7 +672,7 @@ class TokeoAi(MetaMixin):
             raise TokeoAiError(f'tool {tool_name!r} has no sandbox in the agent chain (denied)')
         if invocation is not None:
             invocation.sandbox = sandbox.config_name
-        return sandbox.exec(tool, arguments or {})
+        return self._exec_lifecycle(tool, sandbox, arguments or {}, ctx)
 
     def _exec_governed(self, call, call_governors, return_governors, ctx, agent_obj, profile, call_deny=None):
         # run one tool call through the guard pipeline: the on_call guards may
@@ -665,6 +714,7 @@ class TokeoAi(MetaMixin):
                     profile,
                     call_deny,
                     invocation,
+                    ctx,
                 )
             except Exception as err:
                 # the pipeline is resilient: a failing tool is recorded and the
@@ -843,6 +893,8 @@ class TokeoAi(MetaMixin):
                             agent_obj,
                             profile,
                             deny,
+                            None,
+                            ctx,
                         )
                         # the sandbox always returns a ToolResult; a tool that
                         # raised is carried in its state, not thrown here
