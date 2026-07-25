@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=75.0.0", "wheel"]
+requires = ["setuptools>=77.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -24,12 +24,13 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pip-tools>=7.0.0",
+    "build>=1.0.0",
+    "setuptools>=77.0.0",
+    "wheel>=0.40.0",
+    "twine>=6.0.0",
     "pytest>=8.5.0",
     "pytest-cov>=6.0.0",
     "coverage>=7.10.0",
-    "twine>=6.0.0",
-    "setuptools>=75.0.0",
-    "wheel>=0.40.0",
     "pyink>=25.0.0",
     "flake8>=7.0.0",
     # packages necessary to run all macros
@@ -40,11 +41,11 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = {find = {namespaces = true, include = ["tokeo", "tokeo.*"], exclude = ["tokeo.templates", "tokeo.templates.*", "ez_setup", "tests*", "wasm*"]}}
+packages = {find = {namespaces = true, include = ["tokeo", "tokeo.*"], exclude = ["ez_setup", "tests*"]}}
 include-package-data = true
 
 [tool.setuptools.package-data]
-"tokeo.core.ai" = ["**/*.md"]
+"tokeo" = ["**/*.md"]
 
 [tool.setuptools.dynamic]
 version = {attr = "tokeo.core.ai.fundi.get_version"}

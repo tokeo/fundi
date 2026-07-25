@@ -33,10 +33,6 @@
 !/tests/
 !/tests/**
 
-!/tmp/
-!/tmp/tests/
-!/tmp/tests/.gitkeep
-
 !/.python-version
 !/.gitignore
 !/.npmrc
@@ -51,9 +47,12 @@
 !/setup.py
 !/pyproject.toml
 
-!/CHANGELOG.md
+!/LICENSE.txt
 !/LICENSE.md
+!/NOTICE.txt
+!/NOTICE.md
 !/README.md
+!/CHANGELOG.md
 !/TODO.md
 !/*.md
 

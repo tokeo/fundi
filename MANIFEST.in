@@ -1,4 +1,2 @@
-recursive-include config *.yaml
-recursive-exclude config *.local.yaml
-include CHANGELOG.md LICENSE.md
-include Makefile
+include LICENSE.md
+include README.md CHANGELOG.md
