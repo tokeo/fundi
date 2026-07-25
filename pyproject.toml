@@ -10,7 +10,8 @@ readme = "README.md"
 authors = [
     {name = "Tom Freudenberg", email = "th.freudenberg@gmail.com"}
 ]
-license = {file = "LICENSE.md"}
+license = "LicenseRef-Tokeo-Fundi-Source-Available-1.0"
+license-files = ["LICENSE.md"]
 urls = {"Homepage" = "https://github.com/tokeo/fundi"}
 requires-python = ">=3.10"
 
