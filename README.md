@@ -9,7 +9,7 @@
   <strong>The governed AI runtime for Tokeo: the model plans, the pipeline governs, the tools compute.</strong>
 </p>
 <p align="center">
-  -- Typed contracts, guarded tool execution, full traces -- from a 1.5 MB local micro model up to any large provider --
+  — Typed contracts, guarded tool execution, full traces — from a ~2.5 MB local micro model up to any large provider —
 </p>
 
 <br/>
@@ -20,9 +20,9 @@ One sentence carries the whole design: **fundi** (the master) wields the tools, 
 
 **Fundi** is the AI extension for [Tokeo](https://github.com/tokeo/tokeo). It adds a complete, compact agent runtime built on one conviction: **the model plans, the pipeline governs, the tools compute.** No step is implicit, every step is inspectable.
 
-Where Tokeo gives you the event-driven CLI framework, Fundi gives that framework a governed way to talk to AI providers: typed message and tool contracts, an agent pipeline where every tool call passes through guards, sandboxes that contain what the tools do, and a full trace of every run. The same agent definitions drive a deterministic mock provider, a model you train yourself, and any large OpenAI-compatible endpoint -- switching between them is editing a profile, not refactoring code.
+Where Tokeo gives you the event-driven CLI framework, Fundi gives that framework a governed way to talk to AI providers: typed message and tool contracts, an agent pipeline where every tool call passes through guards, sandboxes that contain what the tools do, and a full trace of every run. The same agent definitions drive a deterministic mock provider, a model you train yourself, and any large OpenAI-compatible endpoint. Switching between them is editing a profile, not refactoring code.
 
-Fundi is the source-available core of that runtime: the code under `tokeo.core.ai`, its tests under `tests/core/ai`, and the extension `tokeo.ext.ai` that wires it into an application. It lives in the shared `tokeo` namespace, is installed as part of Tokeo, inherits Tokeo's `tokeo` command, and you reach it through `tokeo ai ...`. The concrete tools, guards, and providers a project builds on top of fundi -- including the akili model below -- are generated into your own application and belong to you.
+Fundi is the source-available core of that runtime, and exactly these things make it up: the code under ```tokeo.core.ai``` and ```tokeo.pact.ai```, the extension ```tokeo.ext.ai``` that wires it into an application, and its tests under ```tests/core/ai```, ```tests/pact/ai``` and ```tests/ext/ai```. It is its own distribution that lives in the shared ```tokeo``` namespace, is installed alongside Tokeo, inherits Tokeo's ```tokeo``` command, and you reach it through ```tokeo ai ...```. The concrete tools, guards, and providers a project builds on top of fundi are generated into your own application and belong to you.
 
 <br/>
 
@@ -30,22 +30,22 @@ Fundi is the source-available core of that runtime: the code under `tokeo.core.a
 
 Most ways of wiring an application to an LLM let the model reach straight into your system. Fundi puts a pipeline in between, and makes every part of it explicit and typed.
 
-- **Contracts first.** Messages, tool calls, results, and traces are typed values (`tokeo.core.ai`), independent of any provider SDK. The contracts are the product; the providers plug into them.
-- **Agents are configuration.** An agent is a named composition in YAML -- its tools, its guard chain, its sandbox chain, its step budget. `audited` records everything and forbids nothing; `guarded` adds schema validation and policy (for example a read-only filesystem). Lean by default: with no agent a request runs plain and untraced, and you opt into governance.
+- **Contracts first.** Messages, tool calls, results, and traces are typed values (```tokeo.core.ai```), independent of any provider SDK. The contracts are the product; the providers plug into them.
+- **Agents are configuration.** An agent is a named composition in YAML — its tools, its guard chain, its sandbox chain, its step budget. ```audited``` records everything and forbids nothing; ```guarded``` adds schema validation and policy (for example a read-only filesystem). Lean by default: with no agent a request runs plain and untraced, and you opt into governance.
 - **Tools are plain functions.** Registered with a spec, activated in named groups (calendar, filesystem, mathematics) per profile. The provider never executes anything itself; a tool's result returns as feedback through the guards.
-- **Guards form the pipeline.** A before-guard may deny a call ahead of execution; an after-guard observes every outcome, so even a denial is recorded. A denied call is not executed -- the loop continues and the model sees the denial, so it can correct itself.
-- **Sandboxes contain execution.** A guard decides *whether* a call may run; a sandbox is the wall it runs *behind*. Fundi ships in-process (zero isolation), subprocess (fault and resource isolation), and a WebAssembly sandbox with no network, explicit mounts only, and a hard memory cap -- the safe home for model-generated code.
-- **Trace is the single source of truth.** Every run leaves a typed, inspectable trace: the prompts, the calls, the guard decisions, the results. Honest by construction -- a pipeline that denies nothing still says so.
+- **Guards form the pipeline.** A before-guard may deny a call ahead of execution; an after-guard observes every outcome, so even a denial is recorded. A denied call is not executed — the loop continues and the model sees the denial, so it can correct itself.
+- **Sandboxes contain execution.** A guard decides *whether* a call may run; a sandbox is the wall it runs *behind*. Fundi ships in-process (zero isolation), subprocess (fault and resource isolation), and a WebAssembly sandbox with no network, explicit mounts only, and a hard memory cap — the safe home for model-generated code.
+- **Trace is the single source of truth.** Every run leaves a typed, inspectable trace: the prompts, the calls, the guard decisions, the results. Honest by construction — a pipeline that denies nothing still says so.
 
 <br/>
 
 ## Getting started
 
-Fundi is installed through Tokeo's `fundi` extra:
+Fundi is its own distribution, installed alongside Tokeo:
 
 ```bash
-# Install Tokeo with the Fundi AI extension
-pip install tokeo[fundi]
+# Install Tokeo and the Fundi AI extension
+pip install tokeo tokeo-fundi
 
 # Verify
 tokeo --help
@@ -62,7 +62,7 @@ tokeo generate project your_app
 
 ## A first look
 
-The mock provider needs no server and no network -- it is the deterministic driver that makes the whole pipeline testable and demonstrable:
+The mock provider needs no server and no network, it is the deterministic driver that makes the whole pipeline testable and demonstrable:
 
 ```bash
 # Ask through the default profile (mock provider)
@@ -81,16 +81,16 @@ your_app ai ask "add 14 days to 2026-06-08" --agent guarded --json
 
 <br/>
 
-## akili -- a model your project owns
+## akili — a demonstration model for your project
 
-Fundi's contracts are provider-shaped, and the proof that they hold all the way down is **akili**: a real, trained micro language model that a generated project owns, trains, and operates itself. akili is **not** part of the fundi package -- it ships as a template, generated into your application under `your_app/core/akili/`, so the weights and the language belong to you. It is the canonical example of writing a provider against Fundi's contracts.
+Fundi's contracts are provider-shaped, and the proof that they hold all the way down is **akili**: a real, trained micro language model that a generated project owns, trains, and operates itself. akili is **not** part of the fundi package. It ships as a template, generated into your application under ```your_app/core/akili/```, so the weights and the language belong to you. It is the canonical example of writing a provider against Fundi's contracts.
 
-akili does one thing, and does it exactly: it turns a natural-language request -- English or German, plain or nested -- into a **plan** of tool calls over the project's calendar toolset. Nested requests like *"the weekday of today plus 2 days"* become real three-step chains. It runs in-process with plain NumPy: no host to start, no network, no third-party weights, answers in tens of milliseconds, and is fully audited under `--agent guarded` like any other provider.
+akili does one thing, and does it exactly: it turns a natural-language request — English or German, plain or nested, into a **plan** of tool calls over the project's calendar toolset. Nested requests like *"the weekday of today plus 2 days"* become real three-step chains. It runs in-process with plain NumPy: no host to start, no network, no third-party weights, answers in tens of milliseconds, and is fully audited under ```--agent guarded``` like any other provider.
 
-- **A few hundred thousand parameters, learned from scratch** on the project's own synthetic data -- a byte-level tokenizer and a small transformer, small enough to read in an afternoon.
-- **Train first, no shipped weights.** `python -m your_app.core.akili.train` builds the model on your machine (CPU is fine) in a few minutes and reports an honest held-out accuracy; until then the `akili` profile raises a clear hint and its tests skip.
-- **The language is data.** Every word and sentence pattern lives in `AKILI-LEX.yaml`; the training-data generator reads it, so teaching akili new language is editing that file and retraining. Capability lives in the data, not in the code -- an ablation switch demonstrates the lesson live.
-- **It complements the mock.** The built-in `mock` provider is the deliberately dumb test double that proves the machinery without any prerequisite; akili is the content that proves a project can own its model. The agents stay model-free compositions: the same `audited` or `guarded` agent runs against `mock`, `akili`, or a remote profile unchanged.
+- **A few hundred thousand parameters, learned from scratch** on the project's own synthetic data, a byte-level tokenizer and a small transformer, small enough to read in an afternoon.
+- **Train first, no shipped weights.** ```python -m your_app.core.akili.train``` builds the model on your machine (CPU only is fine) in a few minutes and reports an honest held-out accuracy; until then the ```akili``` profile raises a clear hint and its tests skip.
+- **The language is data.** Every word and sentence pattern lives in ```AKILI-LEX.yaml```; the training-data generator reads it, so teaching akili new language is editing that file and retraining. Capability lives in the data, not in the code, an ablation switch demonstrates the lesson live.
+- **It complements the mock.** The built-in ```mock``` provider is the deliberately dumb test double that proves the machinery without any prerequisite; akili is the content that proves a project can own its model. The agents stay model-free compositions: the same ```audited``` or ```guarded``` agent runs against ```mock```, ```akili```, or a remote profile unchanged.
 
 ```bash
 # Train the weights once, then plan tool calls with the model
@@ -104,9 +104,9 @@ your_app ai ask "the weekday of today plus 14 days" --profile akili --agent guar
 
 The generated project carries akili's full documentation, which is the best place to go deeper:
 
-- **`core/akili/AKILI-LLM.md`** -- how the model works: training, the anatomy of the weights, and grammar-constrained decoding, with diagrams.
-- **`core/akili/AKILI-USE.md`** -- what it does: a guided three-act demo of the Fundi agent, the trained model, and -- on purpose -- where the model breaks and why.
-- **`core/akili/AKILI-LEX.yaml`** -- the language itself: every word and phrasing the model is taught, ready to edit and extend.
+- **```core/akili/AKILI-LLM.md```** — how the model works: training, the anatomy of the weights, and grammar-constrained decoding, with diagrams.
+- **```core/akili/AKILI-USE.md```** — what it does: a guided three-act demo of the Fundi agent, the trained model, and — on purpose — where the model breaks and why.
+- **```core/akili/AKILI-LEX.yaml```** — the language itself: every word and phrasing the model is taught, ready to edit and extend.
 
 <br/>
 
@@ -114,9 +114,9 @@ The generated project carries akili's full documentation, which is the best plac
 
 The runtime is provider-shaped: the same agents and guards run against every backend, so changing where the intelligence comes from is a profile edit.
 
-- **mock** -- the deterministic local provider; no server, no network. The universal test and demo driver.
-- **akili** -- the trained micro model, running in-process with plain NumPy.
-- **oai_compat** -- any OpenAI-compatible endpoint you run yourself (Ollama, vLLM, llama.cpp, MLX) or a commercial API. The API key resolves through Tokeo's config the normal way -- plain text, a `${ENV_VAR}`, or a `!vault:`-encrypted value -- so the secret need never sit in clear text.
+- **mock** — the deterministic local provider; no server, no network. The universal test and demo driver.
+- **akili** — the trained micro model, running in-process with plain NumPy.
+- **oai_compat** — any OpenAI-compatible endpoint you run yourself (Ollama, vLLM, llama.cpp, MLX) or a commercial API. The API key resolves through Tokeo's config the normal way — plain text, a ```${ENV_VAR}```, or a ```!vault:```-encrypted value — so the secret need never sit in clear text.
 
 ```bash
 # Drive a real local or remote model behind the same agents
@@ -127,7 +127,7 @@ your_app ai ask "summarize this file" --profile assistant
 
 ## Code mode and the WebAssembly sandbox
 
-For agents that write and run code, Fundi provides a `python_untrusted_exec` tool that runs model-generated Python inside a WebAssembly guest -- no network, explicit mounts only, a hard memory cap and wall-clock timeout on every platform. The model writes the code; the sandbox isolates it.
+For agents that write and run code, Fundi provides a ```python_untrusted_exec``` tool that runs model-generated Python inside a WebAssembly guest — no network, explicit mounts only, a hard memory cap and wall-clock timeout on every platform. The model writes the code; the sandbox isolates it.
 
 ```bash
 # The mock synthesizes code that runs in the wasm guest (needs the ./wasm build)
@@ -139,11 +139,12 @@ The wasm build is opt-in and documented in the project's WASM guide; without it,
 <br/>
 <br/>
 
-## How Fundi relates to Tokeo
+## Tokeo packages
 
-- **Tokeo** is the event-driven CLI framework: the command surface, messaging, scheduling, automation, gRPC, web, vault, and the project generator. It also ships all the project templates -- including the AI branch and the akili lab that gets generated into your application.
-- **Fundi** (`tokeo-fundi`) is the source-available AI runtime, and exactly three things make it up: the code under `tokeo.core.ai`, its tests under `tests/core/ai`, and the extension `tokeo.ext.ai`.
-- **Akili** is generated by Tokeo within a project template and placed into your application under `your_app/core/akili/` when selected during your setup.
+- **Tokeo** is the event-driven CLI framework: the command surface, messaging, scheduling, automation, gRPC, web, vault, and the project generator.
+- **Ramani** ships all the project templates, including the AI branch and the akili lab that gets generated into your application.
+- **Fundi** (```tokeo-fundi```) is the source-available AI runtime.
+- **Akili** is generated by ```tokeo generate``` from Ramani's template and placed into your application for demonstration purposes under ```your_app/core/akili/``` when selected during your setup.
 
 <br/>
 <br/>
@@ -153,26 +154,34 @@ The wasm build is opt-in and documented in the project's WASM guide; without it,
 I believe in empowering the community while building a sustainable ecosystem. That's why Tokeo and its extensions use a dual-approach to licensing:
 
 **The Tokeo Core Framework (Apache 2.0)**
+
 I transitioned the core Tokeo framework from its original MIT license to the **Apache 2.0 license**. This switch wasn't primarily about Tokeo itself. It was made to provide *you*, the implementer and the project, with absolute legal certainty. In addition, the Apache 2.0 license includes explicit patent grants and protection, giving your projects a legally safe and rock-solid foundation to build upon.
 
 **The Tokeo Fundi Agent AI Extension (Source-Available License)**
-The optional ```tokeo-fundi``` AI extension is governed by our custom **Tokeo-Fundi Source-Available License**. Please don't let this scare you off! I am deeply committed to keeping software free for the community. If you are a hobbyist, a startup, or a small team, `tokeo-fundi` is **completely free** for you to use in any personal, internal or commercial project.
 
-However, to keep this project healthy, actively developed, and sustainable, this license introduces a fair-use threshold: businesses with highly successful commercial operations (exceeding EUR 2,000,000 in annual revenue or having 50 FTEs and more) are required to purchase a commercial Enterprise License. I believe this is a fair balance: those who achieve significant economic success using this software should contribute back to the developers making it possible.
+The optional ```tokeo-fundi``` AI extension is governed by the custom **Tokeo-Fundi Source-Available License 1.0**. Please don't let this scare you off! I am deeply committed to keeping software free for the community. If you are a hobbyist, a startup, or a small team, ```tokeo-fundi``` is **free of charge** for you to use in any personal, internal or commercial project.
+
+However, to keep this project healthy, actively developed, and sustainable, this license introduces a fair-use threshold. Businesses with highly successful commercial operations (across the whole group: more than EUR 2,000,000 in fiscal year global gross revenue excluding VAT, or more than 50 FTEs) are required to purchase a commercial Enterprise License. The license also restricts using its source code as training data for machine-learning systems. Read the complete and authoritative terms in ```LICENSE.md``` of this distribution.
+
+I believe this is a fair balance: those who achieve significant economic success using this software should contribute back to the developers making it possible.
+
+**The Tokeo Akili Demonstration LLM (Apache 2.0)**
+
+```akili``` is not part of this package. It is generated into your application from Ramani's template and stays under the Apache License, Version 2.0. It is meant as a demonstration and is not intended for delivery. It ships so you can experiment and learn, and it can be removed without side effects.
 
 <br/>
 <br/>
 
 ## ⭐ Support the Project
 
-Tokeo-Fundi is built in the open, with working code over promises. If this approach is useful to you, a star on [GitHub](https://github.com/tokeo/fundi) helps others find it -- issues, ideas, and pull requests are just as welcome.
+Tokeo-Fundi is built in the open, with working code over promises. If this approach is useful to you, a star on [GitHub](https://github.com/tokeo/fundi) helps others find it. Issues, ideas, and pull requests are just as welcome.
 
 <br/>
 <br/>
 
 ## A note on contributions
 
-We keep the human in the loop and use AI as an exoskeleton, not a replacement -- the same conviction that shapes the runtime itself. Purely AI-generated issues or pull requests are not accepted.
+We keep the human in the loop and use AI as an exoskeleton, not a replacement — the same conviction that shapes the runtime itself. Purely AI-generated issues or pull requests are not accepted.
 
 <br/>
 <br/>
