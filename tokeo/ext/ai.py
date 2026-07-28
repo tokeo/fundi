@@ -66,6 +66,7 @@ from cement import ex
 from cement.core.meta import MetaMixin
 from cement.core.foundation import SIGNALS
 from cement.core.exc import CaughtSignal
+from cement.utils.misc import is_true
 
 import importlib
 import shlex
@@ -142,6 +143,8 @@ class TokeoAi(MetaMixin):
 
     """
 
+    FUNDI_LICENSE_NOTICE = 'tokeo-fundi is source-available, not open source. See LICENSE.md, then set ai.license_acknowledged=true.'
+
     class Meta:
         """Handler meta-data and configuration defaults."""
 
@@ -204,6 +207,8 @@ class TokeoAi(MetaMixin):
         """
         super(TokeoAi, self).__init__(*args, **kw)
         self.app = app
+        # initialize display license notice
+        self._show_license_notice = True
         # the ai component registry lives on the handler: kind -> {name: cls}.
         # built-ins register here at post_setup; a project or third-party class
         # is named by a dotted ```type``` in the config and imported on demand.
@@ -239,6 +244,8 @@ class TokeoAi(MetaMixin):
 
         """
         self.app.config.merge({self._meta.config_section: self._meta.config_defaults}, override=False)
+        # update display license notice from acknowledgement
+        self._show_license_notice = not is_true(self._config('license_acknowledged', fallback=False))
         # pull the ai configuration into the handler once, at setup time
         self._defaults = self._config('defaults', fallback={}) or {}
         self._profiles = self._config('profiles', fallback={}) or {}
@@ -813,6 +820,14 @@ class TokeoAi(MetaMixin):
             or when a budget aborts the execution
 
         """
+        # show license information
+        if self._show_license_notice:
+            # this is possibly a mutable field but without significant outcome
+            # show the message only once per session
+            self._show_license_notice = False
+            # log the notice
+            self.app.log.info(self.FUNDI_LICENSE_NOTICE)
+        # proceed with chat
         name, profile = self._resolve(profile=profile, model=model, purpose=purpose)
         provider_type = provider_type_of(name, profile)
         provider = self._provider(provider_type)
