@@ -59,6 +59,11 @@ For example:
 
 ## 5. Permitted Purpose and Zero-Cost Qualification
 
+Obtaining, installing, and keeping a copy of the Software, including as a
+dependency of other software, is a Permitted Purpose. It is not Commercial Use
+on its own. The limits below apply from the point at which Commercial Use
+begins. Distribution remains subject to Sections 4, 6 and 8.
+
 Private Use is a Permitted Purpose and free of charge. Commercial Use is a
 Permitted Purpose under this zero-cost license, and free of charge, as long as
 both of these limits are respected:
@@ -215,8 +220,10 @@ is registered as a business. Evaluating the Software and learning to use it stay
 Private Use, even where you intend to make Commercial Use later.
 
 "Commercial Use" is any other use. The Software is put to Commercial Use where
-it is actually deployed, operated, or otherwise applied so that it contributes
-to such an activity. It does not matter when, how, or for which purpose the use
+it is actually deployed, operated, called from your own code, or otherwise
+applied so that it contributes to such an activity. Importing and calling any
+part of the Software counts, whether through its command surface or its classes
+and functions. It does not matter when, how, or for which purpose the use
 began. Work created under Private Use becomes Commercial Use once it is put to
 such an activity.
 
