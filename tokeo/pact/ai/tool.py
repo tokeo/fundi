@@ -1,7 +1,7 @@
 """
 The pact result helpers: build a ```ToolResult``` and encode its json.
 
-The two pieces a sandbox needs to assemble a result on its own -- the encoder
+The two pieces a sandbox needs to assemble a result on its own: the encoder
 that records whether the json form is faithful, and ```create_tool_result```
 that turns a raw value into the transport object. They depend on nothing but
 the standard library and the pact data and json modules, so they load in a
@@ -68,10 +68,10 @@ def create_tool_result(value, as_str=None, state=None):
 
     - **value**: The delivered value (mandatory); becomes ```as_data```, and the
         base for ```as_json``` and the ```as_str``` default
-    - **as_str** (str | None): The model-facing string; defaults to
+    - **as_str** (str|None): The model-facing string; defaults to
         ```str(value)```, or the empty string for a ```None``` value, when not
         given
-    - **state** (dict | None): Run states to carry as a dict of field names
+    - **state** (dict|None): Run states to carry as a dict of field names
         (```stdout```, ```stderr```, ```exception```, ```incomplete```); only the
         named fields are set onto the derived states, so a partial dict keeps the
         derived ```incomplete```. With ```None``` the states are derived from the
@@ -79,7 +79,7 @@ def create_tool_result(value, as_str=None, state=None):
 
     ### Returns
 
-    - **ToolResult**: with a ```ToolValue``` built from the value and the states
+    - **ToolResult**: With a ```ToolValue``` built from the value and the states
 
     """
     # one encode pass: the encoder names every object it has to substitute and
@@ -88,7 +88,7 @@ def create_tool_result(value, as_str=None, state=None):
     as_json = json_dump(value, encoder=encoder)
     # always a fresh states owned by this result (so nothing the caller holds is
     # aliased); incomplete starts from the encoder's finding, then a state dict
-    # sets only its named fields onto it -- a partial dict keeps the derived
+    # sets only its named fields onto it; a partial dict keeps the derived
     # incomplete. walking fields() covers a new ToolStates field untouched here
     toolstate = ToolStates(incomplete=encoder.substituted)
     if isinstance(state, dict):
@@ -96,7 +96,7 @@ def create_tool_result(value, as_str=None, state=None):
             if f.name in state:
                 setattr(toolstate, f.name, state[f.name])
     # default the model-facing string from the value, but a None value has no
-    # text -- show empty rather than the literal 'None'; an explicit as_str wins
+    # text, so show empty rather than the literal 'None'; an explicit as_str wins
     if as_str is None:
         as_str = '' if value is None else str(value)
     return ToolResult(

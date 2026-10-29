@@ -89,7 +89,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
     # the A/B split at the sandbox seam: a tool that raises is caught and rides
     # in state.exception (A), the sandbox still returns a result; a machinery
     # failure (here a subprocess timeout) is raised as TokeoAiError (B) and
-    # propagates, so the loop -- not the result -- carries it. the loop's
+    # propagates, so the loop (not the result) carries it. the loop's
     # content shaping of these into 'error: ...' is exercised by the Spiral tests
     cfg = ai_config()
     with ToolResultTest(config_defaults=cfg) as app:
@@ -97,7 +97,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
         agent = app.ai._agent('plain')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
         assert out.state.exception is not None
-    # B: a subprocess timeout is a machinery failure -- raised, not in state
+    # B: a subprocess timeout is a machinery failure: raised, not in state
     cfg['ai']['sandboxes']['jailed']['options']['timeout'] = 1
     cfg['ai']['tools']['slow'] = dict(type='tests.core.ai.tools.SleepTool')
     cfg['ai']['sandboxes']['jailed']['tools'].append('slow')
@@ -144,7 +144,7 @@ def test_a_structured_tool_result_keeps_its_views_through_the_sandbox():
 
 def test_a_tool_returning_nothing_yields_no_value():
     # a tool that returns nothing comes back as the no-result state: value None,
-    # no exception -- "nothing to deliver", not "it failed"
+    # no exception: "nothing to deliver", not "it failed"
     with ToolResultTest(config_defaults=ai_config()) as app:
         agent = app.ai._agent('plain')
         out = app.ai._exec_in_sandbox('void', {}, agent, None, None, None, None)

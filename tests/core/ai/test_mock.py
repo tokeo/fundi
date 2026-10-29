@@ -2,7 +2,7 @@
 Tests for the mock provider's codeact synthesis.
 
 The mock turns a ```text <op> <sentence>``` prompt into model-generated python
-and calls a code-running tool with it -- but only when such a tool (one taking a
+and calls a code-running tool with it, but only when such a tool (one taking a
 ```code``` parameter) is on offer. These tests cover the synthesis in isolation:
 they check the produced code and the activation rules, with no wasm guest, since
 the synthesis only builds the tool call (the sandbox would run it).

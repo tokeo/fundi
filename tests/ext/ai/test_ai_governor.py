@@ -34,7 +34,7 @@ class AiTest(TokeoTest):
 
 
 # small governors that participate in chosen stages by overriding their methods;
-# the bodies are no-ops -- only which stages they have matters for ordering. they
+# the bodies are no-ops; only which stages they have matters for ordering. they
 # derive from the bare TokeoAiGovernor: the mechanic under test is role-independent
 class OnCallGovernor(TokeoAiGovernor):
 
@@ -141,7 +141,7 @@ def test_no_governors_gives_empty_lists_for_every_stage():
         assert all(by_stage[stage] == [] for stage in GOVERNOR_STAGES)
 
 
-# --- deny stamps: trace and feedback name who decided (T-00015/17) ---
+# ---- deny stamps: trace and feedback name who decided ----
 
 
 class DenyingSilently(TokeoAiTransformer):
@@ -160,7 +160,7 @@ class DenyingOnReturn(TokeoAiConductor):
 
 def test_call_deny_without_reason_is_stamped_with_the_actor():
     # the deny is honoured (roles are characters, the implementation
-    # decides) and the stamped reason names role + name -- never 'a guard'
+    # decides) and the stamped reason names role + name, never 'a guard'
     with AiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'shredder')
@@ -210,7 +210,7 @@ def test_governor_config_reads_a_key_honouring_the_stage():
 def test_governor_label_reads_class_character_and_config_name():
     # the role comes from the class (isinstance), the name from the config
     # name _setup handed it; an object built without one reports as its full
-    # dotted class -- the same form a point-of-use declaration writes
+    # dotted class, the same form a point-of-use declaration writes
     with AiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'truncate')

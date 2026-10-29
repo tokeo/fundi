@@ -14,22 +14,18 @@ class TokeoAiProvider:
     ```app.ai``` handler. It must not keep mutable per-call state, so that it can
     be called concurrently without locking.
 
+    ### Args
+
+    - **app**: The Tokeo application instance
+    - **args**: Positional arguments for the parent initializer
+
+    ### Keyword Args
+
+    - **kw**: Keyword arguments for the parent initializer
+
     """
 
     def __init__(self, app, *args, **kw):
-        """
-        Initialize the provider.
-
-        ### Args
-
-        - **app**: The Tokeo application instance
-        - **args**: Positional arguments for the parent initializer
-
-        ### Keyword Args
-
-        - **kw**: Keyword arguments for the parent initializer
-
-        """
         self.app = app
         # never declared under a config key; the property reports the class
         self._config_name = None
@@ -55,7 +51,7 @@ class TokeoAiProvider:
         """
         Set up the provider.
 
-        Same form as every other ai class; a provider has nothing to receive --
+        Same form as every other ai class; a provider has nothing to receive;
         its settings come from the profile it is handed per chat call.
 
         ### Args

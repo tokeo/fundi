@@ -3,7 +3,7 @@ Helpers shared by the sandbox implementations.
 
 Both the subprocess and the wasm sandbox rebuild a tool in a fresh interpreter
 and build a scrubbed environment for it, so these two helpers live here rather
-than in either sandbox -- the sandboxes are siblings and should not import from
+than in either sandbox; the sandboxes are siblings and should not import from
 each other.
 """
 
@@ -20,7 +20,7 @@ def _importable_path(cls, what):
     if module == '__main__':
         # WHY: under ```python -m pkg.mod``` the defining module RUNS as
         # __main__ but stays importable under its real name; PEP 451 keeps
-        # that name on the spec. only the name is taken -- re-importing in
+        # that name on the spec. only the name is taken; re-importing in
         # the parent would execute the module twice
         spec = getattr(sys.modules.get('__main__'), '__spec__', None)
         if spec is not None and spec.name:
@@ -41,12 +41,12 @@ def expand_env(spec):
     The result is scrubbed: only the keys listed in ```spec``` are present (the
     host environment is a resolution source, not the sandbox's environment). A
     ```${NAME}``` reference resolves against the keys already built in this pass,
-    then the host ```os.environ```, then the empty string -- shell-like, with no
+    then the host ```os.environ```, then the empty string: shell-like, with no
     error on an unknown name. A bare ```$``` is literal.
 
     ### Args
 
-    - **spec** (dict | None): The ```options.env``` mapping, in definition order
+    - **spec** (dict|None): The ```options.env``` mapping, in definition order
 
     ### Returns
 

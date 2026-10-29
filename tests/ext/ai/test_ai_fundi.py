@@ -369,7 +369,7 @@ def test_setup_is_one_form_across_the_ai_classes():
 
 def test_a_tool_reads_its_declared_options_through_config():
     # the declaration's options overlay the class's config_defaults, read
-    # lazily through the tool's own _config -- the agent/sandbox pattern
+    # lazily through the tool's own _config, the agent/sandbox pattern
     with FundiTest(config_defaults=ai_config()) as app:
         assert run(app, 'greeter', 'plain', name='ada') == 'moin ada'
         tool = app.ai._tool('greeter')
@@ -386,7 +386,7 @@ def test_a_tool_without_options_runs_on_its_config_defaults():
 
 def test_two_declarations_of_one_class_stay_separate():
     # the same class under two keys is two objects with two config names and
-    # two option sets -- the class-level config_defaults is never mutated
+    # two option sets; the class-level config_defaults is never mutated
     with FundiTest(config_defaults=ai_config()) as app:
         greeter, plain = app.ai._tool('greeter'), app.ai._tool('plain_greeter')
         assert greeter is not plain

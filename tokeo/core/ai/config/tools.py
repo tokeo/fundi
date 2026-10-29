@@ -3,8 +3,8 @@ Resolve a tool selection into a flat, deduplicated, ordered item list.
 
 A tool selection (on an agent, a profile, a sandbox's ```tools```, or a call)
 names tool items and tool groups. A group is a list value under ```ai.tools```;
-an item is a leaf. This module expands groups to their member items -- groups may
-contain groups -- keeping list order and dropping duplicates, with a path set
+an item is a leaf. This module expands groups to their member items (groups may
+contain groups), keeping list order and dropping duplicates, with a path set
 guarding against a cyclic membership.
 
 It holds no app state and does no class loading; it works on the raw ```groups```

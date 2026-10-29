@@ -1,7 +1,7 @@
 """
 The in-process sandbox: zero isolation, the lean default.
 
-It runs a tool call directly in the application process -- the same place the
+It runs a tool call directly in the application process, the same place the
 loop ran tools before the sandbox seam existed. With ```tools: _all``` placed
 last in an agent's sandbox chain it is the opt-in catch-all that lets the
 remaining tools run in process; its absence from a chain is the deny-by-default.
@@ -59,7 +59,7 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
 
         """
         # capture the tool's own stdout/stderr while it runs, so a print() is
-        # recorded on the result rather than only hitting the app console -- the
+        # recorded on the result rather than only hitting the app console; the
         # same run states a process-boundary sandbox reports, for consistency.
         # the buffers also hold output a tool emitted before raising
         out_buf, err_buf = io.StringIO(), io.StringIO()
@@ -73,13 +73,13 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
             # carrying the exception rather than propagating to the loop
             output = ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
         # a bare None carries no value; a finished ToolResult passes through; any
-        # other value is wrapped -- so the loop always reads a ToolResult
+        # other value is wrapped, so the loop always reads a ToolResult
         if output is None:
             output = ToolResult(value=None)
         elif not isinstance(output, ToolResult):
             output = create_tool_result(output)
         # fold the captured streams into the run states, but only where the tool
-        # left them unset -- a stdout/stderr the tool set on purpose is its own
+        # left them unset; a stdout/stderr the tool set on purpose is its own
         # note and wins; an empty buffer stays None
         if output.state.stdout is None and out_buf.getvalue():
             output.state.stdout = out_buf.getvalue()

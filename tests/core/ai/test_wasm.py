@@ -1,7 +1,7 @@
 """
 Tests for the wasm sandbox itself.
 
-The runtime guarantees -- memory cap, timeout, exit status, option validation --
+The runtime guarantees (memory cap, timeout, exit status, option validation)
 and the in-process exec paths, driven directly without an app. Runs through the
 agent chain live in ```tests/ext/ai/test_ai_wasm.py```.
 """
@@ -53,7 +53,7 @@ def _run_wat(wat, memory_mb=None, timeout=None):
 
 
 def test_wasm_memory_cap_is_hard():
-    # the store limit makes the guest trap instead of eating host memory --
+    # the store limit makes the guest trap instead of eating host memory,
     # platform-independent, the gap the subprocess sandbox has on macos
     with pytest.raises(wasmtime.Trap):
         _run_wat(_GROW_WAT, memory_mb=8)
@@ -107,7 +107,7 @@ def test_wasm_validate_options_rejects_unknown():
 
 
 def test_untrusted_exec_runs_in_process():
-    # the tool returns the snippet's raw value now -- the sandbox layer wraps it
+    # the tool returns the snippet's raw value now; the sandbox layer wraps it
     # into a ToolResult, so exec itself is sandbox-agnostic and value-only
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert tool.exec(code='sum(range(10))') == 45
@@ -133,7 +133,7 @@ def test_untrusted_exec_delivers_by_return():
 
 
 def test_untrusted_exec_without_a_value_returns_none():
-    # a snippet that ends on a statement -- here a loop, not a value-bearing
-    # line -- delivers nothing: the tool returns None, read as 'no value'
+    # a snippet that ends on a statement (here a loop, not a value-bearing
+    # line) delivers nothing: the tool returns None, read as 'no value'
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert tool.exec(code='total = 0\nfor i in range(10):\n    total += i') is None

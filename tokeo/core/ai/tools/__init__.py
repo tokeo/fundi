@@ -11,7 +11,7 @@ Built-in agent tools.
 
 Each module here defines one ```TokeoAiTool``` subclass registered under a short
 name by the ```app.ai``` handler, so a config item can select it by ```type```.
-A tool defines WHAT runs; the sandbox chain decides WHERE.
+A tool defines what runs; the sandbox chain decides where.
 
 The tool classes are re-exported here, so a config ```type``` can use the short
 path ```tokeo.core.ai.tools.TokeoAiPythonUntrustedExecTool``` instead of the full

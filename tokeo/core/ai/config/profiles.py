@@ -3,8 +3,8 @@ Resolve which profile a run uses, and the agent the profile binds.
 
 A profile is a named entry under ```ai.profiles```; it binds a provider (the
 model, by ```type```) and an agent (the composition that runs tools), and may
-carry a ```model```/```purpose``` selector. A run picks one profile -- by name,
-by model, by purpose, or the configured default -- and from it the agent to run.
+carry a ```model```/```purpose``` selector. A run picks one profile (by name,
+by model, by purpose, or the configured default) and from it the agent to run.
 
 It holds no app state and does no class loading; it works on the raw
 ```profiles``` mapping plus the selector and the default, so the handler and the
@@ -72,8 +72,10 @@ def resolve_profile(profiles, default_profile, profile=None, model=None, purpose
     ### Args
 
     - **profiles** (dict): The ```ai.profiles``` mapping
-    - **default_profile** (str | None): ```ai.defaults.profile```
-    - **profile** / **model** / **purpose**: At most one selector
+    - **default_profile** (str|None): ```ai.defaults.profile```
+    - **profile** (str, optional): Selects the profile by its name
+    - **model** (str, optional): Selects the profile by its model
+    - **purpose** (str, optional): Selects the profile by its purpose
 
     ### Returns
 
@@ -102,22 +104,22 @@ def resolve_agent_name(agent, profile, default_agent):
     Return the agent name a run uses, in order: call argument, profile, defaults.
 
     An explicit call ```agent``` wins. Else the selected profile's ```agent```,
-    which must be *stated* -- an explicit ```agent: null``` on the profile opts
+    which must be *stated*: an explicit ```agent: null``` on the profile opts
     out on purpose (overriding the default), a present name selects it. Else
     ```ai.defaults.agent```. ```None``` means no agent is bound, and under the
-    sandbox rules a tool call is then denied -- binding an agent is how a profile
+    sandbox rules a tool call is then denied; binding an agent is how a profile
     opts into running tools at all.
 
     ### Args
 
-    - **agent** (str | None): The explicit call argument, if any
-    - **profile** (dict | None): The selected profile (its ```agent``` key, if
+    - **agent** (str|None): The explicit call argument, if any
+    - **profile** (dict|None): The selected profile (its ```agent``` key, if
         present, is honoured even when ```null```)
-    - **default_agent** (str | None): ```ai.defaults.agent```
+    - **default_agent** (str|None): ```ai.defaults.agent```
 
     ### Returns
 
-    - **str | None**: The agent name to build, or ```None``` when none is bound
+    - **str|None**: The agent name to build, or ```None``` when none is bound
 
     """
     if agent is None and profile is not None and 'agent' in profile:

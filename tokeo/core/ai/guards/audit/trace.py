@@ -16,7 +16,7 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
     A ready-to-use audit guard that logs every step at every stage.
 
     Built on the audit type, it overrides all six stage methods and writes one
-    log line per step -- the stage, the run object in hand, and (at the tool
+    log line per step: the stage, the run object in hand, and (at the tool
     stages) the call's outcome. So the whole pipeline becomes visible in the
     log: each model round, each tool call, each guard that ran before it. It
     changes nothing; registered as ```trace_audit```, an agent opts in via its
@@ -77,7 +77,7 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
             where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
             self._log(f'return {invocation.name!r} errored{where}: {invocation.error}')
         elif invocation.result and invocation.result.state.exception is not None:
-            # a tool that raised: caught by the sandbox, carried in its state --
+            # a tool that raised: caught by the sandbox, carried in its state,
             # distinct from the machinery error above, so the log tells them apart
             where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
             self._log(f'return {invocation.name!r} raised{where}: {invocation.result.state.exception}')

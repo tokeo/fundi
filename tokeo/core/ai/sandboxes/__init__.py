@@ -14,7 +14,7 @@ The sandbox classes are re-exported here, so the short path
 the full ```tokeo.core.ai.sandboxes.subprocess.TokeoAiSubprocessSandbox```). No
 cycle: a sandbox module imports the base from the ```tokeo.core.ai``` facade,
 which is always fully loaded before this subpackage __init__ runs. The wasm
-import is safe without the optional ```wasmtime``` extra -- that import is lazy
+import is safe without the optional ```wasmtime``` extra; that import is lazy
 inside the run path, not at module load. ```_common``` and ```runner``` carry no
 sandbox class and are not re-exported.
 """

@@ -28,9 +28,18 @@ class TokeoAiSandbox(MetaMixin):
     Its class is resolved from the ```ai.sandboxes``` item ```type``` (a built-in
     alias or a dotted path) and instantiated with the application by the
     ```app.ai``` handler, which then sets it up with its config name and its raw
-    declaration -- setup reads the ```options``` out of it once, and
+    declaration; setup reads the ```options``` out of it once, and
     ```_config``` serves the merged view. Like a provider, it holds no mutable
     per-call state.
+
+    ### Args
+
+    - **app**: The Tokeo application instance
+    - **args**: Positional arguments for the parent initializer
+
+    ### Keyword Args
+
+    - **kw**: Keyword arguments for the parent initializer
 
     ### Notes
 
@@ -56,19 +65,6 @@ class TokeoAiSandbox(MetaMixin):
         config_defaults = {}
 
     def __init__(self, app, *args, **kw):
-        """
-        Initialize the sandbox.
-
-        ### Args
-
-        - **app**: The Tokeo application instance
-        - **args**: Positional arguments for the parent initializer
-
-        ### Keyword Args
-
-        - **kw**: Keyword arguments for the parent initializer
-
-        """
         super(TokeoAiSandbox, self).__init__(*args, **kw)
         self.app = app
         self._config_name = None
@@ -96,7 +92,7 @@ class TokeoAiSandbox(MetaMixin):
         Set up the sandbox with its config.
 
         Called by the handler right after the build. An override must call
-        ```super()._setup(...)``` first -- it builds the view ```_config```
+        ```super()._setup(...)``` first; it builds the view ```_config```
         reads.
 
         ### Args
@@ -158,7 +154,7 @@ class TokeoAiSandbox(MetaMixin):
 
         ### Returns
 
-        - **ToolResult | str**: The tool's result; a plain string is treated
+        - **ToolResult|str**: The tool's result; a plain string is treated
             as the model-facing text
 
         """
@@ -178,7 +174,7 @@ class TokeoAiSandbox(MetaMixin):
 
         ### Returns
 
-        - **list[str] | None**: Error messages, or ```None```/empty when valid
+        - **list[str]|None**: Error messages, or ```None```/empty when valid
 
         """
         return None

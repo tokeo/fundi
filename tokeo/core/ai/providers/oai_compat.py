@@ -1,8 +1,8 @@
 """
 OpenAI-compatible chat provider for Tokeo applications.
 
-A thin synchronous client over the OpenAI-compatible chat-completions transport
--- the protocol that Ollama, llama.cpp, vLLM, MLX and the commercial APIs all
+A thin synchronous client over the OpenAI-compatible chat-completions transport,
+the protocol that Ollama, llama.cpp, vLLM, MLX and the commercial APIs all
 speak, so one provider serves them all. It is a dumb transport: it posts the
 messages (and any tool specs) to ```{base_url}/chat/completions``` and maps the
 reply into a ```ChatResult```. Tool-call normalization and the native-vs-prompt
@@ -37,11 +37,11 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
     - Options (top-level or under ```options```): ```base_url``` (required, e.g.
         ```http://localhost:11434/v1```), ```model``` (required), ```key```
         (optional bearer token; omit for an open local endpoint), ```timeout```
-        (seconds, default 120 -- inference is slow, so the default is generous)
+        (seconds, default 120; inference is slow, so the default is generous)
     - The unmodified server reply is kept on ```ChatResult.raw```, so a caller
         can always inspect exactly what came back
     - Errors become a clear ```TokeoAiError```: an unreachable endpoint, a
-        timeout, or a non-2xx status (with a short body excerpt) -- never a
+        timeout, or a non-2xx status (with a short body excerpt), never a
         raw transport traceback across the boundary
 
     """
@@ -62,15 +62,15 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         - **profile** (dict): The resolved profile; carries ```base_url```,
             ```model```, optional ```key``` and ```timeout```
         - **messages** (list): Chat messages as plain OpenAI-style dicts
-        - **tools** (list | None): OpenAI-style function specs to offer; sent
+        - **tools** (list|None): OpenAI-style function specs to offer; sent
             only when non-empty
-        - **model_params** (dict | None): Per-call model parameters; merged over
+        - **model_params** (dict|None): Per-call model parameters; merged over
             the profile's ```model_params``` (the call's keys win), so a caller
             can adjust sampling for one request without touching the config
 
         ### Returns
 
-        - **ChatResult**: text, reasoning, refusal, tool_calls, usage,
+        - **ChatResult**: Text, reasoning, refusal, tool_calls, usage,
             finish_reason, system_fingerprint, and the raw reply
 
         ### Raises
@@ -88,7 +88,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
 
         # model parameters: the profile's model_params are the base, the call's
         # override them key by key, so a caller tweaks one request without editing
-        # the config. passed straight through to the model -- no validation here,
+        # the config. passed straight through to the model; no validation here,
         # the endpoint owns the valid ranges (they vary by model)
         params = dict(profile.get('model_params') or {})
         if model_params:

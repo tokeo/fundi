@@ -4,7 +4,7 @@ Resolve which sandbox of an agent's chain contains a tool.
 A sandbox chain is an agent's ordered ```sandboxes``` list; a tool runs in the
 first sandbox whose ```tools``` contain it. A sandbox's ```tools``` is the
 keyword ```_all``` (every tool that reaches it) or a list of tool/group names;
-its ```except``` excludes members from *this* sandbox only -- not a ban, the
+its ```except``` excludes members from *this* sandbox only; not a ban, the
 chain walks on for them. An exhausted chain means no sandbox lists the tool,
 which is the deny-by-default.
 
@@ -63,7 +63,7 @@ def sandbox_for(tool_name, chain, item_of, resolve):
 
     Walks the ordered chain and takes the first sandbox whose tools contain the
     tool (and does not ```except``` it). An exhausted chain returns ```None```,
-    which the caller turns into a deny (no sandbox listing the tool IS the
+    which the caller turns into a deny (no sandbox listing the tool is the
     deny-by-default).
 
     ### Args
@@ -76,7 +76,7 @@ def sandbox_for(tool_name, chain, item_of, resolve):
 
     ### Returns
 
-    - **str | None**: The chosen sandbox name, or ```None``` when the chain is
+    - **str|None**: The chosen sandbox name, or ```None``` when the chain is
         exhausted
 
     """

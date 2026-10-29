@@ -11,16 +11,19 @@ A ```threading``` shim for the single-threaded WASI guest.
 
 WASI has no threads, so the real ```threading``` module is absent. This shim
 provides the names a framework touches at import time. The lock types are
-no-ops -- correct in a guest that can never run a second thread -- and starting
+no-ops (correct in a guest that can never run a second thread), and starting
 an actual ```Thread``` raises a clear error rather than silently doing nothing.
 """
 
 
 class Thread:
-    """A non-startable thread: the WASI guest is single-threaded."""
+    """
+    A non-startable thread: the WASI guest is single-threaded.
+
+    Its construction is refused with a clear reason.
+    """
 
     def __init__(self, *args, **kwargs):
-        """Refuse construction with a clear reason."""
         raise RuntimeError('threading.Thread is not available in the wasi guest (no threads)')
 
 

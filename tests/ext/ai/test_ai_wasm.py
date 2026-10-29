@@ -82,7 +82,7 @@ def test_wasm_missing_mount_path_names_the_path(tmp):
 
 
 def test_untrusted_exec_non_json_value_is_returned_raw():
-    # the tool no longer screens for json-ability -- it returns the raw object
+    # the tool no longer screens for json-ability; it returns the raw object
     # and the sandbox's encoder decides how to represent it (and flags loss)
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert isinstance(tool.exec(code='object()'), object)
@@ -105,7 +105,7 @@ import tokeo  # noqa: E402
 _TOKEO_ROOTS = sorted({os.path.dirname(os.path.abspath(p)) for p in tokeo.__path__})
 
 # the trusted tool's base class pulls in cement, which lives in site-packages
-# (a different tree than tokeo) -- the trusted guest must mount that too. find
+# (a different tree than tokeo); the trusted guest must mount that too. find
 # it from the installed package so the test works on any machine
 import cement  # noqa: E402
 
@@ -240,7 +240,7 @@ def test_untrusted_guest_cannot_import_the_framework():
     # the untrusted path mounts the pact contract (tokeo.pact) but no framework,
     # so the bare tokeo namespace and tokeo.pact resolve by design, while the
     # framework does not: importing tokeo.core fails in the guest, recorded as a
-    # tool exception on the result (A) with no value -- the framework stays
+    # tool exception on the result (A) with no value; the framework stays
     # invisible to untrusted code even though the inert contract is visible
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')
@@ -262,7 +262,7 @@ def test_untrusted_guest_cannot_import_the_framework():
     reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_wasm_guest_has_no_network():
-    # the guest must not reach the network -- the syscalls do not exist in its
+    # the guest must not reach the network; the syscalls do not exist in its
     # world, so the resolver call fails: no value, the failure on the result's
     # state (A). the exception type is build-specific (gaierror/OSError, or a
     # missing socket module), so only the recorded failure is asserted

@@ -135,6 +135,18 @@ class TokeoAi(MetaMixin):
     from several threads at once (for example dramatiq workers or scheduler
     jobs).
 
+    Stores the application reference only on construction; the configuration
+    is merged in the ```_setup``` method once the framework has loaded it.
+
+    ### Args
+
+    - **app**: The Tokeo application instance
+    - **args**: Positional arguments passed to the parent initializer
+
+    ### Keyword Args
+
+    - **kw**: Keyword arguments passed to the parent initializer
+
     ### Notes
 
     : The handler is registered as ```ai``` and is reached through ```app.ai```.
@@ -167,7 +179,7 @@ class TokeoAi(MetaMixin):
             max_steps=0,
             max_loops=3,
             # whether the run records its step history (the trace). True by
-            # default; set ai.trace=False to skip building the trace -- the
+            # default; set ai.trace=False to skip building the trace; the
             # typed caches still fill, so guards keep working, but result.trace
             # stays empty (and ai ask --trace has nothing to show). only safe
             # when no active guard reads the trace itself
@@ -189,22 +201,6 @@ class TokeoAi(MetaMixin):
         )
 
     def __init__(self, app, *args, **kw):
-        """
-        Initialize the ai handler.
-
-        Stores the application reference only; the configuration is merged in
-        the ```_setup``` method once the framework has loaded it.
-
-        ### Args
-
-        - **app**: The Tokeo application instance
-        - **args**: Positional arguments passed to the parent initializer
-
-        ### Keyword Args
-
-        - **kw**: Keyword arguments passed to the parent initializer
-
-        """
         super(TokeoAi, self).__init__(*args, **kw)
         self.app = app
         # initialize display license notice
@@ -356,7 +352,7 @@ class TokeoAi(MetaMixin):
 
         ### Args
 
-        - **kind** (str | None): A single kind (```provider```, ```tool``` ...),
+        - **kind** (str|None): A single kind (```provider```, ```tool``` ...),
             or ```None``` for the whole registry
 
         ### Returns
@@ -428,7 +424,7 @@ class TokeoAi(MetaMixin):
             # WHY: a sandbox that runs the tool in another process (subprocess,
             # docker) rebuilds it there. the import path comes from the tool's
             # class itself (so a registry alias in the config crosses the
-            # boundary too); only the configured options must travel -- carry
+            # boundary too); only the configured options must travel; carry
             # them on the instance so both twins are built the same way (the
             # uniformity rule)
             obj._tokeo_parent_instance_options = dict(settings)
@@ -500,7 +496,7 @@ class TokeoAi(MetaMixin):
 
     def _tools_minus_deny(self, agent_obj, profile, call_deny=None):
         # the active tool set: the agent's tools minus the shared deny set. a
-        # call can only narrow the set, never extend it -- there is no way to
+        # call can only narrow the set, never extend it; there is no way to
         # add a tool the agent does not carry. tools resolve to concrete names
         # first (so a denied group removes all its members), order is kept
         active = self._resolve_tools(agent_obj._config('tools'))
@@ -512,7 +508,7 @@ class TokeoAi(MetaMixin):
         # reuse it; governors hold no per-call state, so one cached instance is
         # fine. two forms: a dotted class at the point of use (a '.' in the
         # name) runs with class defaults, not configurable; a declared name is
-        # built from its ai.guards item -- ```type``` (a built-in alias or a
+        # built from its ai.guards item: ```type``` (a built-in alias or a
         # dotted path) resolves to a class, set up with its key and its raw
         # declaration
         obj = self._governor_objs.get(config_name)
@@ -556,8 +552,8 @@ class TokeoAi(MetaMixin):
         # build the per-stage running order: one ordered guard list per stage.
         # the stage is the fixed band; within a stage the guards run in agent
         # list order. each resolved entry (GovernorConfigEntry) carries the stages
-        # it runs at -- the intersection of its declared composition stages
-        # and what its class implements -- so a guard runs at a stage only
+        # it runs at (the intersection of its declared composition stages
+        # and what its class implements), so a guard runs at a stage only
         # when both the composition AND the class include it. with no guards
         # every list is empty and the loop runs as before.
         #
@@ -594,7 +590,7 @@ class TokeoAi(MetaMixin):
 
         ### Args
 
-        - **name** (str | None): A configured sandbox name, or ```None``` to
+        - **name** (str|None): A configured sandbox name, or ```None``` to
             clear the override and return to the per-agent chain
 
         """
@@ -623,7 +619,7 @@ class TokeoAi(MetaMixin):
 
     def _denies(self, tool_name, agent_obj, profile, call_deny=None):
         # the exec-time defence line: refuse a tool that is in the shared deny
-        # set before any sandbox lookup -- the same set used to trim the specs,
+        # set before any sandbox lookup, the same set used to trim the specs,
         # so a model calling a carved-out tool is refused here too
         return tool_name in self._deny_set(agent_obj, profile, call_deny)
 
@@ -693,7 +689,7 @@ class TokeoAi(MetaMixin):
         # run one tool call through the guard pipeline: the on_call guards may
         # deny it, the tool runs (inside its sandbox) unless denied, and the
         # on_return guards always run (so a denial is recorded too). the guards
-        # receive the running context plus the invocation -- the per-call object
+        # receive the running context plus the invocation, the per-call object
         # they work on, handed in (not fished from the trace)
         invocation = Invocation(id=call.id, name=call.name, arguments=dict(call.arguments or {}))
         # track it at creation (the loop is the origin), so it is in the
@@ -709,7 +705,7 @@ class TokeoAi(MetaMixin):
         # each guard runs and its step is recorded through supersede: a guard
         # that returns a fresh copy supersedes the working invocation (changed
         # step), one that mutates in place or returns nothing leaves it (an
-        # unchanged step -- the guard is still on the trace, attributable)
+        # unchanged step; the guard is still on the trace, attributable)
         for governor in call_governors:
             invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
             if invocation.decision == Invocation.DENY:
@@ -786,24 +782,24 @@ class TokeoAi(MetaMixin):
         ### Args
 
         - **messages** (list): Chat messages as plain OpenAI-style dicts
-        - **deny** (list | str | None): Tools or groups this call forbids, on
+        - **deny** (list|str|None): Tools or groups this call forbids, on
             top of the agent's and the profile's deny. A call may only narrow
             the agent's tool set, never extend it
-        - **profile** (str | None): Select a profile by name
-        - **model** (str | None): Select the first enabled profile by model
-        - **model_params** (dict | None): Per-call model parameters (temperature,
+        - **profile** (str|None): Select a profile by name
+        - **model** (str|None): Select the first enabled profile by model
+        - **model_params** (dict|None): Per-call model parameters (temperature,
             top_p, ...) that override the profile's ```model_params``` for this
             request only; passed to the provider, which spreads them into the
             request. Providers without a configurable model ignore them
-        - **purpose** (str | None): Select the first enabled profile by purpose
-        - **agent** (str | None): Select an agent by name; defaults to the
+        - **purpose** (str|None): Select the first enabled profile by purpose
+        - **agent** (str|None): Select an agent by name; defaults to the
             configured ```ai.defaults.agent``` when one is set
-        - **max_steps** (int | None): Maximum tool rounds, 0 for unlimited;
+        - **max_steps** (int|None): Maximum tool rounds, 0 for unlimited;
             defaults to the agent's budget, otherwise the framework default
-        - **max_loops** (int | None): Maximum consecutive rounds without one
+        - **max_loops** (int|None): Maximum consecutive rounds without one
             successful call, 0 for unlimited; defaults to the agent's budget,
             otherwise the framework default
-        - **turndata_preset** (dict | None): Starting values for the run's
+        - **turndata_preset** (dict|None): Starting values for the run's
             ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
         - **userdata**: An opaque value carried through the run on the context,
             untouched by the framework, for a guard or confirm hook to read back
@@ -811,7 +807,7 @@ class TokeoAi(MetaMixin):
 
         ### Returns
 
-        - **TokeoAiResult**: The run result -- the final answer (a
+        - **TokeoAiResult**: The run result: the final answer (a
             ```ChatResult```, no pending tool calls), the trace, and the status
 
         ### Raises
@@ -834,7 +830,7 @@ class TokeoAi(MetaMixin):
         # the agent is the composition root: it supplies the tools and the
         # guards and sets the budgets and the sandbox chain, while the profile
         # selects only the model. the active tools are the agent's tools, minus
-        # the agent's deny, minus the profile's deny, minus this call's deny --
+        # the agent's deny, minus the profile's deny, minus this call's deny;
         # a call can only narrow the set, never extend it. so several profiles
         # (and calls) share one agent and each carve out a subset. the agent is
         # resolved call > profile.agent > defaults.agent
@@ -870,7 +866,7 @@ class TokeoAi(MetaMixin):
         # keeps the typed views (messages, invocations, results) in step. the
         # incoming messages are tracked at construction, so ctx.messages is the
         # conversation history. the current result is a local, handed to the
-        # stages and tracked -- not a context field
+        # stages and tracked, not a context field
         ctx = TokeoAiContext(messages=messages, turndata_preset=turndata_preset, userdata=userdata, trace=self._trace_enabled)
         # on_begin: once, on the raw incoming request, before any model call.
         # begin/prompt act on the accumulated conversation (no single handed-in
@@ -883,7 +879,7 @@ class TokeoAi(MetaMixin):
         for governor in at_prompt:
             ctx.refine_messages(governor, governor.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
         result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
-        # on_answer: after each model call, on the model answer -- the result is
+        # on_answer: after each model call, on the model answer; the result is
         # the handed-in work object, so the step is recorded through supersede
         for governor in at_answer:
             result = ctx.supersede(governor, governor.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
@@ -989,17 +985,17 @@ class TokeoAi(MetaMixin):
         ### Args
 
         - **prompt** (str): The user prompt
-        - **deny** (list | str | None): Tools or groups this call forbids, on
+        - **deny** (list|str|None): Tools or groups this call forbids, on
             top of the agent's and the profile's deny. A call may only narrow
             the agent's tool set, never extend it
-        - **profile** (str | None): Select a profile by name
-        - **model** (str | None): Select the first enabled profile by model
-        - **model_params** (dict | None): Per-call model parameters that override
+        - **profile** (str|None): Select a profile by name
+        - **model** (str|None): Select the first enabled profile by model
+        - **model_params** (dict|None): Per-call model parameters that override
             the profile's ```model_params``` for this request only
-        - **purpose** (str | None): Select the first enabled profile by purpose
-        - **agent** (str | None): Select an agent by name; defaults to the
+        - **purpose** (str|None): Select the first enabled profile by purpose
+        - **agent** (str|None): Select an agent by name; defaults to the
             configured ```ai.defaults.agent``` when one is set
-        - **turndata_preset** (dict | None): Starting values for the run's
+        - **turndata_preset** (dict|None): Starting values for the run's
             ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
         - **userdata**: An opaque value carried through the run on the context,
             untouched by the framework, for a guard or confirm hook to read back
@@ -1031,7 +1027,7 @@ class _ChatCompleter(Completer):
 
     Unlike a ```NestedCompleter``` (which only completes from the start of the
     line, against its first word), this completes the selector switches and
-    their configured values *anywhere* in the line -- so they still pop up
+    their configured values *anywhere* in the line, so they still pop up
     after some prompt text, e.g. ```the weekday of today --agent gua|```. It
     looks only at the word under the cursor and the word before it:
 
@@ -1172,7 +1168,7 @@ class AiController(Controller):
         #
         # the prompt is a prompt_toolkit line editor with a session-only
         # InMemoryHistory (up/down walk this run's prompts, ctrl-r searches
-        # them, no persistence -- the history lives and dies with the
+        # them, no persistence; the history lives and dies with the
         # session) and a completer: typing "--" offers the four selector
         # switches, and after one the configured values follow. inline
         # --profile/--agent/--model/--purpose change the session for the
@@ -1255,7 +1251,7 @@ class AiController(Controller):
                     self.app.print(result.answer.text)
                 except KeyboardInterrupt:
                     # ctrl-c clears the current line and re-prompts, like a
-                    # shell -- it does not end the session
+                    # shell; it does not end the session
                     continue
                 except EOFError:
                     # ctrl-d ends the session
@@ -1422,11 +1418,11 @@ def ai_extend_app(app):
     app.ai.register('sandbox', 'subprocess', TokeoAiSubprocessSandbox)
     # built-in guard: the ready-to-use trace audit, logging every step at every
     # stage so the whole chain is visible. the audit *type* (TokeoAiAuditGuard)
-    # is not registered -- it is a base to derive from in python, not selected
+    # is not registered; it is a base to derive from in python, not selected
     app.ai.register('governor', 'trace_audit', TokeoAiTraceAuditGuard)
-    # built-in policy guards: the type (TokeoAiPolicyGuard) is not registered --
+    # built-in policy guards: the type (TokeoAiPolicyGuard) is not registered;
     # it is a base to derive from in python. the implementations: tool_policy
-    # (allow/deny by tool name), and two debugging guards -- deny_policy (always
+    # (allow/deny by tool name), and two debugging guards: deny_policy (always
     # a soft denial at the tool stages) and abort_policy (always a hard stop)
     app.ai.register('governor', 'abort_policy', TokeoAiAbortPolicyGuard)
     app.ai.register('governor', 'deny_policy', TokeoAiDenyPolicyGuard)

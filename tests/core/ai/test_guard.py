@@ -3,7 +3,7 @@ Tests for the guard role's own contract: the soft/hard denial (tokeo core).
 
 The shared governor mechanic (stage reflection, per-stage ordering) is tested in
 ```test_governor.py``` on the bare base. Here the focus is what makes a guard a
-guard rather than any other governor -- the deny decision: a soft denial
+guard rather than any other governor, the deny decision: a soft denial
 (```decision = DENY``` with a reason) that skips one call while the loop
 continues, and the hard stop (a raise) that ends the run. Each policy guard is
 tested in isolation (one guard, one invocation or stage call); the full loop is
@@ -85,7 +85,7 @@ def test_deny_policy_softly_denies_at_the_tool_stages():
 
 def test_deny_policy_raises_at_the_non_tool_stages_for_now():
     # at the non-tool stages a soft denial is not defined yet, so the deny
-    # policy guard raises (a temporary hard stop -- the TODO placeholder)
+    # policy guard raises (a temporary hard stop, the TODO placeholder)
     with AiTest() as app:
         guard = TokeoAiDenyPolicyGuard(app)
         for call in (

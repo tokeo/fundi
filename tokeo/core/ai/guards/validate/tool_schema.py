@@ -4,8 +4,8 @@ declared parameter schema.
 
 ```TokeoAiToolSchemaValidator``` runs at ```on_call```, before the tool runs,
 and checks the arguments the model passed against the schema the handler
-attached to the invocation (```invocation.parameters```). A malformed call -- a
-hallucinated argument, a missing required one, a wrong basic type -- is caught
+attached to the invocation (```invocation.parameters```). A malformed call (a
+hallucinated argument, a missing required one, a wrong basic type) is caught
 here instead of crashing the tool. It covers the schema subset tool definitions
 actually use: ```required``` names, declared ```properties``` (an undeclared
 argument is rejected unless the schema sets ```additionalProperties: true```),
@@ -14,11 +14,11 @@ unchecked.
 
 How it reacts is the ```strict``` option:
 
-- ```strict: false``` (the default) -- a failing call is *flagged*: the problems
+- ```strict: false``` (the default): a failing call is *flagged*: the problems
     are written to ```invocation.reason``` (so they show on the trace) and logged
     as a warning, but the call still runs. Use it to surface schema drift without
     blocking.
-- ```strict: true``` -- a failing call is *denied* (```decision = DENY``` with the
+- ```strict: true```: a failing call is *denied* (```decision = DENY``` with the
     problems as the reason), like the tool policy guard. The loop continues and
     the model sees the ```denied: ...``` feedback, so it can correct the call
     (deny-and-continue).

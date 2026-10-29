@@ -6,17 +6,17 @@ It runs a tool call in a fresh interpreter through the generic runner
 stdin and reading the ```ToolResult``` as JSON on stdout. The child gets its
 own interpreter, a wall-clock timeout (then SIGKILL), an enforced memory cap
 (RLIMIT_AS, with RLIMIT_DATA as fallback; current macos rejects caps below
-the already-mapped virtual size -- gigabytes at interpreter start -- so a
+the already-mapped virtual size (gigabytes at interpreter start), so a
 realistic cap errors the call there instead of silently running uncapped),
 a working directory, and a scrubbed environment. A crashing or run-away tool
-is contained from the parent -- but this is NOT a jail against hostile code:
+is contained from the parent, but this is not a jail against hostile code:
 it cannot stop the tool from reading files or reaching the network. Real path
 or network isolation needs a container, VM, or WASM backend the user supplies.
 
 ### Notes
 
 : The tool is rebuilt in the child from its dotted ```type``` and ```options```
-    (carried on the instance by the handler), with ```app=None``` -- a child has
+    (carried on the instance by the handler), with ```app=None```; a child has
     no live parent app, and the uniformity rule means a tool that needs an app
     builds it itself. The full ```ToolResult``` (its value views and run states)
     crosses the boundary as JSON; only a sandbox-machinery failure (timeout, a
@@ -39,7 +39,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
     Enforced caps: ```timeout``` (wall-clock, then SIGKILL) and ```memory_mb```
     (the child's address-space rlimit). ```cwd``` steers relative paths
     (advisory). ```env``` is scrubbed and ```${NAME}```-expanded. Path and network
-    caps are intentionally absent -- they cannot be promised here.
+    caps are intentionally absent; they cannot be promised here.
     """
 
     class Meta:
@@ -48,10 +48,10 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         # the configurable defaults, as one dict; the item's options overlay
         # this, read at runtime via _config. timeout: wall-clock seconds before
         # the run is killed (None = unbounded). memory_mb: memory cap in MB via
-        # rlimit (RLIMIT_AS, fallback RLIMIT_DATA) -- a refused cap errors the
+        # rlimit (RLIMIT_AS, fallback RLIMIT_DATA); a refused cap errors the
         # call (current macos rejects caps below the mapped size), no sham caps,
         # None = unbounded. cwd: scratch working directory (steers relative
-        # writes, created on demand), advisory only -- absolute paths are not
+        # writes, created on demand), advisory only; absolute paths are not
         # blocked. env: environment for the run, scrubbed/empty by default, only
         # the listed keys are set, ${NAME} expands against out -> host env -> ''
         config_defaults = dict(
@@ -66,7 +66,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         Run the tool in a runner subprocess and return its result.
 
         The full ```ToolResult``` is rebuilt from the runner's JSON, including a
-        tool that raised -- the child catches the tool's own throw and reports it
+        tool that raised; the child catches the tool's own throw and reports it
         in ```state.exception```, so it returns as a result, not as a raise.
         Only a sandbox-machinery failure (timeout, a runner crash, a non-JSON or
         ```error``` reply) is raised here for the loop to catch.
@@ -89,7 +89,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         """
         # WHY canonical path: the child imports by module path. deriving it
         # from the loaded class (not the config string) lets a registry
-        # alias cross the boundary too -- the parent already resolved it
+        # alias cross the boundary too; the parent already resolved it
         dotted = _importable_path(type(tool), 'tool')
         timeout = self._config('timeout')
         memory_mb = self._config('memory_mb')
@@ -108,7 +108,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         # WHY: options.env shapes the TOOL's environment and is scrubbed, but
         # the runner interpreter must still import tokeo and the tool module.
         # carry the parent's import path in PYTHONPATH so the child can boot
-        # regardless of what the user listed -- this is sandbox mechanics, not
+        # regardless of what the user listed; this is sandbox mechanics, not
         # the tool's environment. a PYTHONPATH the user set in env keeps the
         # lead; the parent's entries are appended (absolute, so a changed cwd
         # does not break a relative path)
@@ -136,7 +136,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
             raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the ' 'subprocess sandbox')
         reply = self._decode(proc, dotted)
         # WHY raise on error: an "error" reply is a sandbox-machinery failure
-        # (a bad job, an unenforceable cap, an unimportable tool) -- the tool's
+        # (a bad job, an unenforceable cap, an unimportable tool); the tool's
         # own throw is not here, it rides in state.exception of a normal reply
         if 'error' in reply:
             raise TokeoAiError(f'tool {dotted!r} failed in the subprocess sandbox: {reply["error"]}')
@@ -154,7 +154,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
     def _rebuild(self, reply):
         # turn the runner's JSON back into a ToolResult: a null value stays
         # None (the tool delivered nothing), otherwise the two string views
-        # cross and as_data is reconstructed from as_json -- only the JSON view
+        # cross and as_data is reconstructed from as_json; only the JSON view
         # of a value survives a process boundary, so a raw datetime returns as
         # its encoded form; the run states are carried across as recorded
         value_doc = reply.get('value')
@@ -190,7 +190,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
 
         ### Returns
 
-        - **list[str] | None**: Error messages, or ```None``` when valid
+        - **list[str]|None**: Error messages, or ```None``` when valid
 
         """
         allowed = {'timeout', 'memory_mb', 'cwd', 'env'}

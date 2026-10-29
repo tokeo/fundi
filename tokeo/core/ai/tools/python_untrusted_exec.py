@@ -1,32 +1,34 @@
 """
 The ```python_untrusted_exec``` tool: run model-generated Python in isolation.
 
-This is the CodeAct pattern for code you must NOT trust. The snippet runs by the
+This is the CodeAct pattern for code you must not trust. The snippet runs by the
 exec-pysnippet guest path that imports nothing from tokeo except the pact
-contract -- the wasm guest sees its standard library, the contract, and the code
+contract; the wasm guest sees its standard library, the contract, and the code
 itself, never the framework. That keeps the isolation total: the model-generated
 code cannot read tokeo's own modules.
-
-### Security
-
-: !!! DANGER !!! This tool executes arbitrary, model-generated code. It MUST
-    only be configured to run inside the ```wasm``` sandbox (no network, only
-    the stdlib, hard memory cap) or a hardened, throwaway ```docker```
-    container. Running it ```in_process``` or in the plain ```subprocess```
-    sandbox gives generated code full host access -- file reads, network,
-    process spawn -- which a prompt-injection can turn into data exfiltration
-    or worse. The sandbox is not optional for this tool; it is the only thing
-    that makes it safe.
 
 ### Notes
 
 : ```wasm_exec_pysnippet = True``` tells the wasm sandbox to run the ```code```
-    argument via run_snippet in the guest, WITHOUT rebuilding this tool there --
+    argument via run_snippet in the guest, without rebuilding this tool there,
     so only the pact contract is mounted and the untrusted code stays walled off
     from the framework. The snippet delivers its answer by ending on an expression
     (the jupyter form) or by a ```return```; the same delivery runs in process
     (for tests or a trusted agent that deliberately chose no sandbox), so the tool
     is self-contained either way.
+
+### Reminders
+
+.. danger::
+
+    This tool executes arbitrary, model-generated code. It must
+    only be configured to run inside the ```wasm``` sandbox (no network, only
+    the stdlib, hard memory cap) or a hardened, throwaway ```docker```
+    container. Running it ```in_process``` or in the plain ```subprocess```
+    sandbox gives generated code full host access (file reads, network,
+    process spawn), which a prompt-injection can turn into data exfiltration
+    or worse. The sandbox is not optional for this tool; it is the only thing
+    that makes it safe.
 """
 
 from tokeo.core.ai import TokeoAiTool
@@ -35,9 +37,9 @@ from tokeo.pact.ai.pysnippet import run_snippet
 
 class TokeoAiPythonUntrustedExecTool(TokeoAiTool):
     """
-    Execute UNTRUSTED model-generated Python in isolation, returning its value.
+    Execute untrusted model-generated Python in isolation, returning its value.
 
-    DANGER: runs arbitrary code -- only ever behind the wasm sandbox or a
+    Danger: runs arbitrary code; only ever behind the wasm sandbox or a
     hardened, disposable docker container. The wasm path runs the code via
     run_snippet in the guest with only the pact contract mounted, so the
     framework stays invisible to it.
@@ -89,7 +91,7 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiTool):
 
         ### Returns
 
-        - **object | None**: The value the snippet delivered, or ```None```
+        - **object|None**: The value the snippet delivered, or ```None```
 
         """
         return run_snippet(arguments.get('code') or '')

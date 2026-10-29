@@ -4,7 +4,7 @@ Generic, tool-agnostic sandbox job runner.
 A subprocess sandbox (and later a docker one) runs a tool call in a fresh
 interpreter through this module: it is started as ```python -m
 tokeo.core.ai.sandboxes.runner```, reads a single JSON job from stdin, applies the
-resource caps BEFORE importing the tool, runs the tool, and writes the
+resource caps before importing the tool, runs the tool, and writes the
 ```ToolResult``` back as JSON on stdout. It never reaches back into the parent;
 the only contract across the boundary is JSON in and JSON out.
 
@@ -31,7 +31,7 @@ raw object (a datetime, a set) need not be JSON-able. The parent rebuilds
 boundary as its encoded JSON shape.
 
 A tool that raised is a normal reply too, carrying its message in
-```state.exception``` with a null ```value``` -- the tool throwing is the tool's
+```state.exception``` with a null ```value```; the tool throwing is the tool's
 own outcome, not a sandbox failure. Only a failure of the sandbox machinery
 itself (a bad job, an unenforceable cap, an unimportable tool) becomes a
 ```{"error": "..."}``` reply with a non-zero exit, a short message and never a
@@ -67,7 +67,7 @@ def _set_caps(caps):
     # that as "current limit exceeds maximum limit"); on apple silicon a
     # fresh interpreter maps gigabytes (dyld shared cache, malloc zones),
     # so realistic caps are refused there. a configured cap is enforced
-    # through whatever the platform accepts -- or the call errors below,
+    # through whatever the platform accepts, or the call errors below,
     # never a sham setting
     for name in ('RLIMIT_AS', 'RLIMIT_DATA'):
         res = getattr(resource, name, None)
@@ -82,7 +82,7 @@ def _set_caps(caps):
         # fails allocations there); the hard limit is only the ceiling a
         # process may raise its own soft limit back to. pinning both hardens
         # against self-raising, but macos often refuses any change to the
-        # hard limit (EINVAL) -- so fall back to soft-only, which is still
+        # hard limit (EINVAL), so fall back to soft-only, which is still
         # full enforcement, just not hardened (and we promise no jail)
         for soft_hard in ((pinned, pinned), (pinned, hard)):
             try:
@@ -92,7 +92,7 @@ def _set_caps(caps):
                 continue
     # WHY error out: a configured cap is a promise. if no mechanism on this
     # platform can keep it, a sham setting that silently runs uncapped would
-    # lie to the config -- fail the call with a clear reason instead
+    # lie to the config; fail the call with a clear reason instead
     raise RuntimeError('memory cap (memory_mb) is not enforceable on this platform')
 
 
@@ -110,7 +110,7 @@ def _load_tool(dotted, options):
 def _encode_result(output):
     # reduce a ToolResult to the JSON-able reply that crosses the boundary; the
     # same shape the parent rebuilds a ToolResult from. a value crosses as its
-    # two string views, or null when the tool delivered nothing -- as_data is
+    # two string views, or null when the tool delivered nothing; as_data is
     # deliberately NOT sent: a raw object (a datetime, a set) need not be
     # JSON-able, so the parent reconstructs as_data from as_json instead
     value = output.value
@@ -164,13 +164,13 @@ def main():
         # value and the message in state.exception (the same split as in process)
         output = ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
     # a finished ToolResult passes through; a bare None carries no value; any
-    # other value is wrapped -- so the reply is always a ToolResult
+    # other value is wrapped, so the reply is always a ToolResult
     if output is None:
         output = ToolResult(value=None)
     elif not isinstance(output, ToolResult):
         output = create_tool_result(output)
     # fold the captured streams into the run states, but only where the tool
-    # left them unset -- a stdout/stderr the tool set on purpose is its own note
+    # left them unset; a stdout/stderr the tool set on purpose is its own note
     # and wins; an empty buffer stays None
     if output.state.stdout is None and out_buf.getvalue():
         output.state.stdout = out_buf.getvalue()

@@ -4,27 +4,27 @@ The governor base class: a positioned, state-refining step in the loop.
 A governor is the regulator layer over the tools and sandboxes: a step at one or
 more stages of the run, from the raw request to the final result, that keeps the
 run ordered and safe. At its stage it receives the running ```TokeoAiContext```
-(the whole state -- the trace and its typed views) and, where the stage works on
+(the whole state: the trace and its typed views) and, where the stage works on
 one, a reference to that object (the ```ChatResult``` of a model answer, the
 ```Invocation``` of a tool call). It may inspect and refine what it sees.
 
 The three roles built on it share this whole mechanic and differ in their
 character: a ```guard``` secures by checking, a ```transformer``` reshapes,
 a ```conductor``` directs the run. Those are characters in thought, not
-fences -- everything a governor does is determined by its implementation,
+fences; everything a governor does is determined by its implementation,
 and the loop honours it: a deny is honoured from any role, and the trace
 and the feedback name the governor that decided.
 
-A governor participates at a stage by **overriding** that stage's method; the
+A governor participates at a stage by overriding that stage's method; the
 base versions are no-ops, so an unoverridden stage simply does not run. The
 handler finds participation by reflection (a method that differs from the base),
 so there is no separate phase declaration. Like a provider, a governor holds no
 mutable per-call state.
 
-The full reference for writing a governor -- the stages, what each hands you, the
-write contract for a result-changing step, coherence and the memory note -- is the
+The full reference for writing a governor (the stages, what each hands you, the
+write contract for a result-changing step, coherence and the memory note) is the
 included guide below. Each role adds only its own contract on top
-(`TokeoAiGuard`, `TokeoAiTransformer`, `TokeoAiConductor`).
+(```TokeoAiGuard```, ```TokeoAiTransformer```, ```TokeoAiConductor```).
 
 .. include:: ./GOVERNORS.md
 """
@@ -80,28 +80,28 @@ class TokeoAiGovernor(MetaMixin):
     Its class is resolved from the role's registry item ```type``` (a built-in
     alias or a dotted path) and instantiated with the application by the
     ```app.ai``` handler, which then sets it up with its config name and its raw
-    declaration -- setup builds the per-stage ```options``` views out of it
+    declaration; setup builds the per-stage ```options``` views out of it
     once, and ```_config``` serves them. Like a provider, it holds no mutable
     per-call state.
 
     ## Do not derive from this class directly
 
     This is the *master* base. Write a governor by deriving from a role and, under
-    it, from one of that role's *types* -- not from ```TokeoAiGovernor``` itself.
-    The role states the character -- securing (guard), reshaping (transformer),
-    directing (conductor) -- and the type states the sub-role your subclass is
+    it, from one of that role's *types*, not from ```TokeoAiGovernor``` itself.
+    The role states the character, securing (guard), reshaping (transformer) or
+    directing (conductor), and the type states the sub-role your subclass is
     written for. Deriving straight from ```TokeoAiGovernor``` makes a step
-    with no declared role -- avoid it.
+    with no declared role; avoid it.
 
     ## The stages: what each one hands you, and how to use it
 
-    A governor participates in a stage by **overriding** that stage's method. Each
+    A governor participates in a stage by overriding that stage's method. Each
     method receives the running ```TokeoAiContext``` (always) and, at the answer,
     tool, and close stages, the one object in hand. What you may do with it differs
     per stage; the rules below hold for every role (the role says what a governor
-    is *for* -- e.g. a transformer is there to reshape -- not what it can do).
+    is *for*, e.g. a transformer is there to reshape, not what it can do).
 
-    - **```on_begin(ctx)```** -- once, on the raw incoming request, before the
+    - ```on_begin(ctx)```: once, on the raw incoming request, before the
         first model call. There is no single work object; the conversation is
         ```ctx.messages``` (the full list of incoming messages). Read it to
         inspect the request. To change it, either mutate ```ctx.messages``` in
@@ -110,13 +110,13 @@ class TokeoAiGovernor(MetaMixin):
         conversation (a trimmed history, an injected system turn). A returned
         list must be messages (dicts); anything else fails loud.
 
-    - **```on_prompt(ctx)```** -- before *each* model call, on the outgoing
+    - ```on_prompt(ctx)```: before *each* model call, on the outgoing
         conversation. Same object and same rules as ```on_begin```:
         ```ctx.messages``` is what is about to be sent to the model. Runs again
         on every loop turn (after a tool result is appended), so it sees the
         conversation grow.
 
-    - **```on_answer(ctx, result)```** -- after each model call, on that call's
+    - ```on_answer(ctx, result)```: after each model call, on that call's
         answer. ```result``` is a ```ChatResult``` (```result.text```,
         ```result.reasoning```, ```result.refusal```, ```result.tool_calls```,
         ```result.usage```, ```result.raw```). Read or reshape its fields in
@@ -124,7 +124,7 @@ class TokeoAiGovernor(MetaMixin):
         it. This is where a role may, for example, strip or rewrite a pending
         ```tool_calls``` entry before it is executed.
 
-    - **```on_call(ctx, invocation)```** -- before a tool runs, on the pending
+    - ```on_call(ctx, invocation)```: before a tool runs, on the pending
         call. ```invocation``` is an ```Invocation```: ```invocation.name```,
         ```invocation.arguments``` (a dict, filled), ```invocation.parameters```
         (the tool's schema), ```invocation.decision```/```invocation.reason```.
@@ -133,20 +133,20 @@ class TokeoAiGovernor(MetaMixin):
         ```Invocation```. A guard may additionally deny the call here (see the
         guard role); other roles reshape but do not deny.
 
-    - **```on_return(ctx, invocation)```** -- after the tool ran, on the same
+    - ```on_return(ctx, invocation)```: after the tool ran, on the same
         ```Invocation```. Now ```invocation.result``` (a ```ToolResult``` whose
         ```value``` is a ```ToolValue``` with ```as_str```, ```as_json``` and
         ```as_data```, plus a ```state``` carrying ```incomplete```,
         ```stdout```, ```stderr``` and ```exception```) is filled, or
         ```invocation.error``` holds a sandbox-machinery failure (a tool that
-        raised is not an error here -- it rides in ```result.state.exception```).
+        raised is not an error here; it rides in ```result.state.exception```).
         ```invocation.sandbox``` names where it ran. ```value``` is ```None```
         when the tool returned nothing, so guard the access. Reshape the result
         (mask, shorten) by writing the views you change, or replace the whole
         ```value``` via ```create_tool_result``` to keep the three views
         coherent. Return ```None``` or a new ```Invocation```.
 
-    - **```on_close(ctx, result)```** -- once, on the final answer of the whole
+    - ```on_close(ctx, result)```: once, on the final answer of the whole
         run, after the loop. ```result``` is the final ```ChatResult```. Same
         shape and rules as ```on_answer```; this is the last chance to reshape
         what the caller receives.
@@ -162,7 +162,7 @@ class TokeoAiGovernor(MetaMixin):
 
     At any stage a governor may ```raise``` a ```TokeoAiGuardError``` (or a typed
     subclass). The handler does *not* catch these, so the raise propagates out of
-    ```chat``` and **ends the whole run at once** -- the rest of the chain, the
+    ```chat``` and ends the whole run at once: the rest of the chain, the
     remaining loop turns, and the final answer are all abandoned. (The sandbox
     catches a tool that *raises* and records it in ```result.state.exception```;
     the loop's own try/except around the sandbox call only turns a machinery
@@ -170,6 +170,15 @@ class TokeoAiGovernor(MetaMixin):
     Raise a hard abort when proceeding would be wrong, not merely unwanted. A
     guard has, in addition, a soft denial that skips only one call (see the guard
     role).
+
+    ### Args
+
+    - **app**: The Tokeo application instance
+    - **args**: Positional arguments for the parent initializer
+
+    ### Keyword Args
+
+    - **kw**: Keyword arguments for the parent initializer
 
     """
 
@@ -182,19 +191,6 @@ class TokeoAiGovernor(MetaMixin):
         config_defaults = {}
 
     def __init__(self, app, *args, **kw):
-        """
-        Initialize the governor.
-
-        ### Args
-
-        - **app**: The Tokeo application instance
-        - **args**: Positional arguments for the parent initializer
-
-        ### Keyword Args
-
-        - **kw**: Keyword arguments for the parent initializer
-
-        """
         super(TokeoAiGovernor, self).__init__(*args, **kw)
         self.app = app
         # the set of stages this governor participates in, filled lazily on the
@@ -208,8 +204,8 @@ class TokeoAiGovernor(MetaMixin):
         """
         The name this governor answers to. Never ```None``` or empty.
 
-        The declared config key -- or the dotted class as written at the
-        point of use -- once setup handed one in, the dotted class
+        The declared config key (or the dotted class as written at the
+        point of use) once setup handed one in, the dotted class
         (```module.Class```) until then.
 
         ### Returns
@@ -226,7 +222,7 @@ class TokeoAiGovernor(MetaMixin):
         Set up the governor with its config.
 
         Called by the handler right after the build. An override must call
-        ```super()._setup(...)``` first -- it builds the views ```_config```
+        ```super()._setup(...)``` first; it builds the views ```_config```
         reads.
 
         ### Args
@@ -248,7 +244,7 @@ class TokeoAiGovernor(MetaMixin):
         Reads the views setup built: the ```_any``` default view
         (```Meta.config_defaults``` overlaid with the declaration's top-level
         ```options```), or the stage's own view where the declaration carries
-        an ```on_<stage>.options``` override -- every stage view is complete
+        an ```on_<stage>.options``` override; every stage view is complete
         (a partial override fills in the rest from the default, never a hole).
         The same ```key -> value``` contract as every other ai class; the
         stage is the governor's extra axis.
@@ -288,7 +284,7 @@ class TokeoAiGovernor(MetaMixin):
         time, so the shared base is never mutated). Stages without an override
         are not stored; they fall back to ```_any``` in ```_config```.
 
-        **List settings are merged, not replaced.** Deep merge appends lists
+        List settings are merged, not replaced. Deep merge appends lists
         (the Tokeo config rule, same as the yaml config handler): a ```patterns```
         list in ```options``` extends the ```config_defaults``` list, and a
         ```patterns``` list in an ```on_<stage>``` override extends the ```_any```
@@ -311,7 +307,7 @@ class TokeoAiGovernor(MetaMixin):
         configs = {GOVERNOR_STAGE_ANY: base}
         # a per-stage view only where the declaration carries an on_<stage> block;
         # the override deep-merges onto a copy of the base (lists append, dicts
-        # merge, scalars replace -- the shared Tokeo config rule)
+        # merge, scalars replace: the shared Tokeo config rule)
         for stage in GOVERNOR_STAGES:
             override = (declaration.get(stage) or {}).get('options')
             if override:
@@ -350,7 +346,7 @@ class TokeoAiGovernor(MetaMixin):
 
         - **ctx** (TokeoAiContext): The running state
         - **result** (ChatResult): The model's latest answer (text and/or tool
-            calls), already tracked -- a reference to the object on the trace
+            calls), already tracked, a reference to the object on the trace
 
         """
         pass
@@ -363,7 +359,7 @@ class TokeoAiGovernor(MetaMixin):
 
         - **ctx** (TokeoAiContext): The running state
         - **invocation** (Invocation): The tool call about to run, already
-            tracked -- a reference to the object on the trace; a guard may set
+            tracked, a reference to the object on the trace; a guard may set
             ```decision```/```reason``` to ```deny``` to block it
 
         """

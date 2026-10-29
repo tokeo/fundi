@@ -1,7 +1,7 @@
 """
 Resolve the provider a profile uses.
 
-A provider is the model behind a profile -- built by ```type``` like any other
+A provider is the model behind a profile, built by ```type``` like any other
 component (mock, an OpenAI-compatible endpoint, ...). The one piece of
 "resolution" the provider side has is reading the provider ```type``` out of a
 selected profile; building the class stays in the handler.

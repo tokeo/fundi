@@ -1,7 +1,7 @@
 """
 The run context: the manager of one agent-loop run's history.
 
-```TokeoAiContext``` is the active manager that travels a run -- it holds the one
+```TokeoAiContext``` is the active manager that travels a run; it holds the one
 chronological trace of every object the run produces and keeps the typed views
 over it consistent. It lives apart from ```data.py``` (the passive value shapes)
 because it carries behaviour (```track```, ```tracked```, the typed-view
@@ -21,11 +21,11 @@ class TokeoAiContext:
     history: it holds one chronological trace of steps and keeps typed
     quick-access caches of the bare objects, because only it writes them.
 
-    The trace is the run's history -- a list of ```TraceStep``` (an origin and
+    The trace is the run's history: a list of ```TraceStep``` (an origin and
     the object it left in hand), in order. ```track``` adds a step for a fresh
     object (the loop is the origin); ```supersede``` adds a step for each guard
     that ran (the guard is the origin), so the trace shows *who* acted and *what*
-    the object looked like after, step by step -- the record for audit and
+    the object looked like after, step by step, the record for audit and
     analysis.
 
     The caches are a different thing: ```messages```, ```invocations```,
@@ -37,13 +37,13 @@ class TokeoAiContext:
     hands back a fresh object (so a cache stays one entry per tool call, while the
     trace keeps every step).
 
-    The context carries only what accumulates -- the trace, the caches, and
+    The context carries only what accumulates: the trace, the caches, and
     ```status``` (the counters). The current single objects (the round's result,
     a call's invocation) are not fields here: the loop tracks them and hands them
     to the stage that needs them, and ```cur_invocation``` reaches the latest from
     the cache. Apart from these it holds ```userdata```: an opaque value the
     caller may set once and the framework never touches, carried unchanged
-    through the run (not history, not a counter -- a constant the caller can read
+    through the run (not history, not a counter; a constant the caller can read
     its own context back from). It also holds ```turndata```: a free, shared
     dict that lives one run for in-process participants to keep working state
     under their own key.
@@ -52,6 +52,27 @@ class TokeoAiContext:
     ```Invocation```, ```ChatResult```), so a cache exists for each from the
     start; adding a kind is naming one more class.
 
+    ### Args
+
+    - **messages** (list|None): The incoming conversation to seed the run
+        with; each is tracked, so it is on the trace and in the messages view
+    - **turndata_preset** (dict|None): Starting values for this run's
+        ```turndata```, taken 1:1 into a fresh ```TokeoAiTurndata``` (not
+        deep-copied, so nested objects are shared; copy first to protect
+        them). Lets a delegate share its caller's turndata. Defaults to
+        ```None``` (empty)
+    - **userdata**: An opaque value the caller may carry through the run. The
+        framework never reads, interprets, or changes it; it only makes it
+        available on the context, so a guard (or a later confirm hook) can
+        find the caller's own context by it. Its content is the caller's
+        concern (a string, an id, a struct); the only guarantee is that it
+        arrives unchanged. Defaults to ```None```
+    - **trace** (bool): Whether to record the step history. ```True``` (the
+        default) builds the full trace; ```False``` skips appending steps
+        while the typed caches (messages, invocations, results) still fill
+        normally, so guards keep working. Only safe when no active guard
+        reads the trace itself; guards read the caches, not the history
+
     """
 
     # the kinds that get a typed view; track files an object into each one it is
@@ -59,31 +80,6 @@ class TokeoAiContext:
     _CACHED = (ChatMessage, Invocation, ChatResult)
 
     def __init__(self, messages=None, turndata_preset=None, userdata=None, trace=True):
-        """
-        Start a run's context, optionally seeding the incoming messages.
-
-        ### Args
-
-        - **messages** (list | None): The incoming conversation to seed the run
-            with; each is tracked, so it is on the trace and in the messages view
-        - **turndata_preset** (dict | None): Starting values for this run's
-            ```turndata```, taken 1:1 into a fresh ```TokeoAiTurndata``` (NOT
-            deep-copied, so nested objects are shared -- copy first to protect
-            them). Lets a delegate share its caller's turndata. Defaults to
-            ```None``` (empty)
-        - **userdata**: An opaque value the caller may carry through the run. The
-            framework never reads, interprets, or changes it -- it only makes it
-            available on the context, so a guard (or a later confirm hook) can
-            find the caller's own context by it. Its content is the caller's
-            concern (a string, an id, a struct); the only guarantee is that it
-            arrives unchanged. Defaults to ```None```
-        - **trace** (bool): Whether to record the step history. ```True``` (the
-            default) builds the full trace; ```False``` skips appending steps
-            while the typed caches (messages, invocations, results) still fill
-            normally, so guards keep working. Only safe when no active guard
-            reads the trace itself -- guards read the caches, not the history
-
-        """
         # whether to record the step history; the caches always fill
         self._record_trace = trace
         # the one chronological stream of every tracked object
@@ -107,7 +103,7 @@ class TokeoAiContext:
 
     def _append_step(self, origin, obj, changed, stage):
         """
-        Append one TraceStep -- the shared trace-write of track/supersede/refine.
+        Append one TraceStep, the shared trace-write of track/supersede/refine.
 
         The trace half that every recorder has in common: build the step (origin,
         object, changed, stage) and append it. The cache half differs per
@@ -134,23 +130,23 @@ class TokeoAiContext:
         The adder for a *new* object entering the run (a message, a model
         result, a freshly built invocation). It appends a ```TraceStep``` to the
         trace (the history) and the bare object to each cache it matches (the
-        state by kind). The trace carries steps; the caches carry bare objects --
+        state by kind). The trace carries steps; the caches carry bare objects;
         the two are kept in step here, because only ```track```,
         ```supersede``` and ```refine_messages``` write them.
 
         ### Args
 
-        - **origin**: Who creates this object -- the loop (its handler) for a
+        - **origin**: Who creates this object: the loop (its handler) for a
             fresh message/result/invocation. Recorded on the step so the history
             is attributable
         - **obj**: The run object to record (a ```ChatMessage```,
             ```Invocation```, ```ChatResult```, or any future cached kind). A
-            plain value -- anything from ```builtins``` or ```datetime```, so a
-            str, dict, number or date -- is wrapped in a ```TokeoAiTraceNote```
+            plain value (anything from ```builtins``` or ```datetime```, so a
+            str, dict, number or date) is wrapped in a ```TokeoAiTraceNote```
             first, because it would otherwise land on the trace nameless.
             ```None``` is skipped: an empty note records nothing
         - **stage**: The guard stage, or ```None``` for a loop track outside any
-            stage (the common case here -- the loop adds fresh objects)
+            stage (the common case here; the loop adds fresh objects)
 
         ### Returns
 
@@ -182,11 +178,11 @@ class TokeoAiContext:
         is *always* appended (every guard that ran is on the trace, attributable).
         Whether the cache changes depends on identity:
 
-        - ```returned``` is ```None``` or the *same* object as ```current``` --
+        - ```returned``` is ```None``` or the *same* object as ```current```:
             the guard added no new object (it mutated in place, or did nothing).
             The cache is left alone; the step records ```current``` with
             ```changed=False```. The current working reference is unchanged.
-        - ```returned``` is a *different* object -- the guard handed back a fresh
+        - ```returned``` is a *different* object: the guard handed back a fresh
             copy. It supersedes the last cache entry of its kind, and the step
             records it with ```changed=True```. The returned object becomes the
             new working reference.
@@ -218,7 +214,7 @@ class TokeoAiContext:
             self._append_step(origin, current, False, stage)
             return current
         # a new object must be of the same kind, or the guard returned something
-        # it should not have -- fail loud, do not mis-file it
+        # it should not have; fail loud, do not mis-file it
         if type(returned) is not type(current):
             raise TokeoAiError(f'guard {origin!r} returned a {type(returned).__name__}, expected a {type(current).__name__}')
         # the new object supersedes the last cache entry of its kind; the step
@@ -238,10 +234,10 @@ class TokeoAiContext:
         object, so this is the messages counterpart of ```supersede```: the unit
         here is the whole ```messages``` list, not one cache entry.
 
-        - ```returned``` is ```None``` or *is* the live ```messages``` list -- the
+        - ```returned``` is ```None``` or *is* the live ```messages``` list: the
             guard refined in place (or did nothing). The cache is left alone; the
             step records a snapshot of the list with ```changed=False```.
-        - ```returned``` is a *new* list -- the guard built a fresh conversation
+        - ```returned``` is a *new* list: the guard built a fresh conversation
             (a trimmed history, an injected system turn). Its items must all be
             mappings (a ```ChatMessage``` is a ```dict```), or it is a guard bug
             and this raises. The whole ```ChatMessage``` cache is replaced by the
@@ -250,13 +246,13 @@ class TokeoAiContext:
             with ```changed=True```.
 
         The step holds a shallow copy of the list, not the live cache, so it
-        shows the conversation as it stood at this stage -- the live list keeps
+        shows the conversation as it stood at this stage; the live list keeps
         growing through the run and would otherwise show the end state on every
         pre-model step.
 
         It is a separate method from ```supersede``` on purpose: ```supersede```
-        replaces ONE cache entry (the last object of a kind); this replaces the
-        WHOLE list. Different operation, different verb.
+        replaces one cache entry (the last object of a kind); this replaces the
+        whole list. Different operation, different verb.
 
         ### Args
 
@@ -275,11 +271,11 @@ class TokeoAiContext:
             # the guard refined in place (or did nothing): a step holding a
             # SNAPSHOT of the conversation at this stage, the cache untouched.
             # a shallow copy of the list, since the cache list keeps growing as
-            # the run goes on -- the live list would later show the end state
+            # the run goes on; the live list would later show the end state
             self._append_step(origin, list(cache), False, stage)
             return cache
         # a returned conversation must be a list of mappings (ChatMessage is a
-        # dict); anything else is a guard bug -- fail loud, do not corrupt the
+        # dict); anything else is a guard bug; fail loud, do not corrupt the
         # cache
         if not isinstance(returned, list) or not all(isinstance(m, dict) for m in returned):
             raise TokeoAiError(f'guard {origin!r} returned an invalid messages list (expected a list of messages)')
@@ -293,7 +289,7 @@ class TokeoAiContext:
 
     def tracked(self, kind):
         """
-        The typed view for a kind -- the bare objects of that type, in order.
+        The typed view for a kind: the bare objects of that type, in order.
 
         Returns the live cache list (not a copy), so it reflects later
         recording; read and iterate it, do not mutate it. An unknown kind yields
@@ -318,7 +314,7 @@ class TokeoAiContext:
 
     @property
     def messages(self):
-        """The ```ChatMessage``` turns, in order -- the conversation history."""
+        """The ```ChatMessage``` turns, in order: the conversation history."""
         return self._caches[ChatMessage]
 
     @property
@@ -334,7 +330,7 @@ class TokeoAiContext:
     @property
     def cur_invocation(self):
         """
-        The current tool call -- the latest ```Invocation``` in its newest state.
+        The current tool call: the latest ```Invocation``` in its newest state.
 
         A convenience over ```invocations[-1]``` (the cache, not the trace), so a
         guard or the loop can reach the call in hand without indexing. ```None```

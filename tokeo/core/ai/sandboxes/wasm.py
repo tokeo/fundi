@@ -6,8 +6,8 @@ user-supplied CPython-WASI build (the ```runtime```/```stdlib``` options); the
 host writes the task as JSON into a private scratch dir mounted read-write at
 ```/io```, a small bundled guest entry script either rebuilds the tool (trusted)
 or runs the snippet directly (untrusted), then writes the ```ToolResult``` back
-to ```/io/reply.json```. The guest has NO network (the
-syscalls do not exist in its world), sees NO host file outside the explicit
+to ```/io/reply.json```. The guest has no network (the
+syscalls do not exist in its world), sees no host file outside the explicit
 ```mounts```, and runs under a hard memory cap (Wasmtime store limits, the same
 on every platform) and an epoch timeout. This is deny-by-default: a tool that
 needs a path or the network must be granted it explicitly, or run in a
@@ -16,7 +16,7 @@ different sandbox.
 ### Notes
 
 : On the trusted path the tool is rebuilt in the guest from its dotted ```type```
-    and ```options``` with ```app=None``` -- a guest has no live parent app, and
+    and ```options``` with ```app=None```; a guest has no live parent app, and
     the uniformity rule means a tool that needs an app builds it itself; on the
     untrusted path no tool is rebuilt at all, the guest runs the snippet directly.
     Either way only JSON-able
@@ -25,12 +25,12 @@ different sandbox.
     guest builds the result with the pact contract (```create_tool_result```),
     mounted read-only for both paths since it is dependency-free and cannot
     weaken the isolation. Unlike the subprocess sandbox there is no parent-path
-    injection: nothing else is visible that the config did not mount, on purpose
-    -- visibility is the whole point of choosing wasm.
+    injection: nothing else is visible that the config did not mount, on
+    purpose; visibility is the whole point of choosing wasm.
 
-: Full documentation -- when to use it, the two python-exec tools, installing a
+: Full documentation (when to use it, the two python-exec tools, installing a
     WASI Python build into ```./wasm```, every option, the file bridge, the two
-    trust models, the WASI stdlib shims, and troubleshooting -- lives in
+    trust models, the WASI stdlib shims, and troubleshooting) lives in
     ```WASM.md``` next to this module.
 """
 
@@ -44,7 +44,7 @@ from tokeo.core.ai.sandboxes._common import _importable_path, expand_env
 # the exec-tool guest entry (the trusted/rebuild path): it runs INSIDE the wasm
 # interpreter, reads the task from the read-write /io mount, REBUILDS the tool
 # with no app and calls its exec, then writes the reply. kept as a string so the
-# host can drop it into the scratch dir next to the task -- the guest needs no
+# host can drop it into the scratch dir next to the task; the guest needs no
 # host import path beyond the mounted code. the pact contract is mounted too, so
 # the guest builds a ToolResult the same way the host would (create_tool_result),
 # and the reply carries the value/state shape the parent rebuilds from
@@ -71,7 +71,7 @@ def _load(dotted, options):
 
 def _encode(output):
     # the same reply shape the parent rebuilds from: a value crosses as its two
-    # string views, or null when nothing was delivered -- as_data is NOT sent,
+    # string views, or null when nothing was delivered; as_data is NOT sent,
     # the parent reconstructs it from as_json
     value = output.value
     value_doc = None if value is None else dict(as_str=value.as_str, as_json=value.as_json)
@@ -96,22 +96,22 @@ try:
             output = tool.exec(**(task.get('arguments') or {}))
     except Exception as tool_err:
         # the tool itself raised (A): a result with no value and the message in
-        # state.exception, NOT a machinery error -- the same split as in process
+        # state.exception, NOT a machinery error, the same split as in process
         output = ToolResult(value=None, state=ToolStates(
             exception='{}: {}'.format(type(tool_err).__name__, tool_err)))
     # a finished ToolResult passes through; a bare None carries no value; any
-    # other value is wrapped -- so the result is always a ToolResult
+    # other value is wrapped, so the result is always a ToolResult
     if output is None:
         output = ToolResult(value=None)
     elif not isinstance(output, ToolResult):
         output = create_tool_result(output)
     # fold the captured stdout into the state, but only where the tool left it
-    # unset -- a stdout the tool set on purpose is its own note and wins
+    # unset; a stdout the tool set on purpose is its own note and wins
     if output.state.stdout is None and out_buf.getvalue():
         output.state.stdout = out_buf.getvalue()
     reply = _encode(output)
 except Exception as err:
-    # anything outside the tool call -- tool load, encode, json -- is a
+    # anything outside the tool call (tool load, encode, json) is a
     # machinery error (B): an error reply the host turns into a TokeoAiError
     reply = dict(error='{}: {}'.format(type(err).__name__, err))
 
@@ -122,7 +122,7 @@ with open('/io/reply.json', 'w') as f:
 # the exec-pysnippet guest entry (the untrusted path): it runs the code
 # argument itself via run_snippet, rebuilding NO tool from tokeo, so the
 # untrusted snippet stays walled off from the framework. it still imports the
-# pact contract (dataclasses, create_tool_result, run_snippet -- no framework,
+# pact contract (dataclasses, create_tool_result, run_snippet; no framework,
 # no IO, no secrets), so it builds the same value/state result the exec-tool path
 # does and delivers the snippet's value the same way, mirroring the untrusted
 # tool body
@@ -149,14 +149,14 @@ try:
         with contextlib.redirect_stdout(out_buf):
             result = run_snippet(code, namespace)
     except Exception as code_err:
-        # the snippet is the problem -- it raised at run time, did not parse, or
+        # the snippet is the problem: it raised at run time, did not parse, or
         # used a form the wrap does not support: a result with no value and the
         # message in state.exception (A), NOT a machinery error
         output = ToolResult(value=None)
         output.state.exception = '{}: {}'.format(type(code_err).__name__, code_err)
     else:
         # a None result carries no value; any other value is wrapped the way
-        # the framework would -- create_tool_result builds the coherent views
+        # the framework would; create_tool_result builds the coherent views
         output = ToolResult(value=None) if result is None else create_tool_result(result)
     if output.state.stdout is None and out_buf.getvalue():
         output.state.stdout = out_buf.getvalue()
@@ -170,7 +170,7 @@ try:
         exception=state.exception,
     ))
 except Exception as err:
-    # anything outside the snippet run -- reading the task, encoding, json -- is
+    # anything outside the snippet run (reading the task, encoding, json) is
     # a machinery error (B): an error reply the host turns into a TokeoAiError
     reply = dict(error='{}: {}'.format(type(err).__name__, err))
 
@@ -187,6 +187,16 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
     host paths are visible, a hard memory cap and an epoch timeout. The guest
     is a user-supplied CPython-WASI build named by the ```runtime```/```stdlib```
     options; the tool runs across a file bridge in a private scratch dir.
+
+    ### Args
+
+    - **app**: The Tokeo application instance
+    - **args**: Positional arguments for the parent initializer
+
+    ### Keyword Args
+
+    - **kw**: Keyword arguments for the parent initializer
+
     """
 
     class Meta:
@@ -224,19 +234,6 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         )
 
     def __init__(self, app, *args, **kw):
-        """
-        Initialize the wasm sandbox.
-
-        ### Args
-
-        - **app**: The Tokeo application instance
-        - **args**: Positional arguments for the parent initializer
-
-        ### Keyword Args
-
-        - **kw**: Keyword arguments for the parent initializer
-
-        """
         super(TokeoAiWasmSandbox, self).__init__(app, *args, **kw)
         # proxied config, filled in _setup (each is used at more than one place)
         self._runtime = None
@@ -288,11 +285,11 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         try:
             import wasmtime
         except ImportError:
-            raise TokeoAiError('the wasm sandbox needs the wasmtime package -- use feature_ai_wasm')
+            raise TokeoAiError('the wasm sandbox needs the wasmtime package; use feature_ai_wasm')
         runtime = self._runtime
         stdlib = self._stdlib
         if not runtime or not stdlib:
-            raise TokeoAiError('the wasm sandbox needs a runtime (python.wasm) and a stdlib path -- see the docs')
+            raise TokeoAiError('the wasm sandbox needs a runtime (python.wasm) and a stdlib path; see the docs')
 
         dotted = _importable_path(type(tool), 'tool')
         # an untrusted tool flags itself for pysnippet exec: the guest runs the
@@ -325,7 +322,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
     def _rebuild(self, reply):
         # turn the guest's JSON back into a ToolResult: a null value stays None
         # (the tool delivered nothing), otherwise the two string views cross and
-        # as_data is reconstructed from as_json -- only the JSON view of a value
+        # as_data is reconstructed from as_json; only the JSON view of a value
         # survives the bridge, so a raw datetime returns as its encoded form;
         # the run states are carried across as recorded
         value_doc = reply.get('value')
@@ -359,7 +356,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         memory_mb = self._config('memory_mb')
         if memory_mb:
             # WHY hard cap: store limits make the kernel of the guest refuse
-            # growth past the bound -- a runaway allocation traps, it cannot
+            # growth past the bound: a runaway allocation traps, it cannot
             # eat host memory. platform-independent, unlike rlimit
             store.set_limits(memory_size=memory_mb * 1024 * 1024)
         linker = wasmtime.Linker(engine)
@@ -403,11 +400,11 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # work: /lib is the stdlib mount and does not list a tokeo child, so the
         # dotted import fails at its first step. instead a writable package root
         # /pkg is given the REAL namespace chain tokeo/pact (plain dirs, no
-        # __init__ -- PEP 420) with an empty stub per subpackage as the mount
+        # __init__, PEP 420) with an empty stub per subpackage as the mount
         # point, then each real subpackage is mounted OVER its stub. pact is a
         # split namespace (utils from tokeo, ai from fundi), each name single-
-        # origin, so a name is mounted once. pact is dependency-free -- no
-        # framework, no IO, no secrets -- so it is carried for BOTH paths, the
+        # origin, so a name is mounted once. pact is dependency-free (no
+        # framework, no IO, no secrets), so it is carried for BOTH paths, the
         # untrusted one too: seeing it cannot weaken the isolation
         import tokeo.pact
 
@@ -463,7 +460,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         if timeout:
             # set the deadline before any wasm code runs: with epoch
             # interruption enabled the store starts at deadline 0, and
-            # instantiate already executes module start code -- newer
+            # instantiate already executes module start code; newer
             # wasmtime checks the epoch there and traps 'interrupt' at once
             store.set_epoch_deadline(1)
         instance = linker.instantiate(store, module)
@@ -479,7 +476,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         except wasmtime.ExitTrap as exit_trap:
             # the guest interpreter calls exit() at the end: status 0 is a
             # clean, successful run (the reply is already written); a nonzero
-            # status is a real failure -- surface the captured stderr
+            # status is a real failure: surface the captured stderr
             if getattr(exit_trap, 'code', 0) != 0:
                 detail = ''
                 if os.path.exists(stderr_path):
@@ -487,7 +484,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                 raise TokeoAiError(f'tool {dotted!r} crashed in the wasm sandbox: {detail or exit_trap}')
         except wasmtime.Trap as trap:
             # newer wasmtime marks the epoch trap by code and words it as
-            # 'interrupt'; older builds only say 'epoch' in the message --
+            # 'interrupt'; older builds only say 'epoch' in the message;
             # match the code first, the text as the fallback
             trap_code = getattr(wasmtime, 'TrapCode', None)
             code_hit = trap_code is not None and getattr(trap, 'trap_code', None) == trap_code.INTERRUPT
@@ -495,7 +492,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             if timeout and (code_hit or text_hit):
                 raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the wasm sandbox')
             # a trap with a written reply is the tool's own error (handled by
-            # the caller); a trap without one is a guest-level failure -- the
+            # the caller); a trap without one is a guest-level failure; the
             # captured stderr says why the interpreter aborted
             if not os.path.exists(os.path.join(io_dir, 'reply.json')):
                 detail = ''
@@ -521,7 +518,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         ### Returns
 
-        - **list[str] | None**: Error messages, or ```None``` when valid
+        - **list[str]|None**: Error messages, or ```None``` when valid
 
         """
         allowed = {'runtime', 'stdlib', 'mounts', 'cwd', 'env', 'timeout', 'memory_mb', 'shim_wasi_stdlib'}

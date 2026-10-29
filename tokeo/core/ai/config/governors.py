@@ -5,27 +5,27 @@ This is the composition notation made executable. A composition is what an
 agent's ```guards``` list (or a chain under ```ai.guards```) declares: *where and
 in what
 order* guards run, carrying no config (config lives in the declaration under
-```ai.guards```). This module turns that notation -- bare names, ```name:
-[stages]``` stage lists, ```_any```, imported chains, and the agent's ```omit```
--- into a flat, ordered list of ```(config_name, stages)``` entries the handler
+```ai.guards```). This module turns that notation (bare names, ```name:
+[stages]``` stage lists, ```_any```, imported chains, and the agent's ```omit```)
+into a flat, ordered list of ```(config_name, stages)``` entries the handler
 can build and run.
 
 It holds no app state and does no class loading; it works on the raw config
 (the ```ai.guards``` mapping and an agent's ```guards```/```omit```) plus a
-``stages_of`` callback that yields a governor's class stages (by reflection),
+```stages_of``` callback that yields a governor's class stages (by reflection),
 so the resolver stays pure and testable. Class loading, building,
 and per-stage running stay in the handler.
 
 The grammar:
 
-- a **string** entry (```alpha```) -- additive, all the class's stages
-- a **map** entry (```alpha: [on_prompt, on_call]```) -- replacing, only those
-- ```[_any]``` as the stage list -- all the class's stages, explicitly
-- an empty / ```null``` / ```[]``` stage list -- an error (too easily a mistake)
-- a **dotted class** as the config name (```module.Class```) -- used at the
+- a string entry (```alpha```): additive, all the class's stages
+- a map entry (```alpha: [on_prompt, on_call]```): replacing, only those
+- ```[_any]``` as the stage list: all the class's stages, explicitly
+- an empty / ```null``` / ```[]``` stage list: an error (too easily a mistake)
+- a dotted class as the config name (```module.Class```): used at the
   point of use without registration; not configurable, runs with class defaults
 
-The config name is the **name as written**: a declared name and a dotted
+The config name is the name as written: a declared name and a dotted
 class are different config names even for the same class, and two declared
 names for one class are two config names (two instances). The same config name
 appearing more than once is deduplicated; its stages are the union across its
@@ -77,7 +77,7 @@ def parse_entry(entry):
 
     ### Args
 
-    - **entry** (str | dict): One element of a ```guards``` composition list
+    - **entry** (str|dict): One element of a ```guards``` composition list
 
     ### Returns
 
@@ -95,7 +95,7 @@ def parse_entry(entry):
         if len(entry) != 1:
             raise TokeoAiError(f'a guard composition entry must name one guard, got {entry!r}')
         config_name, stages = next(iter(entry.items()))
-        # an empty / null / [] stage list is an error -- an empty set is too
+        # an empty / null / [] stage list is an error; an empty set is too
         # easily a mistake to read as intent
         if stages is None or stages == []:
             raise TokeoAiError(f'guard {config_name!r} has an empty stage list; name its stages or use the bare form')
@@ -134,11 +134,11 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
 
     Conflicts:
 
-    - same config_name, same participation (any source) -- collapses to one,
+    - same config_name, same participation (any source): collapses to one,
         silently.
     - same config_name at different stages from the *same* level (two chains, or
-        two agent entries) -- not decidable between equals, raises.
-    - agent vs chain, contradicting -- the agent wins (the nearer form); when a
+        two agent entries): not decidable between equals, raises.
+    - agent vs chain, contradicting: the agent wins (the nearer form); when a
         ```logger``` is given, a note is logged that the agent overrode the chain.
 
     ### Args
@@ -184,7 +184,7 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
             config_name, stages = parse_entry(entry)
             value = governors_section.get(config_name) if isinstance(config_name, str) else None
             # a list value under ai.guards is a chain: import it (a chain
-            # entry carries no stage list of its own -- it is a name)
+            # entry carries no stage list of its own; it is a name)
             if isinstance(value, list):
                 if stages is not None:
                     raise TokeoAiError(f'chain {config_name!r} cannot take a stage list; stages belong to its guards')

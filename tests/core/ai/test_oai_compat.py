@@ -25,7 +25,7 @@ _PROFILE = {'type': 'oai_compat', 'options': {'base_url': 'http://localhost:1143
 
 def _provider_with(handler, monkeypatch):
     # patch httpx.Client so the provider's per-call client routes through a
-    # MockTransport running ```handler``` -- the real .post path is exercised,
+    # MockTransport running ```handler```; the real .post path is exercised,
     # only the socket is replaced
     original = httpx.Client
 

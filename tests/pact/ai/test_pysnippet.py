@@ -8,7 +8,7 @@ legal; a block that delivers neither yields ```None```. The wrap is rejected for
 a top-level ```await``` (an async wrap is out of scope), a parse error surfaces
 as a ```SyntaxError```, and a runtime error propagates so the caller (the
 sandbox layer) records it. Because the block becomes a function body, the
-snippet's own names stay local -- the passed namespace is the run context, not
+snippet's own names stay local; the passed namespace is the run context, not
 the result channel.
 """
 
@@ -17,7 +17,7 @@ from tokeo.pact.ai.pysnippet import run_snippet, TokeoPactSnippetError
 import pytest
 
 
-# -- value delivery: the snippet hands a value back -------------------------
+# ---- value delivery: the snippet hands a value back -----------------------
 
 
 def test_jupyter_last_expression_is_the_value():
@@ -66,7 +66,7 @@ def test_tuple_target_delivers_a_tuple_of_names():
     assert run_snippet('a, b = 1, 2') == (1, 2)
 
 
-# -- no value: the block runs but delivers nothing --------------------------
+# ---- no value: the block runs but delivers nothing ------------------------
 
 
 def test_attribute_assignment_delivers_none():
@@ -106,7 +106,7 @@ def test_comment_only_delivers_none():
     assert run_snippet('# nothing here') is None
 
 
-# -- rejection and propagation ----------------------------------------------
+# ---- rejection and propagation --------------------------------------------
 
 
 def test_top_level_await_is_rejected():
@@ -140,7 +140,7 @@ def test_runtime_error_propagates():
         run_snippet('1 / 0')
 
 
-# -- namespace is the run context, not the result channel -------------------
+# ---- namespace is the run context, not the result channel -----------------
 
 
 def test_snippet_names_do_not_leak_into_the_namespace():
@@ -154,5 +154,5 @@ def test_snippet_names_do_not_leak_into_the_namespace():
 
 def test_preset_globals_are_readable_by_the_snippet():
     # a value placed in the namespace beforehand is visible as a global to the
-    # snippet -- the namespace feeds the run, it does not collect the result
+    # snippet; the namespace feeds the run, it does not collect the result
     assert run_snippet('preset + 5', {'preset': 100}) == 105

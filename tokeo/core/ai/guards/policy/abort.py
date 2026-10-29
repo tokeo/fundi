@@ -2,7 +2,7 @@
 A policy guard that aborts the run hard, wherever it runs.
 
 ```TokeoAiAbortPolicyGuard``` raises ```TokeoAiPolicyGuardError``` at every
-stage -- the same hard, unambiguous "the run ends here" at any position. A
+stage: the same hard, unambiguous "the run ends here" at any position. A
 debugging tool you drop into a guard list to stop the run reliably at a chosen
 point, with no soft/hard ambiguity: it never continues.
 """
@@ -17,7 +17,7 @@ class TokeoAiAbortPolicyGuard(TokeoAiPolicyGuard):
 
     No configuration, no check: every stage raises ```TokeoAiPolicyGuardError```,
     so the run stops hard wherever this guard sits. Unlike the deny policy guard
-    (soft at the tool stages), this is always a hard stop -- the unambiguous
+    (soft at the tool stages), this is always a hard stop, the unambiguous
     debugging abort.
 
     """

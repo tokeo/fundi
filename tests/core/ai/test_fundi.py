@@ -2,7 +2,7 @@
 Tests for the sandbox helpers that need no app.
 
 Environment scrubbing, the runner's memory cap fallbacks, and the shared
-```_setup``` contract of the ai classes -- all driven directly. Everything that
+```_setup``` contract of the ai classes, all driven directly. Everything that
 goes through the agent chain lives in ```tests/ext/ai/test_ai_fundi.py```.
 """
 
@@ -73,7 +73,7 @@ def test_runner_memory_cap_soft_only_when_hard_is_refused(monkeypatch):
     def fake_setrlimit(res, lim):
         calls.append(lim)
         # the platform refuses any change to the HARD limit (macos-style);
-        # the soft-only form is accepted -- and the soft limit is the one
+        # the soft-only form is accepted, and the soft limit is the one
         # the kernel enforces, so this is real enforcement
         if lim[1] != res_mod.RLIM_INFINITY:
             raise ValueError('current limit exceeds maximum limit')
@@ -103,7 +103,7 @@ def test_runner_memory_cap_refuses_a_sham_setting(monkeypatch):
 def test_setup_reads_the_declaration_once_and_is_idempotent():
     # the declaration is consumed at setup time (the extension rule: read the
     # config once, then work off the attributes). a second setup with another
-    # declaration takes effect -- nothing stale survives it
+    # declaration takes effect; nothing stale survives it
     tool = GreetTool(None)
     tool._setup(None, 'greeter', dict(options=dict(prefix='eins')))
     assert tool._config('prefix') == 'eins'
@@ -126,7 +126,7 @@ def test_an_object_without_setup_is_not_initialized():
 
 def test_a_setup_without_a_config_yields_the_class_defaults():
     # _setup with no declaration (the dotted-governor and unit-test path):
-    # the view is the class's config_defaults -- and it is a deep copy, so a
+    # the view is the class's config_defaults, and it is a deep copy, so a
     # write into it can never bleed into the class-level dict
     tool = GreetTool(None)
     tool._setup(None)

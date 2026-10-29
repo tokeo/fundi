@@ -60,7 +60,7 @@ _ITEM_KEYS = {'type', 'options'}
 # override for that station); agents and tools have no stages, so they do not
 _GUARD_ITEM_KEYS = _ITEM_KEYS | set(GOVERNOR_STAGES)
 # the three governor sections and, per section, the role base a declared type
-# must derive from -- so the linter keeps each section pure (a guard type only
+# must derive from, so the linter keeps each section pure (a guard type only
 # in ai.guards, a transformer only in ai.transformers, ...)
 _GOVERNOR_SECTIONS = ('guards', 'transformers', 'conductors')
 _ROLE_BASE = {'guards': TokeoAiGuard, 'transformers': TokeoAiTransformer, 'conductors': TokeoAiConductor}
@@ -73,7 +73,7 @@ class AiLintIssue:
     """
     A single ai configuration problem found by the linter.
 
-    ### Notes
+    ### Args
 
     - **path** (str): The ```ai.<section>.<name>``` location of the problem
     - **message** (str): What is wrong, with a hint where one applies
@@ -92,6 +92,11 @@ class TokeoAiLinter:
     """
     Lints the ```ai``` configuration against the live registries.
 
+    ### Args
+
+    - **app**: The application instance; its ```app.ai``` registries resolve
+        every ```type```
+
     ### Notes
 
     - Construct it with the application, then call ```lint``` to get the issues
@@ -101,15 +106,6 @@ class TokeoAiLinter:
     """
 
     def __init__(self, app):
-        """
-        Bind the linter to an application.
-
-        ### Args
-
-        - **app**: The application instance; its ```app.ai``` registries resolve
-            every ```type```
-
-        """
         self.app = app
         self.issues = []
         self._validators = {}
@@ -140,7 +136,7 @@ class TokeoAiLinter:
             entries (or ```None``` when it reports through the linter itself).
             It may also raise: a ```TokeoAiError``` becomes an error issue with
             its message at the element, any other exception is reported as a
-            failed validator -- the lint run itself never crashes
+            failed validator; the lint run itself never crashes
 
         """
         self._validators.setdefault(section, []).append(validator)
@@ -197,7 +193,7 @@ class TokeoAiLinter:
         # a map is a declaration (type, options, the six per-stage blocks); a
         # string is the short form name: module.X (= {type: module.X}); a list
         # is a chain (a composition, validated as such). guards and chains share
-        # one namespace -- a name is one or the other, never both
+        # one namespace; a name is one or the other, never both
         path = f'ai.{section}.{name}'
         if isinstance(value, str):
             # short form: the string is the type; resolve it like a declaration
@@ -343,7 +339,7 @@ class TokeoAiLinter:
                 logger=_NoteLogger(),
             )
         except TokeoAiError as err:
-            # a not-decidable conflict (or a chain cycle) -- an error issue
+            # a not-decidable conflict (or a chain cycle): an error issue
             self._add(f'{path}.governors', str(err))
 
     def _guard_class_stages_or_empty(self, config_name):
@@ -435,7 +431,7 @@ class TokeoAiLinter:
         # selection (the keyword ```_all``` or tool/group names), an
         # optional ```except``` skip set (single or list), and the class's own
         # ```options```. the option keys are validated by the class itself
-        # through ```validate_options``` -- the linter does not know them
+        # through ```validate_options```; the linter does not know them
         path = f'ai.{section}.{name}'
         if not isinstance(item, dict):
             self._add(path, 'must be an item (mapping with a "type")')

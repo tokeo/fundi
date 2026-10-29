@@ -1,8 +1,8 @@
 """
 Small, dependency-light helpers shared across the ai layer.
 
-Kept here (not in the ext) so any consumer -- the cli controller, a provider,
-a project's own code -- can use them without importing the cement extension.
+Kept here (not in the ext) so any consumer (the cli controller, a provider,
+a project's own code) can use them without importing the cement extension.
 """
 
 import yaml
@@ -21,7 +21,7 @@ def coerce_model_param_value(raw):
 
     Runs the string through ```yaml.safe_load```, so ```0.2```/```42```/
     ```true```/```null``` get their proper types and anything else stays a
-    string. This mirrors the env-override coercion on purpose -- same rule for
+    string. This mirrors the env-override coercion on purpose: same rule for
     a value typed on the command line as for one injected via the environment.
     It is a deliberate four-line clone rather than a cross-module import, and
     the env-only ```!```-tag rejection is not wanted here.
@@ -114,7 +114,7 @@ class TokeoJsonAiTraceEncoder(TokeoJsonUnknownNameEncoder):
 
         """
         # a trace step: render its fields, and drop the object when the step is
-        # unchanged -- an unchanged step repeats the object the last changed step
+        # unchanged; an unchanged step repeats the object the last changed step
         # already showed, so it is pure repetition in the compact view. a changed
         # step keeps its object (it shows what actually changed). the changed flag
         # is read off the built dict, after the type is known
@@ -130,26 +130,26 @@ def add_tool_call(result, name, call_id, /, **arguments):
     """
     Originate a tool call from the code side (the conductor pattern).
 
-    Appends a fresh ```ToolCall``` to ```result.tool_calls``` and returns a NEW
+    Appends a fresh ```ToolCall``` to ```result.tool_calls``` and returns a new
     ```ChatResult``` (via ```replace```), because a governor's ```on_answer```
     only counts as a change when it hands back a different object.
 
-    The id is passed in, not built here -- the caller owns it (typically
+    The id is passed in, not built here; the caller owns it (typically
     ```get_token_hex(4, 'inj_')``` from ```tokeo.core.utils.uid```, so it is
     random and marked as code-originated). This keeps the helper free of any
     context: it only shapes the result.
 
     ### Args
 
-    - **result** (ChatResult): the answer to add the call to
-    - **name** (str): the tool to call
-    - **call_id** (str): the id for the new call, unique within the turn
-    - **arguments**: the call's arguments as keywords
+    - **result** (ChatResult): The answer to add the call to
+    - **name** (str): The tool to call
+    - **call_id** (str): The id for the new call, unique within the turn
+    - **arguments**: The call's arguments as keywords
 
-    ### Note
+    ### Notes
 
-    See the conductor docs for the append-vs-replace strategies (append only,
-    full replace via ```drop_tool_calls``` first, or a targeted swap).
+    : See the conductor docs for the append-vs-replace strategies (append only,
+        full replace via ```drop_tool_calls``` first, or a targeted swap).
     """
     call = ToolCall(id=call_id, name=name, arguments=arguments)
     return replace(result, tool_calls=[*result.tool_calls, call])
@@ -160,15 +160,15 @@ def drop_tool_calls(result, name=None):
     Drop tool calls from an answer before they run (the conductor pattern).
 
     With a ```name``` it removes every call of that name; with ```None``` it
-    removes ALL calls. Returns a NEW ```ChatResult``` (via ```replace```) for the
+    removes all calls. Returns a new ```ChatResult``` (via ```replace```) for the
     same reason as ```add_tool_call```. Together the two cover append-only,
     full-replace (```drop_tool_calls``` then ```add_tool_call```), and targeted
     swap.
 
     ### Args
 
-    - **result** (ChatResult): the answer to trim
-    - **name** (str, optional): the call name to drop; ```None``` drops all
+    - **result** (ChatResult): The answer to trim
+    - **name** (str, optional): The call name to drop; ```None``` drops all
     """
     kept = [] if name is None else [c for c in result.tool_calls if c.name != name]
     return replace(result, tool_calls=kept)

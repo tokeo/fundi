@@ -14,7 +14,8 @@ the short path ```from tokeo.core.ai.conductors import TokeoAiConductorError```
 reaches it.
 
 No ready-to-use conductor ships in the core yet; the shared mechanic is on the
-`tokeo.core.ai.governor.TokeoAiGovernor` base class, the role contract is below.
+```tokeo.core.ai.governor.TokeoAiGovernor``` base class, the role contract is
+below.
 
 .. include:: ./CONDUCTORS.md
 """

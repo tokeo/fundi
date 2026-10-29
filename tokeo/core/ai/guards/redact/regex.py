@@ -2,11 +2,11 @@ r"""
 A ready-to-use redact guard that masks secret-looking spans by regex.
 
 ```TokeoAiRegexRedactGuard``` masks at both tool stages: the outgoing call
-arguments (```on_call```) and the returned result value (```on_return``` -- the
+arguments (```on_call```) and the returned result value (```on_return```: the
 model-facing ```as_str``` always, the structured ```as_data``` too unless
 ```sanitize_data``` is off), so a
 secret does not flow on into the tool, the message history, the trace, or a log
-line -- whether it sits in what is sent or in what comes back.
+line, whether it sits in what is sent or in what comes back.
 
 Redaction is best-effort masking by pattern, not a guarantee. There is no
 built-in pattern list: the project supplies the full list through the
@@ -59,22 +59,31 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
     safe on every agent; when it masks anything it notes the count on
     ```reason``` so the trace shows the value was shaped.
 
+    ### Args
+
+    - **app**: The Tokeo application instance
+    - **args**: Positional arguments for the parent initializer
+
+    ### Keyword Args
+
+    - **kw**: Keyword arguments for the parent initializer
+
     """
 
     class Meta:
         """Redact rules, overridden per guard by its entry's options."""
 
         # the default settings, as one dict (the '_any' base that per-stage
-        # options overlay). patterns: None by default -- there is no built-in
+        # options overlay). patterns: None by default; there is no built-in
         # list. the project supplies the full list of regex patterns through the
         # patterns option (each pattern matches the secret span itself, so the
         # whole match is replaced). it is required wherever the guard runs: a
         # stage with no patterns, or a pattern that does not compile, raises
         # rather than silently masking nothing (deep merge appends lists, so a
-        # built-in default could not be replaced, only extended -- hence none).
+        # built-in default could not be replaced, only extended, hence none).
         # replacement: what each matched span is replaced with. sanitize_data:
         # when true (the default), the structured result view (value.as_data) is
-        # masked too -- recursively, the string values only, keys untouched -- so
+        # masked too (recursively, the string values only, keys untouched), so
         # a secret cannot survive in as_data/as_json and leak to the trace; set
         # false to mask only the model-facing as_str and leave the structure as
         # the tool returned it
@@ -85,19 +94,6 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         )
 
     def __init__(self, app, *args, **kw):
-        """
-        Initialize the regex redact guard.
-
-        ### Args
-
-        - **app**: The Tokeo application instance
-        - **args**: Positional arguments for the parent initializer
-
-        ### Keyword Args
-
-        - **kw**: Keyword arguments for the parent initializer
-
-        """
         super(TokeoAiRegexRedactGuard, self).__init__(app, *args, **kw)
         # per-stage compiled-pattern cache, filled on first use in _compiled;
         # pre-declared here so masking never depends on _setup having run
@@ -184,7 +180,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         # mask string values recursively through the structure: a dict's values
         # (never its keys), a list's items, a bare string. non-strings pass
         # through. returns the masked copy and the hit count, so as_data is
-        # cleaned the same way as_str is -- a secret that the text view hid must
+        # cleaned the same way as_str is; a secret that the text view hid must
         # not survive in the structured view
         if isinstance(obj, str):
             return self._mask(obj, stage)
@@ -243,8 +239,8 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         Runs at the tool-return stage, after the tool ran. ```ctx``` is the
         running state (unused here). The model-facing ```value.as_str``` is
         always masked. When ```sanitize_data``` is on (the default), the
-        structured ```value.as_data``` is masked too -- recursively, the string
-        values only -- and the value is rebuilt so ```as_json``` carries no
+        structured ```value.as_data``` is masked too (recursively, the string
+        values only), and the value is rebuilt so ```as_json``` carries no
         secret either. With ```sanitize_data``` off, only ```as_str``` is masked
         and the structure is left as the tool returned it.
 

@@ -1,15 +1,15 @@
-# The `ai` configuration
+# The ```ai``` configuration
 
-This is the reference for the `ai:` section of a tokeo application's
+This is the reference for the ```ai:``` section of a tokeo application's
 configuration: every section, every notation, and how a call tunes a run. The
-resolvers that read it live next to this file (`tokeo/core/ai/config/`), one per
+resolvers that read it live next to this file (```tokeo/core/ai/config/```), one per
 component kind; this document describes the shapes they accept.
 
-All examples are YAML under a top-level `ai:` key. Where a value reads
-`module.Class`, it is a full dotted import path to a class; where it reads an
+All examples are YAML under a top-level ```ai:``` key. Where a value reads
+```module.Class```, it is a full dotted import path to a class; where it reads an
 alias, it is a built-in registered under that name.
 
-## 1. The shape of `ai:`
+## 1. The shape of ```ai:```
 
 ```yaml
 ai:
@@ -45,15 +45,15 @@ flowchart TD
 
 .. important::
 
-    The **profile** chooses the model and binds **one** agent. The **agent** is
+    The profile chooses the model and binds one agent. The agent is
     the composition root: it owns the tools, the guard pipeline, the sandbox
     chain, and the budgets. A call can *narrow* what the agent offers (deny tools,
     lower budgets) but never *add* to it.
 
 ## 2. The uniform item form
 
-Three of the four sections (`tools`, `guards`, `sandboxes`) share one notation
-for a single element, the **item**:
+Three of the four sections (```tools```, ```guards```, ```sandboxes```) share one
+notation for a single element, the item:
 
 ```yaml
 some_name:
@@ -71,13 +71,13 @@ some_name: alias                # == { type: alias }
 
 .. tip::
 
-    `type` resolves a class; `options` are handed to that class and validated by
-    the class itself, not by the linter. The linter checks the *shape* (is there a
-    resolvable `type`?), the class checks its *settings*.
+    ```type``` resolves a class; ```options``` are handed to that class and
+    validated by the class itself, not by the linter. The linter checks the *shape*
+    (is there a resolvable ```type```?), the class checks its *settings*.
 
-## 3. `tools` — the toolset
+## 3. The toolset in ```tools```
 
-A `tools:` entry is either an **item** (a dict with a `type`) or a **group** (a
+A ```tools:``` entry is either an item (a dict with a ```type```) or a group (a
 list of member names). Groups may contain groups.
 
 ```yaml
@@ -103,40 +103,41 @@ A profile or an agent then activates a single item or a whole group by name.
 
 .. warning::
 
-    A group that transitively contains itself is a configuration error; `ai lint`
-    reports it. The resolver breaks the cycle, but the lint fails the run.
+    A group that transitively contains itself is a configuration error;
+    ```ai lint``` reports it. The resolver breaks the cycle, but the lint fails the
+    run.
 
-## 4. the `govenor` pipeline
+## 4. The governor pipeline
 
-`guards`, `transformers`, and `conductors` are three **1:1 sections** with the
-same notation (declarations and chains). At load they merge into **one** governor
-registry, so a **name is unique across all three** (a collision is a config
-error). An agent composes them by name under `governors:` (see 4.3). The three
-roles share the same mechanic; they differ in character (a guard secures, a
-transformer reshapes, a conductor directs the run) -- what a governor does is
-determined by its implementation. The linter enforces **section
-purity**: a `type` in `transformers` must resolve to a `TokeoAiTransformer`
-subclass, in `conductors` to a `TokeoAiConductor`, in `guards` to a
-`TokeoAiGuard` -- otherwise ``class <path> can not be used as <role>``. The rest
-of this section uses `guards` as the example; `transformers`/`conductors` are
-identical in form.
+```guards```, ```transformers```, and ```conductors``` are three 1:1 sections with
+the same notation (declarations and chains). At load they merge into one governor
+registry, so a name is unique across all three (a collision is a config error). An
+agent composes them by name under ```governors:``` (see 4.3). The three roles share
+the same mechanic; they differ in character (a guard secures, a transformer
+reshapes, a conductor directs the run); what a governor does is determined by its
+implementation. The linter enforces section purity: a ```type``` in
+```transformers``` must resolve to a ```TokeoAiTransformer``` subclass, in
+```conductors``` to a ```TokeoAiConductor```, in ```guards``` to a
+```TokeoAiGuard```, otherwise ```class <path> can not be used as <role>```. The rest
+of this section uses ```guards``` as the example;
+```transformers```/```conductors``` are identical in form.
 
 
-A guard acts at one or more **stages** of a tool call. The six stages, in order:
+A guard acts at one or more stages of a tool call. The six stages, in order:
 
 | Stage | When | The guard receives |
 |-------|------|--------------------|
-| `on_begin` | run start | the accumulated `messages` |
-| `on_prompt` | before the model is asked | the `messages` about to be sent |
-| `on_answer` | after each model answer | the round's `ChatResult` |
-| `on_call` | before a tool runs | the `Invocation` (may deny or reshape) |
-| `on_return` | after a tool ran | the completed `Invocation` (result/error) |
-| `on_close` | run end | the final `ChatResult` |
+| ```on_begin``` | run start | the accumulated ```messages``` |
+| ```on_prompt``` | before the model is asked | the ```messages``` about to be sent |
+| ```on_answer``` | after each model answer | the round's ```ChatResult``` |
+| ```on_call``` | before a tool runs | the ```Invocation``` (may deny or reshape) |
+| ```on_return``` | after a tool ran | the completed ```Invocation``` (result/error) |
+| ```on_close``` | run end | the final ```ChatResult``` |
 
 ### 4.1 Declaring a guard
 
-A `guards:` entry is a **declaration** (a dict), a **short form** (a string), or
-a **chain** (a list).
+A ```guards:``` entry is a declaration (a dict), a short form (a string), or
+a chain (a list).
 
 ```yaml
 guards:
@@ -156,8 +157,8 @@ guards:
 
 ### 4.2 Per-stage options
 
-A declaration may override its `options` for one stage, under an `on_<stage>`
-block. The stage block overlays the base `options`:
+A declaration may override its ```options``` for one stage, under an
+```on_<stage>``` block. The stage block overlays the base ```options```:
 
 ```yaml
 guards:
@@ -172,8 +173,9 @@ guards:
 
 ### 4.3 Composing governors on an agent
 
-An agent's `governors:` list is a **composition** — *where and in what order*
-its governors (guards, transformers, conductors) run. Each entry is a bare name or a `name: [stages]` stage list.
+An agent's ```governors:``` list is a composition: *where and in what order* its
+governors (guards, transformers, conductors) run. Each entry is a bare name or a
+```name: [stages]``` stage list.
 
 ```yaml
 agents:
@@ -186,21 +188,21 @@ agents:
         - regex_redact          # bare name
 ```
 
-- A **bare name** runs the guard at every stage its class implements.
-- A **`name: [stages]`** entry runs it only at the listed stages (it *replaces*,
+- A bare name runs the guard at every stage its class implements.
+- A ```name: [stages]``` entry runs it only at the listed stages (it *replaces*,
   not adds).
-- `[_any]` is the explicit form of the bare name — all the class's stages.
+- ```[_any]``` is the explicit form of the bare name: all the class's stages.
 
 .. caution::
 
-    An empty stage list (`name: []`, `name:` or `name: null`) is an error. To run
-    a guard at several stages, name them in **one** list: `name: [on_call,
-    on_return]`. Listing the same guard twice with different stages is an error
-    (see "Union and conflict" below).
+    An empty stage list (```name: []```, ```name:``` or ```name: null```) is an
+    error. To run a guard at several stages, name them in one list:
+    ```name: [on_call, on_return]```. Listing the same guard twice with different
+    stages is an error (see "Union and conflict" below).
 
 ### 4.4 Chains
 
-A list value under `ai.guards` is a reusable **chain** — a named composition an
+A list value under ```ai.guards``` is a reusable chain: a named composition an
 agent (or another chain) can import by name:
 
 ```yaml
@@ -219,7 +221,7 @@ ai:
           - trace_audit         # drop one guard the chain brought in
 ```
 
-`omit` is a sibling field of `governors`; it drops a named governor from
+```omit``` is a sibling field of ```governors```; it drops a named governor from
 *this* agent's composition.
 
 ### 4.5 Union and conflict (nearest wins)
@@ -237,13 +239,13 @@ flowchart TD
 
 .. note::
 
-    A **note** is shown by `ai lint`, not during `ask`/`chat`. An **error** stops
-    both: the run aborts and `ai lint` reports it.
+    A note is shown by ```ai lint```, not during ```ask```/```chat```. An error
+    stops both: the run aborts and ```ai lint``` reports it.
 
-## 5. `sandboxes` — the execution walls
+## 5. The execution walls in ```sandboxes```
 
-A sandbox is the wall a tool runs behind. An agent lists an ordered **chain**; a
-tool runs in the first sandbox whose `tools` contain it.
+A sandbox is the wall a tool runs behind. An agent lists an ordered chain; a
+tool runs in the first sandbox whose ```tools``` contain it.
 
 ```yaml
 sandboxes:
@@ -269,16 +271,16 @@ agents:
 
 .. important::
 
-    `_all` is the reserved keyword for "every tool that reaches me". When **no**
-    sandbox in the chain claims a tool, the call is **denied** — so an
-    `in_process` sandbox with `tools: _all` placed last is the opt-in catch-all.
-    Note the spelling: sandbox tools use `_all`, a guard's stage list uses `_any`
-    — both a single underscore, both reserved *values*.
+    ```_all``` is the reserved keyword for "every tool that reaches me". When no
+    sandbox in the chain claims a tool, the call is denied, so an ```in_process```
+    sandbox with ```tools: _all``` placed last is the opt-in catch-all. Note the
+    spelling: sandbox tools use ```_all```, a guard's stage list uses
+    ```_any```: both a single underscore, both reserved *values*.
 
-## 6. `agents` — the compositions
+## 6. The compositions in ```agents```
 
-An agent is the composition root a profile binds. It is an item (`type: fundi`
-is the standard agent) whose `options` assemble the run: which tools, which
+An agent is the composition root a profile binds. It is an item (```type: fundi```
+is the standard agent) whose ```options``` assemble the run: which tools, which
 guard pipeline, which sandbox chain, and the budgets.
 
 ```yaml
@@ -305,22 +307,22 @@ agents:
 
 | Option | Meaning |
 |--------|---------|
-| `tools` | the tools/groups this agent contributes (the active set of a call) |
-| `governors` | the governor composition (guards + transformers + conductors) |
-| `sandboxes` | the ordered sandbox chain (the sandboxes section) |
-| `deny` | tools/groups forbidden outright, before any sandbox lookup |
-| `omit` | governor config names to drop from the composition (chains) |
-| `max_steps` / `max_loops` | per-agent budget overrides (nearest wins) |
+| ```tools``` | the tools/groups this agent contributes (the active set of a call) |
+| ```governors``` | the governor composition (guards + transformers + conductors) |
+| ```sandboxes``` | the ordered sandbox chain (the sandboxes section) |
+| ```deny``` | tools/groups forbidden outright, before any sandbox lookup |
+| ```omit``` | governor config names to drop from the composition (chains) |
+| ```max_steps``` / ```max_loops``` | per-agent budget overrides (nearest wins) |
 
 .. note::
 
-    `deny` is a hard ban (the tool never runs); a sandbox `except` only skips
-    *that* sandbox and lets the chain walk on. They are different mechanisms.
+    ```deny``` is a hard ban (the tool never runs); a sandbox ```except``` only
+    skips *that* sandbox and lets the chain walk on. They are different mechanisms.
 
-## 7. `profiles` — model + agent bundles
+## 7. Model and agent bundles in ```profiles```
 
-A profile names a **provider** (the model, by `type`) and binds an **agent**. A
-run selects one profile by name, by `purpose`, by `model`, or the default.
+A profile names a provider (the model, by ```type```) and binds an agent. A
+run selects one profile by name, by ```purpose```, by ```model```, or the default.
 
 ```yaml
 profiles:
@@ -340,14 +342,15 @@ profiles:
 
 .. important::
 
-    A profile **must** state its `agent`, even as `agent: null` to run without
-    one. A profile binding `null` opts out of `ai.defaults.agent` on purpose.
+    A profile must state its ```agent```, even as ```agent: null``` to run without
+    one. A profile binding ```null``` opts out of ```ai.defaults.agent``` on
+    purpose.
 
-### 7.1 Carving out a subset with `deny`
+### 7.1 Carving out a subset with ```deny```
 
-A profile may `deny` tools or groups, to run a shared agent with a smaller
-toolset. The active tools are `agent.tools` minus `agent.deny` minus
-`profile.deny`:
+A profile may ```deny``` tools or groups, to run a shared agent with a smaller
+toolset. The active tools are ```agent.tools``` minus ```agent.deny``` minus
+```profile.deny```:
 
 ```yaml
 profiles:
@@ -359,10 +362,10 @@ profiles:
       - filesystem
 ```
 
-## 8. Tuning the model — provider parameters
+## 8. Tuning the model by provider parameters
 
-The `oai_compat` provider passes a `model_params` block straight through to the
-endpoint. These steer *how* the model answers. No validation happens in tokeo —
+The ```oai_compat``` provider passes a ```model_params``` block straight through to
+the endpoint. These steer *how* the model answers. No validation happens in tokeo;
 the endpoint owns the valid ranges, which vary by model.
 
 ```yaml
@@ -388,29 +391,29 @@ Common keys and what they do:
 
 | Key | Effect |
 |-----|--------|
-| `temperature` | randomness / creativity (lower = more focused, deterministic) |
-| `top_p` | nucleus sampling cutoff |
-| `max_tokens` | hard cap on the generated answer length |
-| `frequency_penalty` / `presence_penalty` | damp repetition |
-| `stop` | string or list that ends generation |
-| `seed` | fixed value for (mostly) reproducible output |
-| `response_format` | request a shape, e.g. `{type: json_object}` |
-| `tool_choice` | `auto` / `none` / `required`, or a named function |
-| `model` | override the profile's model for that call only |
+| ```temperature``` | randomness / creativity (lower = more focused, deterministic) |
+| ```top_p``` | nucleus sampling cutoff |
+| ```max_tokens``` | hard cap on the generated answer length |
+| ```frequency_penalty``` / ```presence_penalty``` | damp repetition |
+| ```stop``` | string or list that ends generation |
+| ```seed``` | fixed value for (mostly) reproducible output |
+| ```response_format``` | request a shape, e.g. ```{type: json_object}``` |
+| ```tool_choice``` | ```auto``` / ```none``` / ```required```, or a named function |
+| ```model``` | override the profile's model for that call only |
 
 .. tip::
 
-    A profile value may sit at the top level **or** under `options` — the provider
-    reads either place. Connection settings (`model`, `base_url`, `key`,
-    `timeout`) conventionally live under `options`; `model_params` sits at the top
-    level.
+    A profile value may sit at the top level or under ```options```; the provider
+    reads either place. Connection settings (```model```, ```base_url```, ```key```,
+    ```timeout```) conventionally live under ```options```; ```model_params``` sits
+    at the top level.
 
 ### 8.1 Overriding parameters per call (CLI)
 
-`ai ask` and `ai chat` take repeatable `--model_param key=value` flags that
-override the profile's `model_params` for that one call. The value is coerced
-like a YAML scalar; `key=null` *removes* a key, falling back to the profile's
-value.
+```ai ask``` and ```ai chat``` take repeatable ```--model_param key=value``` flags
+that override the profile's ```model_params``` for that one call. The value is
+coerced like a YAML scalar; ```key=null``` *removes* a key, falling back to the
+profile's value.
 
 ```bash
 # more focused for one question
@@ -425,11 +428,11 @@ myapp ai ask "..." --model_param seed=null
 
 ## 9. Using the loop from your own code
 
-`ask()` and `chat()` are the programmatic entry points on the `ai` handler
-(`app.ai`). They take the same selectors as the CLI, so your application logic
-can tune a run at the call site.
+```ask()``` and ```chat()``` are the programmatic entry points on the ```ai```
+handler (```app.ai```). They take the same selectors as the CLI, so your application
+logic can tune a run at the call site.
 
-### 9.1 `ask` — one prompt, the reply text
+### 9.1 One prompt and its reply text with ```ask```
 
 ```python
 text = app.ai.ask(
@@ -443,9 +446,9 @@ text = app.ai.ask(
 # -> str: the assistant text
 ```
 
-### 9.2 `chat` — full control, the full result
+### 9.2 Full control and the full result with ```chat```
 
-`chat()` takes a `messages` list and returns the whole `TokeoAiResult`:
+```chat()``` takes a ```messages``` list and returns the whole ```TokeoAiResult```:
 
 ```python
 result = app.ai.chat(
@@ -468,12 +471,12 @@ The call arguments and where each is resolved:
 
 | Argument | Purpose | Resolution |
 |----------|---------|------------|
-| `profile` / `model` / `purpose` | select the profile (the model) | one of them, or `ai.defaults.profile` |
-| `agent` | select the composition | the arg, else profile's agent, else `ai.defaults.agent` |
-| `model_params` | per-call model tuning | overlays the profile's `model_params` |
-| `deny` | narrow the toolset | added to agent + profile deny |
-| `max_steps` / `max_loops` | per-call budgets | nearest wins: call → agent → `ai:` base |
-| `userdata` | your own context, carried through | untouched by the framework |
+| ```profile``` / ```model``` / ```purpose``` | select the profile (the model) | one of them, or ```ai.defaults.profile``` |
+| ```agent``` | select the composition | the arg, else profile's agent, else ```ai.defaults.agent``` |
+| ```model_params``` | per-call model tuning | overlays the profile's ```model_params``` |
+| ```deny``` | narrow the toolset | added to agent + profile deny |
+| ```max_steps``` / ```max_loops``` | per-call budgets | nearest wins: call → agent → ```ai:``` base |
+| ```userdata``` | your own context, carried through | untouched by the framework |
 
 ### 9.3 Budgets resolve nearest-wins
 
@@ -484,11 +487,11 @@ flowchart LR
     C["ai: base<br/>(max_steps: 8)"] -->|else| R
 ```
 
-### 9.4 `userdata` — carrying your own context
+### 9.4 Carrying your own context in ```userdata```
 
-`userdata` is an opaque value tokeo carries on the run context and never touches.
-A custom guard or tool reads it back to reach your application's own context —
-a tenant id, a request id, a permissions handle.
+```userdata``` is an opaque value tokeo carries on the run context and never
+touches. A custom guard or tool reads it back to reach your application's own
+context: a tenant id, a request id, a permissions handle.
 
 ```python
 result = app.ai.chat(messages, agent='guarded', userdata={'tenant': 'acme'})
@@ -504,14 +507,14 @@ class MyGuard(TokeoAiAuditGuard):
 
 .. note::
 
-    `userdata` content is entirely the caller's concern; the framework guarantees
-    only that it arrives unchanged on `ctx.userdata`.
+    ```userdata``` content is entirely the caller's concern; the framework
+    guarantees only that it arrives unchanged on ```ctx.userdata```.
 
 ## 10. Validating the configuration
 
-`ai lint` checks the whole `ai:` section: unknown references, malformed items,
-unknown stages, empty stage lists, group cycles, and the guard conflicts.
-It is also run automatically before `ask`/`chat`, aborting the run on an error.
+```ai lint``` checks the whole ```ai:``` section: unknown references, malformed
+items, unknown stages, empty stage lists, group cycles, and the guard conflicts. It
+is also run automatically before ```ask```/```chat```, aborting the run on an error.
 
 ```bash
 myapp ai lint              # reports errors, warnings, and notes
@@ -520,9 +523,9 @@ myapp ai lint --strict     # treat warnings as failures too
 
 | Level | Meaning | Blocks a run? |
 |-------|---------|---------------|
-| `error` | the config cannot resolve as written | yes |
-| `warning` | an ignored value, usually a typo | only with `--strict` |
-| `note` | a resolved-but-worth-pointing-out fact (e.g. agent over chain) | no |
+| ```error``` | the config cannot resolve as written | yes |
+| ```warning``` | an ignored value, usually a typo | only with ```--strict``` |
+| ```note``` | a resolved-but-worth-pointing-out fact (e.g. agent over chain) | no |
 
 .. tip::
 

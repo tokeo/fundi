@@ -17,8 +17,11 @@ failing obscurely later.
 
 
 class Process:
-    """A non-startable process: the WASI guest cannot fork or spawn."""
+    """
+    A non-startable process: the WASI guest cannot fork or spawn.
+
+    Its construction is refused with a clear reason.
+    """
 
     def __init__(self, *args, **kwargs):
-        """Refuse construction with a clear reason."""
         raise RuntimeError('multiprocessing.Process is not available in the wasi guest (no processes)')

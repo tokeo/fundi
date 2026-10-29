@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 class ChatMessage(dict):
     """
-    One entry of the chat conversation -- a ```dict``` that carries a type.
+    One entry of the chat conversation, a ```dict``` that carries a type.
 
     Messages are OpenAI-style dicts (```role``` plus ```content``` and, for an
     assistant tool-call turn, ```tool_calls```; for a tool turn,
@@ -73,7 +73,7 @@ class ToolValue:
 
     A ```ToolResult``` holds a ```ToolValue``` when the tool delivered
     something, and ```None``` when it did not. So the mere existence answers
-    "is there a value?" -- ```if result.value:``` reads as "did the tool deliver
+    "is there a value?"; ```if result.value:``` reads as "did the tool deliver
     a value", not a truthiness test of the value (a delivered ```0```/```""```
     still has a value object and so stays truthy).
 
@@ -106,12 +106,12 @@ class ToolStates:
     - **incomplete** (bool): The json form is not faithful to the value (the
         encoder had to substitute a representation for something it could not
         render); ```False``` when the json form represents the value faithfully
-    - **stdout** (str | None): Informal output of the run -- captured print
+    - **stdout** (str|None): Informal output of the run: captured print
         output of executed code, or a note the tool set on purpose; ```None```
         when there was none
-    - **stderr** (str | None): Informal error output of the run; ```None```
+    - **stderr** (str|None): Informal error output of the run; ```None```
         when there was none
-    - **exception** (str | None): The exception that the executed code raised,
+    - **exception** (str|None): The exception that the executed code raised,
         as ```type: message```; ```None``` when the run did not raise
 
     """
@@ -133,7 +133,7 @@ class ToolResult:
 
     ### Args
 
-    - **value** (ToolValue | None): The delivered value in prepared views, or
+    - **value** (ToolValue|None): The delivered value in prepared views, or
         ```None``` when the tool returned nothing. Existence answers "is there a
         value?", truthy for any delivered value including ```0```/```""```
     - **state** (ToolStates): Facts about the run (see ```ToolStates```)
@@ -163,12 +163,12 @@ class ChatResult:
         otherwise. Distinct from an empty ```text```, so a caller can tell
         "declined" from "no content"
     - **tool_calls** (list): The ```ToolCall``` entries the model requested
-    - **usage** (Usage | None): Token usage, when the provider reports it
-    - **finish_reason** (str | None): Why the model stopped, when reported
-    - **system_fingerprint** (str | None): The backend configuration fingerprint
+    - **usage** (Usage|None): Token usage, when the provider reports it
+    - **finish_reason** (str|None): Why the model stopped, when reported
+    - **system_fingerprint** (str|None): The backend configuration fingerprint
         the endpoint reports, when present; with a fixed seed it identifies the
         exact backend state, so a changed value explains differing outputs
-    - **raw** (dict | None): The unmodified provider response, kept so a
+    - **raw** (dict|None): The unmodified provider response, kept so a
         caller can always inspect exactly what came back
 
     """
@@ -200,17 +200,17 @@ class Invocation:
     - **id** (str): The provider-assigned tool-call id, echoed in the result
     - **name** (str): The tool the model wants to call
     - **arguments** (dict): The parsed arguments for the call
-    - **parameters** (dict | None): The called tool's declared parameters
+    - **parameters** (dict|None): The called tool's declared parameters
         schema, attached by the handler so an ```on_call``` guard can validate
         the arguments; ```None``` when the tool is unknown
     - **decision** (str): ```ALLOW``` or ```DENY``` (the constants below); an
         ```on_call``` guard may set it to deny the call
-    - **reason** (str | None): Why a guard denied or flagged the call
-    - **result** (ToolResult | None): The tool's result when it ran
-    - **error** (str | None): The error text when the tool raised
-    - **sandbox** (str | None): The configured name of the sandbox the tool
+    - **reason** (str|None): Why a guard denied or flagged the call
+    - **result** (ToolResult|None): The tool's result when it ran
+    - **error** (str|None): The error text when the tool raised
+    - **sandbox** (str|None): The configured name of the sandbox the tool
         ran in (e.g. ```in_process```, ```jailed```, ```wasm_untrusted```), so
-        the trace shows WHERE each call executed -- the honest-tier record.
+        the trace shows where each call executed, the honest-tier record.
         ```None``` until the call reaches a sandbox (a denied call never does)
 
     """
@@ -237,7 +237,7 @@ class TraceStep:
     """
     One step on the run's trace: an origin and the object it left in hand.
 
-    The trace is a list of these -- the full, ordered history of the run for
+    The trace is a list of these: the full, ordered history of the run for
     audit and analysis. Every recording makes one: ```track``` makes a step for
     a fresh object (the loop is the origin), ```supersede``` makes one for each
     guard that ran (the guard is the origin). So the trace shows *who* acted and
@@ -250,7 +250,7 @@ class TraceStep:
 
     ### Args
 
-    - **origin**: Who produced this step -- the guard at a ```supersede```, the
+    - **origin**: Who produced this step: the guard at a ```supersede```, the
         loop (its handler) at a ```track```. Never ```None```, so every step is
         attributable
     - **object**: The run object as it stood after this step (a ```ChatMessage```,
@@ -261,7 +261,7 @@ class TraceStep:
         when the guard handed back a different object
     - **at** (datetime): When the step was recorded, a UTC timestamp; the json
         encoder renders it as a UTC time string
-    - **stage** (str | None): The guard stage that produced this step
+    - **stage** (str|None): The guard stage that produced this step
         (```on_begin```, ```on_call```, ...), or ```None``` for a loop ```track```
         that belongs to no stage (a fresh message/result the loop recorded)
 
@@ -286,7 +286,7 @@ class TokeoAiLoopdata:
 
     Separated from the run's data (the trace and its views) so the bookkeeping
     that bounds the loop has its own small home. Created fresh for every turn and
-    owned by the loop -- never seeded by the caller, so a turn always starts at
+    owned by the loop, never seeded by the caller, so a turn always starts at
     zero and no caller can preset a counter.
 
     ### Args
@@ -307,7 +307,7 @@ class TokeoAiTurndata(dict):
     A free, shared data area for one turn.
 
     Created fresh for every turn on the context (```ctx.turndata```) and gone
-    with it. It is a working state for THIS turn, not a cache: nothing is
+    with it. It is a working state for this turn, not a cache: nothing is
     persisted. A run starts empty unless the caller seeds it with a
     ```turndata_preset``` (see the context), which lets a delegate share its
     caller's turndata.
@@ -324,13 +324,13 @@ class TokeoAiTraceNote:
     A free note on the trace, so a plain value gets a name.
 
     The export renders an unknown object as its type name, but a plain value
-    (a str, a dict, a number) serializes itself and lands on the trace nameless
-    -- indistinguishable from real objects and not filterable. ```track``` wraps
-    such a value in this note; anything that is a class of its own passes
-    through untouched. For a note with more structure, define a class: it keeps
-    its own type name on the trace.
+    (a str, a dict, a number) serializes itself and lands on the trace
+    nameless, indistinguishable from real objects and not filterable.
+    ```track``` wraps such a value in this note; anything that is a class of its
+    own passes through untouched. For a note with more structure, define a class:
+    it keeps its own type name on the trace.
 
-    ### Attributes
+    ### Args
 
     - **content**: The noted value, as handed to ```track```
 
@@ -342,22 +342,22 @@ class TokeoAiTraceNote:
 @dataclass
 class TokeoAiResult:
     """
-    The result of a whole ```chat``` run -- answer, history, and bookkeeping.
+    The result of a whole ```chat``` run: answer, history, and bookkeeping.
 
     What ```chat``` returns. It separates the three views of one run that used
     to be crammed onto a single ```ChatResult```:
 
-    - the **answer**: the final model reply, a ```ChatResult``` (text, refusal,
+    - the answer: the final model reply, a ```ChatResult``` (text, refusal,
         reasoning, tool_calls, usage, raw). The answer is not always plain text
-        -- a refusal is distinct from empty text -- so the full ```ChatResult```
+        (a refusal is distinct from empty text), so the full ```ChatResult```
         is kept, not a flattened string.
-    - the **loopdata**: the loop's counters (```steps```, ```failed_loops```).
-    - the **trace**: the ordered ```TraceStep``` history of the run (every
+    - the loopdata: the loop's counters (```steps```, ```failed_loops```).
+    - the trace: the ordered ```TraceStep``` history of the run (every
         model round, tool call, and guard that ran).
 
     The trace and loop counters live on the context during the run; ```chat```
     hands them out here so the caller has them without reaching into the context
-    (now gone) -- and without the answer carrying its own trace, which made the
+    (now gone), and without the answer carrying its own trace, which made the
     answer enclose itself.
 
     ### Args

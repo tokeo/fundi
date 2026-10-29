@@ -101,7 +101,7 @@ def test_track_records_a_step_and_caches_the_bare_object():
     assert len(ctx.trace) == 1
     assert ctx.trace[0].object is invocation
     assert ctx.trace[0].origin is origin
-    # other caches stay empty -- isinstance filed it only into invocations
+    # other caches stay empty; isinstance filed it only into invocations
     assert ctx.messages == []
     assert ctx.results == []
 
@@ -375,7 +375,7 @@ def test_note_keeps_origin_and_stage():
 
 
 def test_notes_do_not_reach_the_caches():
-    # a note is history, not state -- the typed caches stay empty
+    # a note is history, not state; the typed caches stay empty
     ctx = TokeoAiContext(messages=[])
     ctx.track(object(), 'just a note')
     assert ctx.messages == []

@@ -7,7 +7,7 @@ magic variable: the snippet delivers a value by ending on an expression (the
 jupyter form), by a ```return```, or by an assignment whose bound value is then
 handed back; the block is wrapped into a function so that ```return``` is legal
 and its value is captured on the call. A block that delivers none yields
-```None``` -- the contract's 'no value', which the caller reports as such.
+```None```, the contract's 'no value', which the caller reports as such.
 
 It is kept dependency-free (the standard library ```ast``` only) so the same run
 works in process and inside an isolated sandbox guest, which mounts this contract
@@ -23,8 +23,8 @@ class TokeoPactSnippetError(Exception):
 
     Raised for a top-level ```await``` (or ```async for```/```async with```): a
     plain function wrap cannot make it legal, and an async wrap is out of scope.
-    The caller treats it as a tool error -- recorded as the snippet's exception
-    (A) with no value delivered -- not as a machinery error.
+    The caller treats it as a tool error (recorded as the snippet's exception
+    (A) with no value delivered), not as a machinery error.
     """
 
 
@@ -35,7 +35,7 @@ def run_snippet(code, namespace=None):
     The snippet is parsed (not executed) first, so its structure decides how it
     delivers. The value comes from the last top-level statement; printed text is
     never the value (it goes to stdout). A block that delivers no value yields
-    ```None``` -- the contract's 'no value'. An empty block yields ```None``` too.
+    ```None```, the contract's 'no value'. An empty block yields ```None``` too.
 
     Forms that deliver a value:
 
@@ -61,12 +61,12 @@ def run_snippet(code, namespace=None):
     ### Args
 
     - **code** (str): The snippet source; any value-delivery form is accepted
-    - **namespace** (dict | None): The globals the snippet runs in; a fresh dict
+    - **namespace** (dict|None): The globals the snippet runs in; a fresh dict
         is used when not given
 
     ### Returns
 
-    - **object | None**: The value the snippet delivered, or ```None``` when it
+    - **object|None**: The value the snippet delivered, or ```None``` when it
         delivered none
 
     ### Raises
@@ -99,8 +99,8 @@ def run_snippet(code, namespace=None):
         delivered = _assignment_value(last)
         if delivered is not None:
             tree.body.append(ast.copy_location(ast.Return(value=delivered), last))
-    # wrap the whole block in a function so a return -- the snippet's own or the
-    # one just synthesised -- is legal; falling through returns None by itself
+    # wrap the whole block in a function so a return (the snippet's own or the
+    # one just synthesised) is legal; falling through returns None by itself
     wrapper = ast.FunctionDef(
         name='__tokeo_snippet__',
         args=ast.arguments(posonlyargs=[], args=[], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
@@ -119,7 +119,7 @@ def run_snippet(code, namespace=None):
 
 def _assignment_value(stmt):
     # the value an assignment on the snippet's last line delivers, as an ast
-    # expression to return after it -- or None when the form has no single
+    # expression to return after it, or None when the form has no single
     # unambiguous value (an attribute write, a mixed or starred target)
     if isinstance(stmt, ast.Assign):
         # plain or chained (a = b = x): every target gets the same value, so the

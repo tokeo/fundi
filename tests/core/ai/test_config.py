@@ -2,12 +2,12 @@
 Tests for the config resolvers (tokeo/core/ai/config).
 
 The config package holds the pure resolvers that turn the raw ai configuration
-into the shapes the handler runs -- one module per component kind. These tests
+into the shapes the handler runs, one module per component kind. These tests
 pin each resolver's rules in isolation, without the handler or class loading
 (stubs stand in for reflection and lookups):
 
-- ```guards```: the §7/§8 composition notation -- bare names, ```name: [stages]```
-  stage lists, ```_any```, chains, ```omit```, and the §8 conflict rules.
+- ```guards```: the composition notation (bare names, ```name: [stages]```
+  stage lists, ```_any```, chains, ```omit```) and the conflict rules.
 - ```tools```: group expansion and cycle finding.
 - ```sandboxes```: "does this sandbox contain this tool" and the chain walk.
 - ```profiles```: profile selection (by name/model/purpose/default) and the
@@ -85,7 +85,7 @@ def test_same_config_name_same_stages_collapses_silently():
 
 def test_same_config_name_different_stages_same_level_is_error():
     # the same config name twice on one level with DIFFERENT stages is not
-    # decidable -- to run it at several stages, name them in one stage list
+    # decidable; to run it at several stages, name them in one stage list
     with pytest.raises(TokeoAiError):
         _resolve({}, [{'alpha': ['on_call']}, {'alpha': ['on_return']}])
 
@@ -112,7 +112,7 @@ def test_a_chain_cycle_is_an_error():
 
 def test_two_chains_contradicting_is_an_error():
     # the same config name with different stages from two equal chains is not
-    # decidable (no nearer form to rank them) -- an error
+    # decidable (no nearer form to rank them): an error
     section = {'chainA': [{'alpha': ['on_call']}], 'chainB': [{'alpha': ['on_return']}]}
     with pytest.raises(TokeoAiError):
         _resolve(section, ['chainA', 'chainB'])
@@ -145,7 +145,7 @@ def test_omit_drops_a_config_name():
 
 def test_agent_entry_wins_over_chain_for_same_config_name():
     # nearest wins: an agent's direct stage list overrides a chain's for the
-    # same config name (§8); the agent form replaces, not unions
+    # same config name; the agent form replaces, not unions
     section = {'my_chain': [{'alpha': ['on_call']}]}
     entries = _resolve(section, ['my_chain', {'alpha': ['on_return']}])
     assert len(entries) == 1
@@ -161,7 +161,7 @@ def test_parse_bare_and_mapping_forms():
         parse_entry(42)  # not a name or mapping
 
 
-# --- tools: group expansion and cycle finding (config.tools) ---
+# ---- tools: group expansion and cycle finding (config.tools) ----
 
 
 def test_tools_bare_name_passes_through():
@@ -199,7 +199,7 @@ def test_find_cycles_empty_when_acyclic():
     assert find_cycles({'g': ['a', 'b']}) == set()
 
 
-# --- sandboxes: containment and the chain walk (config.sandboxes) ---
+# ---- sandboxes: containment and the chain walk (config.sandboxes) ----
 
 
 def _resolve_passthrough(names):
@@ -240,7 +240,7 @@ def test_sandbox_for_exhausted_chain_returns_none():
     assert sandbox_for('other', ['jailed'], items.get, _resolve_passthrough) is None
 
 
-# --- profiles: selection and agent binding (config.profiles) ---
+# ---- profiles: selection and agent binding (config.profiles) ----
 
 
 _PROFILES = {

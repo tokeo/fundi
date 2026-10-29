@@ -31,8 +31,8 @@ class TokeoAiMockProvider(TokeoAiProvider):
         in plain text
     - As a codeact demo, the keyword ```text``` plus an operation word
         (upper/reverse/len, with a few language synonyms) and a sentence makes
-        the mock SYNTHESIZE python that computes the value and call the
-        untrusted exec tool with it -- but only when that tool is on offer
+        the mock synthesize python that computes the value and call the
+        untrusted exec tool with it, but only when that tool is on offer
 
     """
 
@@ -44,7 +44,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
 
         - **profile** (dict): The resolved profile (ignored beyond its type)
         - **messages** (list): Chat messages as plain OpenAI-style dicts
-        - **tools** (list | None): Tool definitions the mock may call
+        - **tools** (list|None): Tool definitions the mock may call
 
         ### Returns
 
@@ -63,7 +63,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
                 prompt = message.get('content') or ''
         # codeact demo: a plain ```text <op> <sentence>``` keyword makes the mock
         # SYNTHESIZE python that computes the value and call the untrusted exec
-        # tool with it -- the model writes code, the sandbox runs it. only
+        # tool with it; the model writes code, the sandbox runs it. only
         # active when that tool is actually offered to this agent
         synth = self._codeact_synthesis(prompt, tools)
         if synth is not None:
@@ -104,7 +104,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # recognise ```text <op> <sentence>``` and, when a code-running tool is
         # on offer, build a tool call whose code computes the value. returns a
         # ToolCall or None (so the normal tool/echo paths still apply). the tool
-        # is matched by SHAPE -- it takes a single ```code``` parameter -- not by
+        # is matched by SHAPE (it takes a single ```code``` parameter), not by
         # a fixed name, since the config name is the project's to choose
         if not prompt or not tools:
             return None
@@ -125,7 +125,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
 
     def _code_tool(self, tools):
         # the code-running tool is the one whose only/first parameter is
-        # ```code``` -- a stable shape, independent of the config name
+        # ```code```, a stable shape, independent of the config name
         for tool in tools:
             names, _ = self._tool_params(tool)
             if names and names[0] == 'code':

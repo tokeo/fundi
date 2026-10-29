@@ -14,7 +14,7 @@ are absent from the WASI standard library. Some frameworks (e.g. cement) import
 a couple of names from them at module load even when they never start a thread
 or process. These shims provide exactly those names so such a framework can be
 imported in the guest; anything that would need real concurrency raises a clear
-error, and the lock/local types are no-ops -- which is correct in a guest that
+error, and the lock/local types are no-ops, which is correct in a guest that
 is single-threaded by construction.
 
 This package is mounted read-only ahead of the real stdlib by the wasm sandbox

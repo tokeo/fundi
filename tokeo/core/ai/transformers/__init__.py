@@ -14,8 +14,8 @@ for the short import path ```tokeo.core.ai.transformers```.
 
 The full reference for how a governor works across its stages (the write contract
 for a result-changing step, keeping the views coherent, stopping by raise) is on
-the `tokeo.core.ai.governor.TokeoAiGovernor` base class; a transformer adds
-only its role contract.
+the ```tokeo.core.ai.governor.TokeoAiGovernor``` base class; a transformer
+adds only its role contract.
 
 .. include:: ./TRANSFORMERS.md
 """
