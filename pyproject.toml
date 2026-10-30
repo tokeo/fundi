@@ -13,13 +13,13 @@ authors = [
 license = "LicenseRef-Tokeo-Fundi-Source-Available-1.0"
 license-files = ["LICENSE.md"]
 urls = {"Homepage" = "https://github.com/tokeo/fundi"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 dependencies = [
-    "tokeo >= 2.1.0, < 3.0.0",
+    "tokeo >= 2.2.0, < 3.0.0",
     # packages necessary to run fundi
     "prompt_toolkit",
-    "httpx",
+    "httpx >= 0.23.0",
 ]
 
 [project.optional-dependencies]

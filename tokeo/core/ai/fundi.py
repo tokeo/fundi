@@ -20,7 +20,7 @@ except ModuleNotFoundError:
         return f'{version[0]}.{version[1]}.{version[2]}{mapping[version[3]]}{version[4]}'
 
 
-VERSION = (1, 3, 0, 'final', 0)
+VERSION = (2, 2, 0, 'final', 0)
 
 
 def get_version(version=VERSION):
