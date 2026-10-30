@@ -185,7 +185,7 @@ Tokeo-Fundi is built in the open. If this approach is useful to you, a star on [
 
 We keep the human in the loop and use AI as an exoskeleton, the same conviction that shapes the runtime itself. Purely AI-generated issues or pull requests are not accepted.
 
-Before you open a pull request, please read [CONTRIBUTING.md](CONTRIBUTING.md). It explains how contributions are licensed, what a change should bring with it, and what to run before you submit. Issues and ideas are just as welcome as code.
+Before you open a pull request, please read [CONTRIBUTING.md](https://github.com/tokeo/fundi/blob/master-2.x/CONTRIBUTING.md). It explains how contributions are licensed, what a change should bring with it, and what to run before you submit. Issues and ideas are just as welcome as code.
 
 <br/>
 <br/>
