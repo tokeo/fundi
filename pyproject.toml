@@ -26,20 +26,20 @@ dependencies = [
 dev = [
     "pip-tools>=7.0.0",
     "build>=1.0.0",
-    "setuptools>=77.0.0",
-    "wheel>=0.40.0",
+    "setuptools>=83.0.0",
+    "wheel>=0.46.2",
     "twine>=6.0.0",
-    "pytest>=8.5.0",
+    "pytest>=9.0.3",
     "pytest-cov>=6.0.0",
     "coverage>=7.10.0",
-    "pyink>=25.0.0",
+    "pyink>=26.5.1",
     "flake8>=7.0.0",
     "watchdog",
     # packages necessary to run all macros
     "numpy",
     "numba",
     "torch",
-    "wasmtime",
+    "wasmtime>=48.0.0",
 ]
 
 [tool.setuptools]

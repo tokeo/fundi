@@ -364,19 +364,13 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         wasi = wasmtime.WasiConfig()
         wasi.argv = ('python', '/io/entry.py')
 
-        ro = wasmtime.DirPerms.READ_ONLY
-        rw = wasmtime.DirPerms.READ_WRITE
-        ro_file = wasmtime.FilePerms.READ_ONLY
-        rw_file = wasmtime.FilePerms.READ_WRITE
-
         def mount(host_path, guest_path, writable, what):
             # a missing host path makes wasmtime raise a bare "failed to add
             # preopen dir"; check first and say WHICH path and role is wrong
             if not os.path.isdir(host_path):
                 raise TokeoAiError(f'the wasm {what} path does not exist or is not a directory: {host_path!r}')
-            dir_perms = rw if writable else ro
-            file_perms = rw_file if writable else ro_file
-            wasi.preopen_dir(host_path, guest_path, dir_perms, file_perms)
+            # fs_mutable sets the rights of the dir and its files together
+            wasi.preopen_dir(host_path, guest_path, fs_mutable=writable)
 
         # the stdlib is read-only at /lib; the guest interpreter reads it to
         # import the standard library it needs
