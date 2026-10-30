@@ -279,3 +279,28 @@ def test_wasm_guest_has_no_network():
         )
         assert out.value is None
         assert out.state.exception is not None
+
+
+@pytest.mark.skipif(
+    not _have_build,
+    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
+)
+def test_wasm_guest_cannot_write_a_read_only_mount():
+    # the stdlib is mounted at /lib with fs_mutable off: a write there fails in
+    # the guest, recorded as a tool exception on the result (A), and no file
+    # reaches the host; the io scratch stays the only writable surface
+    probe = os.path.join(_STDLIB, 'tokeo_wasm_probe.txt')
+    with WasmTest(config_defaults=wasm_ai_config()) as app:
+        agent = app.ai._agent('untrusted_coder')
+        out = app.ai._exec_in_sandbox(
+            'run_untrusted',
+            dict(code='open("/lib/tokeo_wasm_probe.txt", "w").write("x")'),
+            agent,
+            None,
+            None,
+            None,
+            None,
+        )
+        assert out.value is None
+        assert 'PermissionError' in (out.state.exception or '')
+    assert not os.path.exists(probe)
