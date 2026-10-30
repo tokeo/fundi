@@ -5,8 +5,8 @@ The wasm sandbox runs a tool call inside a WebAssembly guest under
 real isolation against untrusted code rather than mere fault-and-resource
 cleanup: the guest has no network at all, sees no host file outside the paths
 you explicitly mount, runs under a hard memory cap that holds on every
-platform, and is interrupted by an epoch timeout. It is an opt-in extension
-(```tokeo[wasm]```) and needs a user-supplied CPython-WASI build.
+platform, and is interrupted by an epoch timeout. It is opt-in, needs the
+```wasmtime``` package (48 or later) and a user-supplied CPython-WASI build.
 
 This document covers when to use it, the two ```python-exec``` tools, how
 to install a WASI Python build into a project's ```./wasm``` folder, every option,
@@ -100,14 +100,15 @@ The examples below install the build into a ```./wasm``` folder at your project
 root, matching the default option paths (```./wasm/python.wasm``` and
 ```./wasm/lib/python3.13```).
 
-### 1. Install the runtime extra
+### 1. Install the runtime
 
 ```
-pip install tokeo[wasm]
+pip install 'wasmtime>=48'
 ```
 
-This pulls in ```wasmtime```, the WebAssembly runtime the sandbox drives. Nothing
-else in tokeo depends on it, so projects that never use wasm stay lean.
+```wasmtime``` is the WebAssembly runtime the sandbox drives. fundi does not
+install it, so projects that never use wasm stay lean. Version 48 or later is
+needed, older versions mount directories by another api.
 
 ### 2. Download and unpack a build into ./wasm
 
@@ -121,7 +122,7 @@ rather than assuming a number.
 mkdir -p wasm
 cd wasm
 
-# example: CPython 3.13.0 built with WASI SDK 24 -- check the releases page
+# example: CPython 3.13.0 built with WASI SDK 24, check the releases page
 # for the current asset name and adjust the version/sdk number accordingly
 curl -LO https://github.com/brettcannon/cpython-wasi-build/releases/download/v3.13.0/python-3.13.0-wasi_sdk-24.zip
 unzip python-3.13.0-wasi_sdk-24.zip
@@ -201,7 +202,7 @@ ai:
 
   sandboxes:
     # untrusted: strong isolation, the guest sees its stdlib and the pact
-    # contract only -- no framework, no app, no host paths
+    # contract only: no framework, no app, no host paths
     wasm_untrusted:
       type: tokeo.core.ai.sandboxes.wasm.TokeoAiWasmSandbox
       tools:
