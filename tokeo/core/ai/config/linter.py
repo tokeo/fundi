@@ -14,7 +14,7 @@ unresolved ```type```) fails fast at startup, and is also exposed as the
 import difflib
 from dataclasses import dataclass
 
-from tokeo.core.utils.base import as_list
+from tokeo.core.utils.validate import as_list
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.guard import TokeoAiGuard
 from tokeo.core.ai.transformer import TokeoAiTransformer

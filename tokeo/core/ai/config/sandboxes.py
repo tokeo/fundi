@@ -15,7 +15,7 @@ from the same source for "does this sandbox contain this tool" and "which
 sandbox runs it".
 """
 
-from tokeo.core.utils.base import as_list
+from tokeo.core.utils.validate import as_list
 
 
 # the keyword on a sandbox's ```tools``` meaning "every tool that reaches it"

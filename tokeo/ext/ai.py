@@ -83,7 +83,7 @@ from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import Completer, Completion
 
 from tokeo.ext.argparse import Controller
-from tokeo.core.utils.base import as_list
+from tokeo.core.utils.validate import as_list
 from tokeo.core.utils.json import json_dump, TokeoJsonUnknownNameEncoder
 from tokeo.core.ai.utils import parse_model_params, TokeoJsonAiTraceEncoder
 from tokeo.core.ai import (
