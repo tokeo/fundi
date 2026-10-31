@@ -14,7 +14,7 @@ unresolved ```type```) fails fast at startup, and is also exposed as the
 import difflib
 from dataclasses import dataclass
 
-from tokeo.core.utils.validate import as_list
+from tokeo.core.utils.validate import as_list, is_int_ge, is_list
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.guard import TokeoAiGuard
 from tokeo.core.ai.transformer import TokeoAiTransformer
@@ -31,6 +31,7 @@ from tokeo.core.ai.config.tools import find_cycles
 # max_steps/max_loops are the handler's base loop budgets (config_defaults),
 # settable at the ai section level; trace toggles recording the step history
 _AI_KEYS = {
+    'license_acknowledged',
     'defaults',
     'profiles',
     'tools',
@@ -157,6 +158,9 @@ class TokeoAiLinter:
         defaults = self._value('defaults')
         agents = self._value('agents') or {}
         self._lint_keys('ai', self._section_keys(), _AI_KEYS)
+        # the notice at every start stays until the license is acknowledged
+        if 'license_acknowledged' not in self._section_keys():
+            self._add('ai.license_acknowledged', 'is missing, set it to true once you have read LICENSE.md of tokeo-fundi', 'warning')
         self._lint_tools(tools)
         self._lint_profiles(profiles, tools)
         self._lint_defaults(defaults, profiles, agents)
@@ -293,13 +297,13 @@ class TokeoAiLinter:
         self._lint_guard_omit(f'{path}.omit', options.get('omit'))
         for key in ('max_steps', 'max_loops'):
             value = options.get(key)
-            if value is not None and not isinstance(value, int):
-                self._add(f'{path}.{key}', 'must be a number (0 = unlimited)')
+            if value is not None and not is_int_ge(value, 0):
+                self._add(f'{path}.{key}', 'must be a whole number of 0 or more (0 = unlimited)')
         # the sandbox chain references ```ai.sandboxes``` by name, in order; an
         # empty or absent chain means no sandbox lists a tool -> denied
         sandboxes = options.get('sandboxes')
         if sandboxes is not None:
-            if not isinstance(sandboxes, list):
+            if not is_list(sandboxes):
                 self._add(f'{path}.sandboxes', 'must be a list of sandbox names')
             else:
                 known = set(self._value('sandboxes') or {})
@@ -320,7 +324,7 @@ class TokeoAiLinter:
         # conflict becomes an error issue. a resolution that cannot even build
         # (an unknown name, already reported by the form check) is skipped here
         governors = options.get('governors')
-        if not isinstance(governors, list):
+        if not is_list(governors):
             return
 
         notes = self
@@ -375,7 +379,7 @@ class TokeoAiLinter:
         # error; an empty/null/[] stage list is an error
         if guards is None:
             return
-        if not isinstance(guards, list):
+        if not is_list(guards):
             self._add(path, 'must be a list of guard names')
             return
         known = set(self._governors_merged())
@@ -416,7 +420,7 @@ class TokeoAiLinter:
         # guard or chain name. each name should be a known guard or chain
         if omit is None:
             return
-        if not isinstance(omit, list):
+        if not is_list(omit):
             self._add(path, 'must be a list of guard names')
             return
         known = set(self._governors_merged())
@@ -596,7 +600,7 @@ class TokeoAiLinter:
         # ```ai.tools```, never a section of its own
         if selection is None:
             return
-        if not isinstance(selection, list):
+        if not is_list(selection):
             self._add(f'{path}.tools', 'must be a list of tool or group names')
             return
         for entry in selection:

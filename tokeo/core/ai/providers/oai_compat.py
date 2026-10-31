@@ -21,6 +21,7 @@ import json
 
 import httpx
 
+from tokeo.core.utils.validate import is_filled_str
 from tokeo.core.ai import TokeoAiError, TokeoAiProvider, ChatResult, ToolCall, Usage
 
 
@@ -176,7 +177,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
             raw_args = function.get('arguments')
             if isinstance(raw_args, dict):
                 arguments = raw_args
-            elif isinstance(raw_args, str) and raw_args.strip():
+            elif is_filled_str(raw_args):
                 try:
                     arguments = json.loads(raw_args)
                 except ValueError:

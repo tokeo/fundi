@@ -301,6 +301,15 @@ def test_linter_flags_unknown_sandbox_in_chain():
         assert any('ghost' in i.message and i.level == 'error' for i in issues)
 
 
+def test_linter_accepts_a_tuple_as_list():
+    # a config built in python may hand a tuple where yaml gives a list
+    cfg = ai_config()
+    cfg['ai']['agents']['plain']['options']['sandboxes'] = ('jailed',)
+    with FundiTest(config_defaults=cfg) as app:
+        issues = TokeoAiLinter(app).lint()
+        assert [i for i in issues if i.path.endswith('.sandboxes')] == []
+
+
 def test_linter_flags_missing_sandbox_tools():
     cfg = ai_config()
     del cfg['ai']['sandboxes']['jailed']['tools']
@@ -315,6 +324,30 @@ def test_linter_flags_unknown_subprocess_option():
     with FundiTest(config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert any('net' in i.message for i in issues)
+
+
+def test_linter_warns_when_license_acknowledged_is_missing():
+    # the config of an app names license_acknowledged; without it the linter
+    # warns, with it (true or false) the key is known and no issue is raised
+    cfg = ai_config()
+    with FundiTest(config_defaults=cfg) as app:
+        issues = TokeoAiLinter(app).lint()
+        assert [(i.path, i.level) for i in issues if 'license_acknowledged' in i.path] == [('ai.license_acknowledged', 'warning')]
+    cfg['ai']['license_acknowledged'] = False
+    with FundiTest(config_defaults=cfg) as app:
+        issues = TokeoAiLinter(app).lint()
+        assert [i for i in issues if 'license_acknowledged' in i.path] == []
+
+
+@pytest.mark.parametrize('value', [True, -1, 1.5, '3'])
+def test_linter_flags_max_steps_that_is_no_whole_number_of_0_or_more(value):
+    # max_steps and max_loops take a whole number, 0 for unlimited; a bool,
+    # a negative or a float is a mistake of the config
+    cfg = ai_config()
+    cfg['ai']['agents']['plain']['options']['max_steps'] = value
+    with FundiTest(config_defaults=cfg) as app:
+        issues = TokeoAiLinter(app).lint()
+        assert any(i.path.endswith('.max_steps') for i in issues)
 
 
 def test_subprocess_resolves_registry_alias_tools():
