@@ -6,19 +6,8 @@
 # Tokeo-Fundi Source-Available License 1.0. See the LICENSE.md file in the
 # project root for the full license text. Use is subject to its conditions.
 
-try:
-    from cement.utils.version import get_version as cement_get_version
-except ModuleNotFoundError:
-    # simple fallback when installing
-    # version: Tuple[int, int, int, str, int])
-    def cement_get_version(version):
-        if version[3] == 'final':
-            return f'{version[0]}.{version[1]}.{version[2]}'
-        if version[3] == 'dev':
-            return f'{version[0]}.{version[1]}.{version[2]}.dev.{version[4]}'
-        mapping = {'alpha': 'a', 'beta': 'b', 'rc': 'c'}
-        return f'{version[0]}.{version[1]}.{version[2]}{mapping[version[3]]}{version[4]}'
-
+# cement is a build requirement, the build and the app count the version alike
+from cement.utils.version import get_version as cement_get_version
 
 VERSION = (2, 2, 0, 'final', 0)
 
