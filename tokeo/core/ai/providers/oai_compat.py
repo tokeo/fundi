@@ -166,8 +166,10 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
 
     def _tool_calls(self, raw_calls):
         # turn native function tool_calls into our ToolCall objects. arguments
-        # arrive as a JSON STRING in the openai shape, so parse it; a malformed
-        # or empty string degrades to an empty dict rather than crashing the run
+        # arrive as a JSON STRING in the openai shape, so parse it; empty means
+        # no arguments. anything else, malformed json or json that is no
+        # object, is kept as it came: the loop refuses that call and the trace
+        # shows what the model really sent
         calls = []
         for index, call in enumerate(raw_calls):
             function = call.get('function') or {}
@@ -181,9 +183,11 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
                 try:
                     arguments = json.loads(raw_args)
                 except ValueError:
-                    arguments = {}
-            else:
+                    arguments = raw_args
+            elif raw_args is None or raw_args == '':
                 arguments = {}
+            else:
+                arguments = raw_args
             calls.append(ToolCall(id=call.get('id') or f'call_{index + 1}', name=name, arguments=arguments))
         return calls
 

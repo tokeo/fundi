@@ -166,6 +166,20 @@ def test_chat_refuses_a_tool_the_agent_does_not_offer():
         assert tool_contents(result) == ["error: TokeoAiError: tool 'shout' is not offered by the agent"]
 
 
+@pytest.mark.parametrize('agent', ['plain', 'audited'])
+def test_chat_refuses_arguments_that_are_no_json_object(agent):
+    """Arguments 'hello' are refused with or without governors, raw on the trace."""
+    script = [dict(calls=[('echo', 'hello')]), dict(text='done')]
+    with LoopTest(config_defaults=loop_config(script)) as app:
+        result = app.ai.chat([dict(role='user', content='hi')], agent=agent)
+        assert result.answer.text == 'done'
+        assert tool_contents(result) == ['error: arguments must be a JSON object, got str']
+        # every step of the answer that asked for the call keeps what it sent
+        calls = [c for s in result.trace if getattr(s.object, 'tool_calls', None) for c in s.object.tool_calls]
+        assert calls and all(c.arguments == 'hello' for c in calls)
+        assert result.loopdata.failed_loops == 1
+
+
 # ask
 
 

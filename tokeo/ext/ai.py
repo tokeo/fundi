@@ -897,6 +897,13 @@ class TokeoAi(MetaMixin):
             ctx.track(self, ChatMessage(self._assistant_turn(result)))
             succeeded = False
             for call in result.tool_calls:
+                if call.arguments is not None and not isinstance(call.arguments, dict):
+                    # arguments that are no json object are refused before any
+                    # guard: no guessing, the model gets the reason and the
+                    # trace keeps the raw value on the answer it came with
+                    content = f'error: arguments must be a JSON object, got {type(call.arguments).__name__}'
+                    ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
+                    continue
                 if tool_governed:
                     # the invocation is tracked inside _exec_governed at creation
                     # and handed back, so the outcome is read off the object

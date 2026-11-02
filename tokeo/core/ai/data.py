@@ -57,7 +57,8 @@ class ToolCall:
 
     - **id** (str): Provider-assigned id, echoed back with the tool result
     - **name** (str): Name of the tool the model wants to call
-    - **arguments** (dict): Parsed arguments for the call
+    - **arguments** (dict): Parsed arguments for the call; what the model sent
+        that is no JSON object is kept as it came, the loop refuses the call
 
     """
 

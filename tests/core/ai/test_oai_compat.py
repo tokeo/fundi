@@ -91,7 +91,7 @@ def test_oai_compat_maps_tool_calls_with_json_string_args(monkeypatch):
 
 
 def test_oai_compat_tolerates_malformed_tool_arguments(monkeypatch):
-    """Tool arguments 'not json' map to an empty dict instead of a crash."""
+    """Tool arguments 'not json' are kept as they came, for the loop to refuse."""
 
     def handler(request):
         return httpx.Response(
@@ -102,7 +102,7 @@ def test_oai_compat_tolerates_malformed_tool_arguments(monkeypatch):
     provider = _provider_with(handler, monkeypatch)
     result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'x'}])
     # a malformed argument string degrades to an empty dict, not a crash
-    assert result.tool_calls[0].arguments == {}
+    assert result.tool_calls[0].arguments == 'not json'
 
 
 def test_oai_compat_keeps_reasoning_apart(monkeypatch):
