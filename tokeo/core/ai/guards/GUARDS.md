@@ -42,4 +42,6 @@ and says what your subclass is *for*.
 - validate (```TokeoAiValidateGuard```): check a call against a contract.
     ```tool_schema_validate``` (arguments against the tool's parameters) ships
     ready.
-- confirm (```TokeoAiConfirmGuard```): gate a call on an out-of-band approval.
+- confirm (```TokeoAiConfirmGuard```): ask a person or a rule before the run
+    goes on. ```confirm``` ships ready: it asks the channels on the hook
+    ```tokeo_ai_confirm``` and records who decided (CONFIG.md, section 4.6).
