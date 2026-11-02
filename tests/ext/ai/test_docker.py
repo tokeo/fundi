@@ -115,15 +115,16 @@ def test_the_docker_sandbox_runs_a_tool_in_a_hardened_container(docker):
 
 
 def test_the_docker_sandbox_mounts_read_only_and_passes_only_its_env(docker, monkeypatch):
-    """A mount is :ro, ${NAME} expands from the host, other variables stay out."""
+    """A mount is :ro and absolute, ${NAME} expands, other variables stay out."""
     monkeypatch.setenv('DOCKER_TEST_HOST', 'from host')
     monkeypatch.setenv('DOCKER_TEST_OTHER', 'secret')
-    cfg = ai_config(docker, mounts={'/data': '/srv/data'}, env=dict(GREETING='${DOCKER_TEST_HOST}'))
+    cfg = ai_config(docker, mounts={'/data': '/srv/data', '/conf': 'conf'}, env=dict(GREETING='${DOCKER_TEST_HOST}'))
     with DockerTest(config_defaults=cfg) as app:
         assert run(app, 'env', dict(name='GREETING')).value.as_str == 'from host'
         assert run(app, 'env', dict(name='DOCKER_TEST_OTHER')).value.as_str == '<unset>'
     args = calls(docker)[0]
-    assert args[args.index('-v') + 1] == '/srv/data:/data:ro'
+    mounts = [args[i + 1] for i, arg in enumerate(args) if arg == '-v']
+    assert mounts == ['/srv/data:/data:ro', f'{os.path.abspath("conf")}:/conf:ro']
     assert args[args.index('-e') + 1] == 'GREETING=from host'
 
 

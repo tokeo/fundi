@@ -201,7 +201,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         if self._config('user'):
             args += ['--user', str(self._config('user'))]
         for guest_path, host_path in (self._config('mounts') or {}).items():
-            args += ['-v', f'{host_path}:{guest_path}:ro']
+            args += ['-v', f'{os.path.abspath(host_path)}:{guest_path}:ro']
         for key, value in expand_env(self._config('env')).items():
             args += ['-e', f'{key}={value}']
         return args
