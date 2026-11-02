@@ -69,6 +69,7 @@ from cement.core.exc import CaughtSignal
 from cement.utils.misc import is_true
 
 import shlex
+import sys
 from copy import deepcopy
 
 # the interactive chat shell uses prompt_toolkit for a real line editor with
@@ -129,6 +130,7 @@ from tokeo.core.ai.guards.confirm import (
     TokeoAiConfirmChanged,
     TokeoAiChannelConfirmGuard,
 )
+from tokeo.core.ai.guards.confirm.terminal import terminal_channel
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
@@ -1192,6 +1194,9 @@ class AiController(Controller):
         if not prompt:
             raise TokeoAiError('no prompt given; usage: ai ask "your question"')
         model_params = parse_model_params(self.app.pargs.model_param)
+        # a person in a terminal answers a confirm; else the default decides
+        if sys.stdin.isatty():
+            self.app.hook.register(CONFIRM_HOOK, terminal_channel(input, self.app.print))
         result = self.app.ai.chat(
             [{'role': 'user', 'content': prompt}],
             profile=self.app.pargs.profile,
@@ -1205,8 +1210,15 @@ class AiController(Controller):
         # object); otherwise just the answer text
         if self.app.pargs.as_trace or self.app.pargs.as_trace_compact:
             self.app.print(json_dump(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.as_trace_compact), indent=2))
+        elif result.status == TokeoAiResult.DECLINED:
+            self.app.print(self._declined(result))
         else:
             self.app.print(result.answer.text)
+
+    def _declined(self, result):
+        # the line for a run a governor declined
+        declined = result.declined
+        return f"declined at {declined['stage']}: {declined['reason']} (by {declined['by'] or '-'})"
 
     @ex(
         help='start an interactive, multi-turn chat session',
@@ -1254,6 +1266,9 @@ class AiController(Controller):
         # carries the history, the selector completer, auto-suggest, and
         # history-prefix search) instead of being rebuilt every turn
         editor = self._chat_session(InMemoryHistory(), completer)
+        # a person in a terminal answers a confirm in the same session
+        if sys.stdin.isatty():
+            self.app.hook.register(CONFIRM_HOOK, terminal_channel(editor.prompt, self.app.print))
         self.app.print('ai chat - "--" for options, "exit"/"quit" or Ctrl-D to quit')
         # patch_stdout keeps any guard/audit log lines printed during a turn
         # from corrupting the live prompt line
@@ -1315,6 +1330,11 @@ class AiController(Controller):
                         # handlers below decide about the session
                         messages.pop()
                         raise
+                    if result.status == TokeoAiResult.DECLINED:
+                        # a declined turn stays out of the conversation
+                        messages.pop()
+                        self.app.print(f'ai chat - {self._declined(result)}')
+                        continue
                     messages.append({'role': 'assistant', 'content': result.answer.text})
                     self.app.print(result.answer.text)
                 except KeyboardInterrupt:

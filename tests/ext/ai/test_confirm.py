@@ -218,3 +218,47 @@ def test_a_change_at_on_prompt_reaches_the_model():
     with LoopTest(config_defaults=confirm_config([dict(text='done')], stages=('on_prompt',)), hooks=[(CONFIRM_HOOK, channel)]) as app:
         app.ai.chat([dict(role='user', content='hi')], agent='careful')
         assert app.ai._provider(SCRIPT).seen[0][-1]['content'] == 'hello'
+
+
+# terminal
+
+
+def terminal(*lines):
+    """A terminal channel that reads the lines in order, and what it wrote."""
+    from tokeo.core.ai.guards.confirm.terminal import terminal_channel
+
+    lines, written = list(lines), []
+    return terminal_channel(lambda prompt: lines.pop(0), written.append), written
+
+
+def test_the_terminal_asks_again_until_an_allowed_answer():
+    """x is no answer, o is once: the call echo and the verdict are shown."""
+    from tokeo.core.ai.guards.confirm import TokeoAiConfirmRequest
+
+    channel, written = terminal('x', 'o')
+    invocation = Invocation(id='c1', name='echo', arguments=dict(text='moin'))
+    request = TokeoAiConfirmRequest('on_call', 'ask', invocation, dict(reason='says bad'), ('no', 'once', 'run', 'change'))
+    assert channel(None, request).answer == 'once'
+    assert written == ['confirm on_call (ask): echo {"text": "moin"}', '  a guard said no: says bad']
+
+
+def test_the_terminal_reads_changed_arguments_as_json():
+    """c, then no JSON, then {"text": "neu"}: the change carries the dict."""
+    from tokeo.core.ai.guards.confirm import TokeoAiConfirmRequest
+
+    channel, written = terminal('c', 'neu', '{"text": "neu"}')
+    request = TokeoAiConfirmRequest('on_call', 'ask', Invocation(id='c1', name='echo'), None, ('no', 'once', 'run', 'change'))
+    answer = channel(None, request)
+    assert (answer.answer, answer.content, answer.by) == ('change', dict(text='neu'), 'human')
+    assert written[-1].startswith('  the arguments are a JSON object')
+
+
+@pytest.mark.parametrize('key, out', [('o', 'done'), ('n', 'declined at on_prompt: declined by confirmation (by human)')])
+def test_ai_ask_asks_in_the_terminal(monkeypatch, capsys, key, out):
+    """ai ask in a terminal: o lets the run answer done, n prints the decline."""
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    monkeypatch.setattr('builtins.input', lambda prompt='': key)
+    cfg = confirm_config([dict(text='done')], stages=('on_prompt',))
+    with LoopTest(argv=['ai', 'ask', 'hi', '--agent', 'careful'], config_defaults=cfg) as app:
+        app.run()
+    assert capsys.readouterr().out.splitlines()[-1] == out
