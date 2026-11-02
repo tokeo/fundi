@@ -343,6 +343,39 @@ agents:
     in the chain names a tool, the call is denied, so a new tool runs nowhere
     until a sandbox names it.
 
+The ```docker``` sandbox runs a call in a throwaway container of ```image```;
+the image must hold tokeo, fundi and the tools of the app, the image of the app
+itself is the simplest choice. ```--rm```, ```--cap-drop ALL``` and
+```--security-opt no-new-privileges``` are always set, every mount is
+read-only. Several docker sandboxes may differ in their rights.
+
+```yaml
+sandboxes:
+  docked:
+    type: docker
+    tools: [mathematics]
+    options:
+      image: myapp:latest       # required
+      command: docker           # or podman (rootless)
+      network: none             # a docker network, none = no network
+      read_only: true           # read-only root, a small /tmp
+      memory_mb: 512            # memory cap, 0 = none
+      pids: 128                 # process cap, 0 = none
+      user: '65534:65534'       # never root
+      mounts:                   # guest path: host path, read-only
+        /data: ./data
+      env:                      # only these variables, ${NAME} expands
+        TZ: ${TZ}
+      timeout: 30               # seconds, then the container is killed
+      reuse: false              # true = one container for the process
+```
+
+.. warning::
+
+    Whoever may use the docker service is root on the host in effect. Run the
+    app with docker rights only where that is acceptable, prefer rootless
+    podman, and never mount the docker socket into a container of the app.
+
 ## 6. The compositions in ```agents```
 
 An agent is the composition root a profile binds. It is an item (```type: fundi```

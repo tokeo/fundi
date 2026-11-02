@@ -34,7 +34,7 @@ Most ways of wiring an application to an LLM let the model reach straight into y
 - An agent is a named composition in YAML: its tools, its guard chain, its sandbox chain and its step budget. ```audited``` records everything and forbids nothing; ```guarded``` adds schema validation and policy (for example a read-only filesystem). Without an agent, the default, a request runs plain and untraced; governance is opted into.
 - Tools are plain functions, registered with a spec and activated in named groups (calendar, filesystem, mathematics) per profile. The provider never executes anything itself; a tool's result returns as feedback through the guards.
 - A before-guard may deny a call ahead of execution; an after-guard observes every outcome, so even a denial is recorded. A denied call is not executed; the loop continues and the model sees the denial, so it can correct itself.
-- A guard decides whether a call may run; a sandbox is the wall it runs behind. Fundi ships in-process (no isolation), subprocess (fault and resource isolation) and a WebAssembly sandbox with no network, explicit mounts only and a hard memory cap, the place for model-generated code.
+- A guard decides whether a call may run; a sandbox is the wall it runs behind. Fundi ships in-process (no isolation), subprocess (fault and resource isolation), docker (a hardened throwaway container) and a WebAssembly sandbox with no network, explicit mounts only and a hard memory cap, the place for model-generated code.
 - Every run leaves a typed trace that can be inspected: the prompts, the calls, the guard decisions and the results. A pipeline that denies nothing still records that.
 
 <br/>
@@ -135,6 +135,25 @@ your_app ai ask "text upper der wochentag von heute" --agent coder
 ```
 
 The wasm build is opt-in and documented in the project's WASM guide; without it, the relevant calls fail with a clear message rather than running unsandboxed.
+
+<br/>
+
+## The docker sandbox
+
+A tool that needs a full Python, but should not touch the host, runs in a throwaway container of the app's own image: no network, a read-only root, no capabilities, a memory, process and time cap, and a user that is not root. Each call gets a fresh container, or with ```reuse: true``` one container serves the process.
+
+```yaml
+ai:
+  sandboxes:
+    docked:
+      type: docker
+      tools: [mathematics]
+      options:
+        image: your_app:latest
+```
+
+> [!WARNING]
+> Whoever may use the docker service is root on the host in effect. Give the app docker rights only where that is acceptable, prefer rootless podman (```command: podman```), and never mount the docker socket into a container of the app. See [SECURITY.md](SECURITY.md).
 
 <br/>
 <br/>
