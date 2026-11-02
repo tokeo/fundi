@@ -10,6 +10,7 @@ The app-free helpers are tested in ```tests/core/ai/test_fundi.py```.
 import os
 import sys
 import inspect
+import threading
 import pytest
 from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
@@ -35,6 +36,7 @@ if sys.platform == 'linux':
     JAILED_OPTIONS['memory_mb'] = 256
 SLEEP = 'tests.ext.ai.lib.ai_tests_helper.SleepTool'
 SPAWN = 'tests.ext.ai.lib.ai_tests_helper.SpawnTool'
+CHATTER = 'tests.ext.ai.lib.ai_tests_helper.ChatterTool'
 
 # every tool of the config, offered by the agents that exercise the sandboxes
 TOOLS = ['echo', 'cwd', 'env', 'sleep', 'greeter', 'plain_greeter']
@@ -179,6 +181,34 @@ def test_subprocess_timeout_is_enforced():
     with FundiTest(config_defaults=cfg) as app:
         with pytest.raises(TokeoAiError, match='timed out'):
             run(app, 'sleep', 'mixed', seconds=3)
+
+
+def test_in_process_keeps_the_output_of_parallel_calls_apart(capsys):
+    """Two calls in parallel threads each get only their own 20 lines of output."""
+    cfg = ai_config()
+    cfg['ai']['tools']['chatter'] = dict(type=CHATTER)
+    cfg['ai']['sandboxes']['allow']['tools'].append('chatter')
+    cfg['ai']['agents']['plain']['options']['tools'].append('chatter')
+    with FundiTest(config_defaults=cfg) as app:
+        agent = app.ai._agent('plain')
+        start = threading.Barrier(2)
+        results = {}
+
+        def call(text):
+            start.wait()
+            results[text] = app.ai._exec_in_sandbox('chatter', dict(text=text), agent, None, None, None, None)
+
+        threads = [threading.Thread(target=call, args=(text,)) for text in ('left', 'right')]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(10)
+        print('outside')
+    for text in ('left', 'right'):
+        assert results[text].state.stdout == f'{text}\n' * 20
+        assert results[text].state.stderr == f'{text}\n' * 20
+    # a print outside a call still reaches the real stream
+    assert 'outside' in capsys.readouterr().out
 
 
 def _spawn_config(tmp_path):

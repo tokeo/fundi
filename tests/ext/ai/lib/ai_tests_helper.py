@@ -7,6 +7,7 @@ project are imported. Each one is a minimal ```TokeoAiTool```.
 """
 
 import os
+import sys
 import time
 import subprocess
 
@@ -109,6 +110,25 @@ class SpawnTool(TokeoAiTool):
             f.write(str(child.pid))
         time.sleep(float(arguments.get('seconds', 0)))
         return create_tool_result('spawned')
+
+
+class ChatterTool(TokeoAiTool):
+    """Print its text 20 times to stdout and stderr, with a pause between."""
+
+    class Meta:
+        description = 'print a text again and again'
+        parameters = {
+            'type': 'object',
+            'properties': {'text': {'type': 'string'}},
+            'required': ['text'],
+        }
+
+    def exec(self, **arguments):
+        for _ in range(20):
+            print(arguments['text'])
+            print(arguments['text'], file=sys.stderr)
+            time.sleep(0.005)
+        return create_tool_result('done')
 
 
 class RaiseTool(TokeoAiTool):
