@@ -20,6 +20,7 @@ from tests.ext.ai.lib.ai_tests_helper import GreetTool
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
+from tokeo.ext.ai import TokeoAi
 from tests.utils import wait_until
 
 # the class paths of the importable test tools the worker loads in a child
@@ -491,6 +492,39 @@ def test_setup_logs_a_lint_warning():
 
     with FundiTest(config_defaults=ai_config(), hooks=[('post_setup', record, 50)]):
         assert any('ai.license_acknowledged' in message for message in logged)
+
+
+def notices(**kw):
+    """A FundiTest that records its info log, and the list it records into."""
+    logged = []
+
+    def record(app):
+        app.log.info = logged.append
+
+    return FundiTest(hooks=[('post_setup', record, 50)], **kw), logged
+
+
+def test_the_ai_lint_command_shows_the_license_notice():
+    """ai lint logs the license notice while license_acknowledged is not true."""
+    app, logged = notices(argv=LINT, config_defaults=ai_config())
+    with app:
+        app.run()
+    assert logged.count(TokeoAi.FUNDI_LICENSE_NOTICE) == 1
+
+
+def test_the_first_ai_call_from_code_shows_the_license_notice_once():
+    """Two ask calls from code log the license notice once; acknowledged, never."""
+    app, logged = notices(config_defaults=ai_config())
+    with app:
+        app.ai.ask('hi', agent='plain')
+        app.ai.ask('hi', agent='plain')
+    assert logged.count(TokeoAi.FUNDI_LICENSE_NOTICE) == 1
+    cfg = ai_config()
+    cfg['ai']['license_acknowledged'] = True
+    app, logged = notices(config_defaults=cfg)
+    with app:
+        app.ai.ask('hi', agent='plain')
+    assert TokeoAi.FUNDI_LICENSE_NOTICE not in logged
 
 
 def test_the_agent_null_offers_no_tool():

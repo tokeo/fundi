@@ -272,6 +272,14 @@ class TokeoAi(MetaMixin):
             elif isinstance(value, dict):
                 self._tool_items[name] = value
 
+    def _license_notice(self):
+        # log the license notice once per process until ai.license_acknowledged
+        # is true: at every ai command and at the first ai call from code. the
+        # flag is shared without a lock, a second notice in a race is harmless
+        if self._show_license_notice:
+            self._show_license_notice = False
+            self.app.log.info(self.FUNDI_LICENSE_NOTICE)
+
     def _config(self, key, **kwargs):
         """
         Get a configuration value from the extension's config section.
@@ -829,13 +837,7 @@ class TokeoAi(MetaMixin):
             or when a budget aborts the execution
 
         """
-        # show license information
-        if self._show_license_notice:
-            # this is possibly a mutable field but without significant outcome
-            # show the message only once per session
-            self._show_license_notice = False
-            # log the notice
-            self.app.log.info(self.FUNDI_LICENSE_NOTICE)
+        self._license_notice()
         # proceed with chat
         name, profile = self._resolve(profile=profile, model=model, purpose=purpose)
         provider_type = provider_type_of(name, profile)
@@ -1395,6 +1397,7 @@ class AiController(Controller):
         # report every form and reference problem at once, each with its
         # ```ai.<section>.<name>``` path; exit non-zero on errors, and on
         # warnings too when --strict is given
+        self.app.ai._license_notice()
         issues = TokeoAiLinter(self.app).lint()
         for issue in issues:
             self.app.print(f'{issue.level}: {issue.path}: {issue.message}')
