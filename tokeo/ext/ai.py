@@ -97,7 +97,7 @@ from tokeo.core.ai import (
     TokeoAiFundiAgent,
     TokeoAiResult,
 )
-from tokeo.core.ai.agent import AGENT_NULL
+from tokeo.core.ai.agent import AGENT_NONE_IMPLICIT
 from tokeo.core.ai.governor import (
     GOVERNOR_STAGES,
     GOVERNOR_STAGE_ON_BEGIN,
@@ -215,6 +215,9 @@ class TokeoAi(MetaMixin):
         self._provider_objs = {}
         self._tool_objs = {}
         self._agent_objs = {}
+        # the implicit agent, built on first use; kept apart from the cache so
+        # no name a call or a command passes can reach it
+        self._agent_implicit = None
         self._governor_objs = {}
         self._sandbox_objs = {}
         # whether a run records its trace (read from config in _setup); the loop
@@ -494,13 +497,8 @@ class TokeoAi(MetaMixin):
         # build the agent configured under ```ai.agents[config_name]``` once and
         # reuse it; ```type``` (a built-in alias or a class path) resolves to
         # an agent class, built with the application and set up with its key
-        # and its raw declaration. the reserved name null is the implicit agent
-        # with an empty config: no tools, no sandboxes, no governors
+        # and its raw declaration
         obj = self._agent_objs.get(config_name)
-        if obj is None and config_name == AGENT_NULL:
-            obj = TokeoAiFundiAgent(self.app)
-            obj._setup(self.app, AGENT_NULL, {})
-            self._agent_objs[config_name] = obj
         if obj is None:
             item = self._agents.get(config_name)
             if not isinstance(item, dict) or not item.get('type'):
@@ -513,10 +511,16 @@ class TokeoAi(MetaMixin):
     def _agent_or_default(self, agent, profile=None):
         # resolve the agent to run via the shared resolver (config.profiles):
         # an explicit call argument wins, else the profile's stated ```agent```,
-        # else ```ai.defaults.agent```. there is always an agent: where none is
-        # named, the run gets the implicit agent null, which offers no tool
+        # else ```ai.defaults.agent```. there is always an agent: where none
+        # results, the run gets the implicit agent, a fundi agent with an empty
+        # config that offers no tool and runs on the ai-level budgets
         name = resolve_agent_name(agent, profile, self._defaults.get('agent'))
-        return self._agent(name if name is not None else AGENT_NULL)
+        if name is not None:
+            return self._agent(name)
+        if self._agent_implicit is None:
+            self._agent_implicit = TokeoAiFundiAgent(self.app)
+            self._agent_implicit._setup(self.app, AGENT_NONE_IMPLICIT, {})
+        return self._agent_implicit
 
     def _deny_set(self, agent_obj, profile, call_deny=None):
         # the resolved set of denied tools, shared by the spec-trimming and the

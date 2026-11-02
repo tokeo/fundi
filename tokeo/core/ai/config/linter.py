@@ -17,7 +17,6 @@ from dataclasses import dataclass
 
 from tokeo.core.utils.validate import as_list, is_int_ge
 from tokeo.core.ai import TokeoAiError
-from tokeo.core.ai.agent import AGENT_NULL
 from tokeo.core.ai.guard import TokeoAiGuard
 from tokeo.core.ai.transformer import TokeoAiTransformer
 from tokeo.core.ai.conductor import TokeoAiConductor
@@ -316,9 +315,13 @@ class TokeoAiLinter:
         # ```ai.tools```, the guards selection into ```ai.guards```, and the
         # budgets are numbers; other keys may be a custom agent's own Meta keys
         path = f'ai.{section}.{name}'
-        # null is the implicit agent; a yaml key null reads as None
-        if name is None or name == AGENT_NULL:
-            self._add(path, f'the name {AGENT_NULL!r} is reserved for the implicit agent, choose another name')
+        # a yaml key null reads as None, no name; a name with a leading __ is
+        # the framework's (the implicit agent), never a configured agent
+        if not isinstance(name, str):
+            self._add(path, 'an agent name must be a string')
+            return
+        if name.startswith('__'):
+            self._add(path, 'a name starting with __ is reserved for the framework, choose another name')
             return
         if not isinstance(item, dict):
             return

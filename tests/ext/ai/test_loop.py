@@ -224,7 +224,7 @@ def test_chat_redact_masks_the_call_in_history_and_trace():
         assert 'geheim' not in repr([s.object for s in result.trace])
 
 
-def test_chat_without_an_agent_runs_the_agent_null():
+def test_chat_without_an_agent_runs_the_implicit_agent():
     """Without an agent the model gets no tools and a call of echo is refused."""
     with LoopTest(config_defaults=loop_config([call('moin'), dict(text='done')])) as app:
         result = app.ai.chat([dict(role='user', content='hi')])

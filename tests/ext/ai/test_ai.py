@@ -293,14 +293,18 @@ def test_linter_flags_an_unknown_name_in_tool_policy():
         assert [i.path for i in issues if 'no_such' in i.message] == ['ai.guards.readonly.options.deny']
 
 
-@pytest.mark.parametrize('name', ['null', None], ids=['null', 'yaml_null'])
-def test_linter_flags_the_reserved_agent_name_null(name):
-    """An agent declared as null, also a yaml key null, is flagged as reserved."""
+@pytest.mark.parametrize(
+    'name, message',
+    [('__implicit', 'reserved for the framework'), ('__own', 'reserved for the framework'), (None, 'must be a string')],
+    ids=['implicit', 'dunder', 'yaml_null'],
+)
+def test_linter_flags_a_reserved_or_no_agent_name(name, message):
+    """An agent named __implicit or __own is reserved, a yaml key null no name."""
     cfg = ai_config()
     cfg['ai']['agents'][name] = dict(type='fundi', options=dict(governors=[]))
     with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
-        assert any(i.level == 'error' and 'reserved for the implicit agent' in i.message for i in issues)
+        assert any(i.level == 'error' and message in i.message for i in issues)
 
 
 def test_linter_flags_an_agent_without_governors():
@@ -388,13 +392,31 @@ def test_agent_refuses_a_tool_it_does_not_offer():
             run(app, 'env', 'echoer')
 
 
-def test_no_agent_named_runs_the_implicit_agent_null():
-    """No agent named gives the agent null: no tools, sandboxes or governors."""
+def test_no_agent_named_runs_the_implicit_agent():
+    """No agent named gives __implicit: no tools, sandboxes or governors."""
     with FundiTest(config_defaults=ai_config()) as app:
         agent = app.ai._agent_or_default(None)
-        assert agent.config_name == 'null'
+        assert agent.config_name == '__implicit'
         assert (agent._config('tools'), agent._config('sandboxes'), agent._config('governors')) == ([], [], [])
-        assert app.ai._agent('null') is agent
+        assert app.ai._agent_or_default(None) is agent
+
+
+@pytest.mark.parametrize('name', ['__implicit', 'null'])
+def test_the_implicit_agent_cannot_be_named(name):
+    """agent __implicit or null in a call is an unknown agent like any typo."""
+    with FundiTest(config_defaults=ai_config()) as app:
+        with pytest.raises(TokeoAiError, match='is not configured under ai.agents'):
+            app.ai._agent_or_default(name)
+
+
+def test_a_profile_agent_null_is_no_agent_a_missing_one_the_default():
+    """agent: null on a profile gives __implicit, without the key the default."""
+    cfg = ai_config()
+    cfg['ai']['defaults']['agent'] = 'plain'
+    with FundiTest(config_defaults=cfg) as app:
+        assert app.ai._agent_or_default(None, dict(type='mock', agent=None)).config_name == '__implicit'
+        assert app.ai._agent_or_default(None, dict(type='mock')).config_name == 'plain'
+        assert app.ai._agent_or_default('echoer', dict(type='mock', agent=None)).config_name == 'echoer'
 
 
 def single_value_config():
@@ -527,11 +549,12 @@ def test_the_first_ai_call_from_code_shows_the_license_notice_once():
     assert TokeoAi.FUNDI_LICENSE_NOTICE not in logged
 
 
-def test_the_agent_null_offers_no_tool():
-    """Under the agent null echo is refused, even though a sandbox would take it."""
+def test_the_implicit_agent_offers_no_tool():
+    """Under __implicit echo is refused, even though a sandbox would take it."""
     with FundiTest(config_defaults=ai_config()) as app:
+        agent = app.ai._agent_or_default(None)
         with pytest.raises(TokeoAiError, match="tool 'echo' is not offered by the agent"):
-            run(app, 'echo', 'null', text='x')
+            app.ai._exec_in_sandbox('echo', dict(text='x'), agent, None, None, None, None)
 
 
 # --------------------------------------------------------------------------------------

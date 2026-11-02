@@ -26,7 +26,7 @@ ai:
 
   defaults:             # what a command uses when it names nothing
     profile: mock
-    agent: null
+    agent: null         # no default agent
 
   tools:                # the toolset: items and named groups
   guards:               # the per-call pipeline: declarations and chains
@@ -374,11 +374,17 @@ provider of your own declares its own there. Any other key, at the top or under
 
 .. important::
 
-    A profile must state its ```agent```, even as ```agent: null```. A profile
-    binding ```null``` opts out of ```ai.defaults.agent``` on purpose and runs
-    with the implicit agent ```null```: no tools, no sandboxes, no governors.
-    There is always an agent; where none is named, the run gets ```null```. The
-    name ```null``` is reserved, no entry of ```ai.agents``` may take it.
+    The agent of a run resolves in this order: the call (```--agent``` or
+    ```agent=```), then the profile's ```agent```, then ```ai.defaults.agent```.
+    A profile without the key ```agent``` falls through to the default; a
+    profile with ```agent: null``` runs with no agent on purpose, also when a
+    default is set. A call that names an agent wins over both.
+
+    There is always an agent: where none results, the run gets the implicit
+    agent ```__implicit```: no tools, no sandboxes, no governors, the ai-level
+    budgets. It exists only for a quick ```ask``` or ```chat``` without any
+    agent; it shows in the trace, but no call, command or config can name it.
+    Names starting with ```__``` are reserved for the framework.
 
 ### 7.1 Carving out a subset with ```deny```
 

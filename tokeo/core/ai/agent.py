@@ -12,8 +12,9 @@ from tokeo.core.utils.dict import deep_merge
 from tokeo.core.ai.exc import TokeoAiError
 
 # the name of the implicit agent: no tools, no sandboxes, no governors. a run
-# that names no agent runs with it; the name is reserved, no config declares it
-AGENT_NULL = 'null'
+# that ends up with no agent runs with it. the name only shows in the trace: no
+# config declares it and no call or command can select it by its name
+AGENT_NONE_IMPLICIT = '__implicit'
 
 
 class TokeoAiAgent(MetaMixin):
