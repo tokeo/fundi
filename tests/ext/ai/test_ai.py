@@ -394,6 +394,38 @@ def test_no_agent_named_runs_the_implicit_agent_null():
         assert app.ai._agent('null') is agent
 
 
+def single_value_config():
+    """ai_config() with an agent that names every list option by one value."""
+    cfg = ai_config()
+    cfg['ai']['guards'] = {'audit': dict(type='trace_audit'), 'redact': dict(type='regex_redact', options=dict(patterns=['x']))}
+    options = dict(tools='echo', sandboxes='allow', governors='audit', omit='redact', deny='cwd')
+    cfg['ai']['agents']['single'] = dict(type='fundi', options=options)
+    return cfg
+
+
+def test_an_agent_takes_a_single_value_as_a_list_of_one():
+    """tools echo, sandboxes allow and governors audit as one value each run."""
+    with FundiTest(config_defaults=single_value_config()) as app:
+        agent = app.ai._agent('single')
+        assert run(app, 'echo', 'single', text='moin') == 'moin'
+        assert [entry.config_name for entry in app.ai._resolve_governors(agent)] == ['audit']
+
+
+def test_linter_takes_a_single_value_as_a_list_of_one():
+    """The single values of the agent and a stage {audit: on_call} lint clean."""
+    cfg = single_value_config()
+    cfg['ai']['agents']['staged'] = dict(type='fundi', options=dict(governors={'audit': 'on_call'}))
+    assert lint_errors(cfg) == {}
+
+
+@pytest.mark.parametrize('key, value', [('max_steps', -1), ('max_loops', 'many'), ('trace', 'yes')])
+def test_linter_checks_the_keys_at_ai_level(key, value):
+    """max_steps -1, max_loops 'many' and trace 'yes' at ai level are errors."""
+    cfg = ai_config()
+    cfg['ai'][key] = value
+    assert f'ai.{key}' in lint_errors(cfg)
+
+
 def test_the_agent_null_offers_no_tool():
     """Under the agent null echo is refused, even though a sandbox would take it."""
     with FundiTest(config_defaults=ai_config()) as app:

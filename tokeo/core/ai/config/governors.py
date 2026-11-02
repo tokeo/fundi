@@ -33,6 +33,7 @@ appearances, with nearest-wins (chain brought in vs. agent direct) deciding a
 contradicting stage list.
 """
 
+from tokeo.core.utils.validate import as_list
 from tokeo.core.ai.exc import TokeoAiError
 from tokeo.core.ai.governor import GOVERNOR_STAGE_ANY
 
@@ -72,8 +73,9 @@ def parse_entry(entry):
 
     A string is a bare entry (additive, all stages -> stage list None). A
     single-key mapping ```{name: [stages]}``` is a replacing entry; its value
-    must be a non-empty list of stage names (or ```[_any]```). Anything else is
-    a malformed entry and raises (an empty / null / ```[]``` value is an error).
+    must be a non-empty list of stage names (or ```[_any]```), a single stage
+    name is a list of one. Anything else is a malformed entry and raises (an
+    empty / null / ```[]``` value is an error).
 
     ### Args
 
@@ -99,7 +101,9 @@ def parse_entry(entry):
         # easily a mistake to read as intent
         if stages is None or stages == []:
             raise TokeoAiError(f'guard {config_name!r} has an empty stage list; name its stages or use the bare form')
-        if not isinstance(stages, list) or not all(isinstance(stage, str) for stage in stages):
+        # a single stage is a list of one
+        stages = as_list(stages)
+        if not all(isinstance(stage, str) for stage in stages):
             raise TokeoAiError(f'guard {config_name!r} stage list must be a list of stage names, got {stages!r}')
         return config_name, stages
     raise TokeoAiError(f'a guard composition entry must be a name or a one-key mapping, got {entry!r}')

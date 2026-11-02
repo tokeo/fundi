@@ -14,7 +14,7 @@ unresolved ```type```) fails fast at startup, and is also exposed as the
 import difflib
 from dataclasses import dataclass
 
-from tokeo.core.utils.validate import as_list, is_int_ge, is_list
+from tokeo.core.utils.validate import as_list, is_int_ge
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.agent import AGENT_NULL
 from tokeo.core.ai.guard import TokeoAiGuard
@@ -161,6 +161,10 @@ class TokeoAiLinter:
         defaults = self._value('defaults')
         agents = self._value('agents') or {}
         self._lint_keys('ai', self._section_keys(), _AI_KEYS)
+        self._lint_budgets('ai', {key: self._value(key) for key in ('max_steps', 'max_loops')})
+        trace = self._value('trace')
+        if trace is not None and not isinstance(trace, bool):
+            self._add('ai.trace', 'must be true or false')
         # the notice at every start stays until the license is acknowledged
         if 'license_acknowledged' not in self._section_keys():
             self._add('ai.license_acknowledged', 'is missing, set it to true once you have read LICENSE.md of tokeo-fundi', 'warning')
@@ -321,36 +325,27 @@ class TokeoAiLinter:
         if not isinstance(item, dict):
             return
         options = item.get('options')
+        path = f'{path}.options'
         # every agent names its governors, an empty list is a deliberate choice
         if not isinstance(options, dict) or 'governors' not in options:
-            self._add(f'{path}.options.governors', 'must list governors (an empty list is allowed)')
+            self._add(f'{path}.governors', 'must list governors (an empty list is allowed)')
         elif options.get('governors') == []:
-            self._add(f'{path}.options.governors', 'is empty, the agent runs without governors', level='note')
+            self._add(f'{path}.governors', 'is empty, the agent runs without governors', level='note')
         if not isinstance(options, dict):
             return
+        # every list option takes a single entry as a list of one
         tool_names = set(self._value('tools') or {})
-        self._lint_selection(path, options.get('tools'), tool_names)
+        self._lint_names(f'{path}.tools', options.get('tools'), tool_names, 'tool or group')
         # the guards composition: each entry is a bare name or a one-key
         # {name: [stages]} mapping; chains (a list value under ai.guards) may be
         # referenced too. omit is a sibling field, not a list entry
         self._lint_guard_composition(f'{path}.governors', options.get('governors'))
         self._lint_guard_omit(f'{path}.omit', options.get('omit'))
-        for key in ('max_steps', 'max_loops'):
-            value = options.get(key)
-            if value is not None and not is_int_ge(value, 0):
-                self._add(f'{path}.{key}', 'must be a whole number of 0 or more (0 = unlimited)')
+        self._lint_budgets(path, options)
         # the sandbox chain references ```ai.sandboxes``` by name, in order; an
         # empty or absent chain means no sandbox lists a tool -> denied
-        sandboxes = options.get('sandboxes')
-        if sandboxes is not None:
-            if not is_list(sandboxes):
-                self._add(f'{path}.sandboxes', 'must be a list of sandbox names')
-            else:
-                known = set(self._value('sandboxes') or {})
-                for entry in sandboxes:
-                    if entry not in known:
-                        self._add(f'{path}.sandboxes', _unknown('sandbox', entry, known))
-        # deny is a hard exclusion: a single tool/group name or a list of them
+        self._lint_names(f'{path}.sandboxes', options.get('sandboxes'), set(self._value('sandboxes') or {}), 'sandbox')
+        # deny is a hard exclusion of tool/group names
         self._lint_names(f'{path}.deny', options.get('deny'), tool_names, 'tool or group')
         # union/conflict: run the one resolver so the linter reports exactly
         # what a run would do. a not-decidable conflict raises (caught as an
@@ -358,15 +353,18 @@ class TokeoAiLinter:
         # logs a note via this adapter
         self._lint_guard_resolution(path, options)
 
+    def _lint_budgets(self, path, values):
+        # max_steps and max_loops, at ai level or on an agent: 0 = unlimited
+        for key in ('max_steps', 'max_loops'):
+            value = values.get(key)
+            if value is not None and not is_int_ge(value, 0):
+                self._add(f'{path}.{key}', 'must be a whole number of 0 or more (0 = unlimited)')
+
     def _lint_guard_resolution(self, path, options):
         # drive the resolver with a note-collecting logger, so the override
         # notes (agent wins over chain) become note issues and a not-decidable
         # conflict becomes an error issue. a resolution that cannot even build
         # (an unknown name, already reported by the form check) is skipped here
-        governors = options.get('governors')
-        if not is_list(governors):
-            return
-
         notes = self
 
         class _NoteLogger:
@@ -377,8 +375,8 @@ class TokeoAiLinter:
         try:
             resolve_governors(
                 self._governors_merged(),
-                governors,
-                options.get('omit') or [],
+                as_list(options.get('governors')),
+                as_list(options.get('omit')),
                 self._guard_class_stages_or_empty,
                 logger=_NoteLogger(),
             )
@@ -417,14 +415,9 @@ class TokeoAiLinter:
         # ai.guards) is walked too. a named stage must be one the guard's class
         # can do; an unknown alias (not a class path, not declared) is an
         # error; an empty/null/[] stage list is an error
-        if guards is None:
-            return
-        if not is_list(guards):
-            self._add(path, 'must be a list of guard names')
-            return
         known = set(self._governors_merged())
         chain_path = chain_path or []
-        for entry in guards:
+        for entry in as_list(guards):
             try:
                 config_name, stages = parse_entry(entry)
             except TokeoAiError as err:
@@ -458,13 +451,8 @@ class TokeoAiLinter:
         # omit is a list of governor config names to drop from the composition;
         # it is a sibling field, not a list entry, so it never collides with a
         # guard or chain name. each name should be a known guard or chain
-        if omit is None:
-            return
-        if not is_list(omit):
-            self._add(path, 'must be a list of guard names')
-            return
         known = set(self._governors_merged())
-        for entry in omit:
+        for entry in as_list(omit):
             if not isinstance(entry, str):
                 self._add(path, f'omit entry must be a guard name, got {entry!r}')
             elif '.' not in entry and entry not in known:
@@ -657,18 +645,6 @@ class TokeoAiLinter:
             if agent is not None and agent not in agent_names:
                 self._add(f'{path}.agent', _unknown('agent', agent, agent_names))
             self._lint_names(f'{path}.deny', profile.get('deny'), tool_names, 'tool or group')
-
-    def _lint_selection(self, path, selection, tool_names):
-        # a profile's ```tools``` is a selection list of item or group names from
-        # ```ai.tools```, never a section of its own
-        if selection is None:
-            return
-        if not is_list(selection):
-            self._add(f'{path}.tools', 'must be a list of tool or group names')
-            return
-        for entry in selection:
-            if entry not in tool_names:
-                self._add(f'{path}.tools', _unknown('tool or group', entry, tool_names))
 
     def _lint_defaults(self, defaults, profiles, agents):
         # the ```defaults``` block names the profile (model) and the agent

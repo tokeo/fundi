@@ -520,7 +520,7 @@ class TokeoAi(MetaMixin):
         # call can only narrow the set, never extend it; there is no way to
         # add a tool the agent does not carry. tools resolve to concrete names
         # first (so a denied group removes all its members), order is kept
-        active = self._resolve_tools(agent_obj._config('tools'))
+        active = self._resolve_tools(as_list(agent_obj._config('tools')))
         denied = self._deny_set(agent_obj, profile, call_deny)
         return [name for name in active if name not in denied]
 
@@ -561,8 +561,8 @@ class TokeoAi(MetaMixin):
         # omit. returns GovernorConfigEntry list in first-appearance order
         return resolve_governors(
             self._governors,
-            agent_obj._config('governors') or [],
-            agent_obj._config('omit') or [],
+            as_list(agent_obj._config('governors')),
+            as_list(agent_obj._config('omit')),
             self._stages_of,
         )
 
@@ -610,7 +610,7 @@ class TokeoAi(MetaMixin):
         # tool. None means the chain is exhausted, which the caller turns into a
         # deny (deny-by-default). where a sandbox name points is the config's
         # choice, e.g. per environment file, never a switch in the process
-        name = sandbox_for(tool_name, agent_obj._config('sandboxes'), self._sandboxes.get, self._resolve_tools)
+        name = sandbox_for(tool_name, as_list(agent_obj._config('sandboxes')), self._sandboxes.get, self._resolve_tools)
         return self._sandbox(name) if name is not None else None
 
     def _denies(self, tool_name, agent_obj, profile, call_deny=None):

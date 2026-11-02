@@ -162,6 +162,11 @@ def test_parse_bare_and_mapping_forms():
         parse_entry(42)  # not a name or mapping
 
 
+def test_parse_a_single_stage_as_a_list_of_one():
+    """{alpha: on_call} parses like {alpha: [on_call]}."""
+    assert parse_entry({'alpha': 'on_call'}) == ('alpha', ['on_call'])
+
+
 # ---- tools: group expansion and cycle finding (config.tools) ----
 
 
