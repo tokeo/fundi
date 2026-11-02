@@ -131,6 +131,7 @@ from tokeo.core.ai.guards.confirm import (
 )
 from tokeo.core.ai.guards.confirm.terminal import terminal_channel
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
+from tokeo.core.ai.sandboxes.docker import TokeoAiDockerSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
 from tokeo.core.ai.providers.mock import TokeoAiMockProvider
@@ -1518,6 +1519,8 @@ def ai_extend_app(app):
     # tools) and subprocess (fault/resource isolation via the worker)
     app.ai.register('sandbox', 'in_process', TokeoAiInProcessSandbox)
     app.ai.register('sandbox', 'subprocess', TokeoAiSubprocessSandbox)
+    # docker: a hardened, throwaway container of the configured image
+    app.ai.register('sandbox', 'docker', TokeoAiDockerSandbox)
     # built-in guard: the ready-to-use trace audit, logging every step at every
     # stage so the whole chain is visible. the audit *type* (TokeoAiAuditGuard)
     # is not registered; it is a base to derive from in python, not selected

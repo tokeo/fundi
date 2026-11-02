@@ -21,10 +21,12 @@ sandbox class and are not re-exported.
 
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
+from tokeo.core.ai.sandboxes.docker import TokeoAiDockerSandbox
 from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox
 
 __all__ = [
     'TokeoAiInProcessSandbox',
     'TokeoAiSubprocessSandbox',
+    'TokeoAiDockerSandbox',
     'TokeoAiWasmSandbox',
 ]
