@@ -210,9 +210,9 @@ def _resolve_passthrough(names):
     return list(names or [])
 
 
-def test_sandbox_all_keyword_contains_every_tool():
-    """A sandbox with tools: _all contains any tool name."""
-    assert sandbox_contains_tool({'tools': '_all'}, 'anything', _resolve_passthrough)
+def test_sandbox_has_no_all_keyword():
+    """tools: _all is just a name, so a sandbox with it contains no 'anything'."""
+    assert not sandbox_contains_tool({'tools': '_all'}, 'anything', _resolve_passthrough)
 
 
 def test_sandbox_listed_tool_is_contained():
@@ -222,8 +222,8 @@ def test_sandbox_listed_tool_is_contained():
 
 
 def test_sandbox_except_excludes_from_this_sandbox():
-    """except: [calc] takes calc out of an _all sandbox, other stays in."""
-    item = {'tools': '_all', 'except': ['calc']}
+    """except: [calc] takes calc out of a [calc, other] sandbox, other stays in."""
+    item = {'tools': ['calc', 'other'], 'except': ['calc']}
     assert not sandbox_contains_tool(item, 'calc', _resolve_passthrough)
     assert sandbox_contains_tool(item, 'other', _resolve_passthrough)
 
@@ -232,12 +232,12 @@ def test_sandbox_scalar_tools_and_except_are_one_name():
     """A scalar 'calc' in tools or except is one name, not iterated chars."""
     # as_list does that
     assert sandbox_contains_tool({'tools': 'calc'}, 'calc', _resolve_passthrough)
-    assert not sandbox_contains_tool({'tools': '_all', 'except': 'calc'}, 'calc', _resolve_passthrough)
+    assert not sandbox_contains_tool({'tools': ['calc'], 'except': 'calc'}, 'calc', _resolve_passthrough)
 
 
 def test_sandbox_for_takes_first_matching_in_chain():
     """The first containing sandbox wins: calc in jailed, other in allow."""
-    items = {'jailed': {'tools': ['calc']}, 'allow': {'tools': '_all'}}
+    items = {'jailed': {'tools': ['calc']}, 'allow': {'tools': ['calc', 'other']}}
     # calc is in jailed (first); other falls through to allow
     assert sandbox_for('calc', ['jailed', 'allow'], items.get, _resolve_passthrough) == 'jailed'
     assert sandbox_for('other', ['jailed', 'allow'], items.get, _resolve_passthrough) == 'allow'

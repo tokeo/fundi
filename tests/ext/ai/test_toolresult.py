@@ -46,7 +46,7 @@ def ai_config():
             'void': dict(type=NOTHING),
         },
         sandboxes={
-            'allow': dict(type='in_process', tools='_all'),
+            'allow': dict(type='in_process', tools=['boom', 'data', 'void']),
             'jailed': dict(type='subprocess', tools=['boom', 'data', 'void'], options=dict(timeout=5)),
         },
         agents={

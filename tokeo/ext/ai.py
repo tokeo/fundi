@@ -578,8 +578,8 @@ class TokeoAi(MetaMixin):
 
     def _sandbox_tools_contain(self, name, tool_name):
         # do the tools of sandbox ```name``` contain ```tool_name```? delegates
-        # to the shared resolver (config.sandboxes), which knows ```_all``` and
-        # ```except```; tool/group names are expanded through _resolve_tools
+        # to the shared resolver (config.sandboxes), which knows ```except```;
+        # tool/group names are expanded through _resolve_tools
         return sandbox_contains_tool(self._sandboxes.get(name), tool_name, self._resolve_tools)
 
     def _sandbox_for(self, tool_name, agent_obj):
@@ -1398,8 +1398,8 @@ def ai_extend_app(app):
     # master that wields the tools); a project configures its agents under
     # ```ai.agents``` and selects one per call, via a profile, or defaults.agent
     app.ai.register('agent', 'fundi', TokeoAiFundiAgent)
-    # built-in sandboxes: in_process (zero isolation, the catch-all with
-    # ```tools: _all```) and subprocess (fault/resource isolation via the worker)
+    # built-in sandboxes: in_process (zero isolation, for trusted and quick
+    # tools) and subprocess (fault/resource isolation via the worker)
     app.ai.register('sandbox', 'in_process', TokeoAiInProcessSandbox)
     app.ai.register('sandbox', 'subprocess', TokeoAiSubprocessSandbox)
     # built-in guard: the ready-to-use trace audit, logging every step at every

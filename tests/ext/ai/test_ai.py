@@ -72,7 +72,7 @@ def ai_config():
             'bundle': ['echo', 'cwd'],
         },
         sandboxes={
-            'allow': dict(type='in_process', tools='_all'),
+            'allow': dict(type='in_process', tools=list(TOOLS)),
             'jailed': dict(
                 type='subprocess',
                 tools=['echo', 'cwd', 'env', 'sleep'],
@@ -180,7 +180,7 @@ def test_subprocess_timeout_is_enforced():
 
 
 # --------------------------------------------------------------------------------------
-# selection: chain order, except, _all, hard deny, deny-by-default
+# selection: chain order, except, hard deny, deny-by-default
 # --------------------------------------------------------------------------------------
 
 
@@ -204,12 +204,21 @@ def test_except_skips_a_sandbox_and_chain_walks_on():
         assert isinstance(app.ai._sandbox_for('cwd', agent), TokeoAiInProcessSandbox)
 
 
-def test_all_keyword_contains_every_tool():
-    """A sandbox with tools: _all takes any tool, e.g. sleep under plain."""
-    with FundiTest(config_defaults=ai_config()) as app:
-        agent = app.ai._agent('plain')
-        # the allow sandbox has tools: _all, so any tool resolves to it
-        assert isinstance(app.ai._sandbox_for('sleep', agent), TokeoAiInProcessSandbox)
+def test_sandbox_runs_only_the_tools_it_names():
+    """A tool allow does not name finds no sandbox under plain, even if offered."""
+    cfg = ai_config()
+    cfg['ai']['sandboxes']['allow']['tools'].remove('sleep')
+    with FundiTest(config_defaults=cfg) as app:
+        assert app.ai._sandbox_for('sleep', app.ai._agent('plain')) is None
+
+
+def test_linter_flags_the_all_catch_all():
+    """tools: _all on a sandbox is flagged, there is no catch-all."""
+    cfg = ai_config()
+    cfg['ai']['sandboxes']['allow']['tools'] = '_all'
+    with FundiTest(config_defaults=cfg) as app:
+        issues = TokeoAiLinter(app).lint()
+        assert any(i.path == 'ai.sandboxes.allow.tools' and 'no catch-all' in i.message for i in issues)
 
 
 def test_hard_deny_forbids_before_lookup():

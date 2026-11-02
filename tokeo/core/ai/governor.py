@@ -49,7 +49,7 @@ GOVERNOR_STAGE_ON_CLOSE = 'on_close'
 # the value standing for "all the class's stages": the base view key in the
 # per-stage config (the default that every stage falls back to) and, in a
 # composition stage list, "run at all the class's stages". a value, never a
-# name; single underscore like the sandbox ```_all``` keyword
+# name
 GOVERNOR_STAGE_ANY = '_any'
 
 # the stages in chain order; the handler reflects over these to learn which

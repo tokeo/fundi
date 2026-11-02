@@ -255,9 +255,10 @@ sandboxes:
       - mathematics             # tool/group names this sandbox claims
     except:
       - calc                    # ... but not these (chain walks on for them)
-  allow:
+  local:
     type: in_process
-    tools: _all                 # the catch-all: every tool that reaches it
+    tools:
+      - calendar                # trusted, quick tools that may run in process
 ```
 
 ```yaml
@@ -266,16 +267,15 @@ agents:
     options:
       sandboxes:
         - jailed                # tried first
-        - allow                 # the catch-all, placed last
+        - local                 # then this one
 ```
 
 .. important::
 
-    ```_all``` is the reserved keyword for "every tool that reaches me". When no
-    sandbox in the chain claims a tool, the call is denied, so an ```in_process```
-    sandbox with ```tools: _all``` placed last is the opt-in catch-all. Note the
-    spelling: sandbox tools use ```_all```, a guard's stage list uses
-    ```_any```: both a single underscore, both reserved *values*.
+    There is no catch-all. A sandbox runs only the tools and groups its
+    ```tools``` names, a single name counts as a list of one. When no sandbox
+    in the chain names a tool, the call is denied, so a new tool runs nowhere
+    until a sandbox names it.
 
 ## 6. The compositions in ```agents```
 

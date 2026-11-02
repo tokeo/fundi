@@ -432,7 +432,7 @@ class TokeoAiLinter:
 
     def _validate_sandbox(self, section, name, item):
         # a sandbox item: a resolvable ```type```, the required ```tools```
-        # selection (the keyword ```_all``` or tool/group names), an
+        # selection (tool/group names), an
         # optional ```except``` skip set (single or list), and the class's own
         # ```options```. the option keys are validated by the class itself
         # through ```validate_options```; the linter does not know them
@@ -443,12 +443,14 @@ class TokeoAiLinter:
         self._lint_keys(path, item, _SANDBOX_KEYS)
         self._lint_type('sandbox', path, item)
         tool_names = set(self._value('tools') or {})
-        # tools is required: either the reserved keyword _all (every
-        # tool that reaches it) or a list of tool/group names from ai.tools
+        # tools is required: the tool/group names from ai.tools; there is no
+        # catch-all, a new tool runs nowhere until a sandbox names it
         listed = item.get('tools')
         if listed is None:
-            self._add(f'{path}.tools', 'is required (a list of tool/group names, or _all)')
-        elif listed != '_all':
+            self._add(f'{path}.tools', 'is required (a list of tool/group names)')
+        elif '_all' in as_list(listed):
+            self._add(f'{path}.tools', "has no catch-all '_all', name the tools and groups it runs")
+        else:
             self._lint_names(f'{path}.tools', listed, tool_names, 'tool or group')
         # except excludes members from THIS sandbox only (single or list)
         self._lint_names(f'{path}.except', item.get('except'), tool_names, 'tool or group')

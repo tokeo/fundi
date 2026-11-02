@@ -61,10 +61,10 @@ class TokeoAiAgent(MetaMixin):
         # governor composition (guard/transformer/conductor names) for the loop
         # pipeline, in order. sandboxes: the
         # ordered sandbox chain (sandbox names); a tool runs in the first
-        # sandbox whose tools contain it; when none does the call is denied, so
-        # an in_process sandbox with tools: _all placed last is the opt-in
-        # catch-all. deny: tools (item or group names) forbidden outright before
-        # any sandbox lookup, a hard exclusion unlike a sandbox except.
+        # sandbox whose tools contain it; when none does the call is denied,
+        # there is no catch-all. deny: tools (item or group names) forbidden
+        # outright before any sandbox lookup, a hard exclusion unlike a
+        # sandbox except.
         # omit: governor config names to drop from this agent's composition (a
         # local leaving-out, e.g. one a chain brought in), next to governors so
         # it never collides with a governor or chain name.

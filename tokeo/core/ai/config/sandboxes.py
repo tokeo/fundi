@@ -2,11 +2,11 @@
 Resolve which sandbox of an agent's chain contains a tool.
 
 A sandbox chain is an agent's ordered ```sandboxes``` list; a tool runs in the
-first sandbox whose ```tools``` contain it. A sandbox's ```tools``` is the
-keyword ```_all``` (every tool that reaches it) or a list of tool/group names;
-its ```except``` excludes members from *this* sandbox only; not a ban, the
-chain walks on for them. An exhausted chain means no sandbox lists the tool,
-which is the deny-by-default.
+first sandbox whose ```tools``` contain it. A sandbox's ```tools``` names its
+tools and groups, a new tool runs nowhere until a sandbox names it; its
+```except``` excludes members from *this* sandbox only; not a ban, the chain
+walks on for them. An exhausted chain means no sandbox lists the tool, which is
+the deny-by-default.
 
 It holds no app state and does no class loading; it works on the raw sandbox
 items plus a ```resolve``` callback (the tool-group expansion) and an
@@ -18,17 +18,13 @@ sandbox runs it".
 from tokeo.core.utils.validate import as_list
 
 
-# the keyword on a sandbox's ```tools``` meaning "every tool that reaches it"
-SANDBOX_TOOLS_ALL = '_all'
-
-
 def sandbox_contains_tool(item, tool_name, resolve):
     """
     Does sandbox ```item```'s tools contain ```tool_name```?
 
-    ```tools``` is ```_all``` (matches every tool) or a list of tool/group names
-    (expanded through ```resolve```). ```except``` excludes members from this
-    sandbox only.
+    ```tools``` is a list of tool/group names, a single name counts as a list
+    of one (expanded through ```resolve```). ```except``` excludes members from
+    this sandbox only.
 
     ### Args
 
@@ -45,13 +41,8 @@ def sandbox_contains_tool(item, tool_name, resolve):
 
     """
     item = item or {}
-    listed = item.get('tools')
-    if listed == SANDBOX_TOOLS_ALL:
-        in_set = True
-    else:
-        # as_list so a single name (a scalar) is one name, not iterated chars
-        in_set = tool_name in resolve(as_list(listed))
-    if not in_set:
+    # as_list so a single name (a scalar) is one name, not iterated chars
+    if tool_name not in resolve(as_list(item.get('tools'))):
         return False
     excepted = resolve(as_list(item.get('except')))
     return tool_name not in excepted

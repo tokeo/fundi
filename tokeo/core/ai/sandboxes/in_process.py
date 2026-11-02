@@ -2,9 +2,9 @@
 The in-process sandbox: zero isolation, the lean default.
 
 It runs a tool call directly in the application process, the same place the
-loop ran tools before the sandbox seam existed. With ```tools: _all``` placed
-last in an agent's sandbox chain it is the opt-in catch-all that lets the
-remaining tools run in process; its absence from a chain is the deny-by-default.
+loop ran tools before the sandbox seam existed. It isolates nothing, so it
+names only trusted, quick tools in its ```tools```; a tool no sandbox of the
+chain names is denied.
 """
 
 import io
