@@ -18,9 +18,7 @@ does not declare in its ```config_defaults```, is an error.
 
 ```yaml
 ai:
-  license_acknowledged: true  # required, any value; read LICENSE.md first; until
-                              # true, every ai command and the first ai call from
-                              # code log a notice
+  license_acknowledged: true  # read LICENSE.md first and set true to prevent notice
   max_steps: 8          # base loop budget (tool rounds), 0 = unlimited
   max_loops: 3          # consecutive empty rounds before abort, 0 = unlimited
   trace: true           # record the step history (the trace)
