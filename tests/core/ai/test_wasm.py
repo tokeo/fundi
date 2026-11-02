@@ -6,6 +6,7 @@ and the in-process exec paths, driven directly without an app. Runs through the
 agent chain live in ```tests/ext/ai/test_wasm.py```.
 """
 
+import sys
 import pytest
 
 from tokeo.core.ai import TokeoAiError
@@ -102,6 +103,15 @@ def test_wasm_needs_a_runtime():
     tool = TokeoAiPythonUntrustedExecTool(None)
     with pytest.raises(TokeoAiError, match='runtime'):
         sandbox.exec(tool, dict(code='1'))
+
+
+def test_wasm_without_wasmtime_names_the_extra(monkeypatch):
+    """Without wasmtime exec raises naming pip install 'tokeo-fundi[wasm]'."""
+    monkeypatch.setitem(sys.modules, 'wasmtime', None)
+    sandbox = TokeoAiWasmSandbox(None)
+    sandbox._setup(None)
+    with pytest.raises(TokeoAiError, match=r"pip install 'tokeo-fundi\[wasm\]'"):
+        sandbox.exec(TokeoAiPythonUntrustedExecTool(None), dict(code='1'))
 
 
 def test_untrusted_exec_runs_in_process():

@@ -103,12 +103,13 @@ root, matching the default option paths (```./wasm/python.wasm``` and
 ### 1. Install the runtime
 
 ```
-pip install 'wasmtime>=48'
+pip install 'tokeo-fundi[wasm]'
 ```
 
-```wasmtime``` is the WebAssembly runtime the sandbox drives. fundi does not
-install it, so projects that never use wasm stay lean. Version 48 or later is
-needed, older versions mount directories by another api.
+The extra ```wasm``` installs ```wasmtime```, the WebAssembly runtime the
+sandbox drives. fundi does not install it by default, so projects that never use
+wasm stay lean. Version 48 or later is needed, older versions mount directories
+by another api.
 
 ### 2. Download and unpack a build into ./wasm
 

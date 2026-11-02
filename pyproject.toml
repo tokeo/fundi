@@ -23,6 +23,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# the wasm sandbox: pip install 'tokeo-fundi[wasm]'
+wasm = [
+    "wasmtime>=48.0.0",
+]
 dev = [
     "pip-tools>=7.0.0",
     "build>=1.0.0",

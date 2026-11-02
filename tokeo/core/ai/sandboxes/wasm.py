@@ -280,12 +280,12 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         - **TokeoAiError**: On a missing runtime, a timeout, or a guest error
 
         """
-        # WHY lazy import: wasmtime is an opt-in extra (tokeo[wasm]); only this
-        # sandbox needs it, so import on use and name the install on absence
+        # WHY lazy import: wasmtime is an opt-in extra (tokeo-fundi[wasm]); only
+        # this sandbox needs it, so import on use and name the install on absence
         try:
             import wasmtime
         except ImportError:
-            raise TokeoAiError('the wasm sandbox needs the wasmtime package; use feature_ai_wasm')
+            raise TokeoAiError("the wasm sandbox needs the wasmtime package: pip install 'tokeo-fundi[wasm]'")
         runtime = self._runtime
         stdlib = self._stdlib
         if not runtime or not stdlib:
