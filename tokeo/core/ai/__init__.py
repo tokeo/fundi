@@ -68,7 +68,7 @@ the provider parameters, and using the loop from your own code) is in the
 # the ai error lives in a leaf module (exc.py) so every ai submodule can import
 # it top-level without cycling through this facade; re-exported here so the
 # short path ```from tokeo.core.ai import TokeoAiError``` keeps working
-from tokeo.core.ai.exc import TokeoAiError
+from tokeo.core.ai.exc import TokeoAiError, TokeoAiRunDeclined
 
 # the package facade: the public names live in focused modules (data shapes,
 # one base class per concern); import them from here as before
@@ -100,6 +100,7 @@ from tokeo.core.ai.sandbox import TokeoAiSandbox
 
 __all__ = [
     'TokeoAiError',
+    'TokeoAiRunDeclined',
     'Usage',
     'ToolCall',
     'ToolResult',

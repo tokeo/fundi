@@ -96,6 +96,9 @@ from tokeo.core.ai import (
     TokeoAiContext,
     TokeoAiFundiAgent,
     TokeoAiResult,
+    TokeoAiRunDeclined,
+    TokeoAiTraceNote,
+    ChatResult,
 )
 from tokeo.core.ai.agent import AGENT_NONE_IMPLICIT
 from tokeo.core.ai.governor import (
@@ -875,95 +878,103 @@ class TokeoAi(MetaMixin):
         # conversation history. the current result is a local, handed to the
         # stages and tracked, not a context field
         ctx = TokeoAiContext(messages=messages, turndata_preset=turndata_preset, userdata=userdata, trace=self._trace_enabled)
-        # on_begin: once, on the raw incoming request, before any model call.
-        # begin/prompt act on the accumulated conversation (no single handed-in
-        # work object), so they refine the messages: a guard may mutate
-        # ctx.messages in place (returning None) or hand back a fresh
-        # conversation, and refine_messages records the step either way
-        for governor in at_begin:
-            ctx.refine_messages(governor, governor.on_begin(ctx), stage=GOVERNOR_STAGE_ON_BEGIN)
-        # on_prompt: before each model call, on the outgoing messages
-        for governor in at_prompt:
-            ctx.refine_messages(governor, governor.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
-        result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
-        # on_answer: after each model call, on the model answer; the result is
-        # the handed-in work object, so the step is recorded through supersede
-        for governor in at_answer:
-            result = ctx.supersede(governor, governor.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
-        while result.tool_calls:
-            # max_steps caps the tool rounds of one request; 0 is unlimited.
-            # reaching it aborts loudly: a silent empty answer hides the cause
-            if max_steps and ctx.loopdata.steps >= max_steps:
-                raise TokeoAiError(f'ai max_steps ({max_steps}) reached, execution aborted')
-            ctx.track(self, ChatMessage(self._assistant_turn(result)))
-            succeeded = False
-            for call in result.tool_calls:
-                if call.arguments is not None and not isinstance(call.arguments, dict):
-                    # arguments that are no json object are refused before any
-                    # guard: no guessing, the model gets the reason and the
-                    # trace keeps the raw value on the answer it came with
-                    content = f'error: arguments must be a JSON object, got {type(call.arguments).__name__}'
-                    ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
-                    continue
-                if tool_governed:
-                    # the invocation is tracked inside _exec_governed at creation
-                    # and handed back, so the outcome is read off the object
-                    invocation, content = self._exec_governed(call, at_call, at_return, ctx, agent_obj, profile, deny)
-                    ok = (
-                        invocation.decision != Invocation.DENY
-                        and invocation.error is None
-                        and (invocation.result is None or invocation.result.state.exception is None)
-                    )
-                else:
-                    # the lean path is as resilient as the guard pipeline: an
-                    # unknown or failing tool (or a deny/exhausted sandbox
-                    # chain) becomes feedback the model may correct itself on,
-                    # instead of an exception killing the whole loop
-                    try:
-                        tool_result = self._exec_in_sandbox(
-                            call.name,
-                            call.arguments or {},
-                            agent_obj,
-                            profile,
-                            deny,
-                            None,
-                            ctx,
-                        )
-                        # the sandbox always returns a ToolResult; a tool that
-                        # raised is carried in its state, not thrown here
-                        if tool_result.state.exception is not None:
-                            content = f'error: {tool_result.state.exception}'
-                            ok = False
-                        else:
-                            content = tool_result.value.as_str if tool_result.value else ''
-                            ok = True
-                    except Exception as err:
-                        content = f'error: {type(err).__name__}: {err}'
-                        ok = False
-                succeeded = succeeded or ok
-                ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
-            ctx.loopdata.steps += 1
-            # max_loops caps the consecutive rounds without one successful
-            # call (every call denied or failing); 0 is unlimited. this stops
-            # a model stuck repeating broken calls, while any successful call
-            # resets the counter and lets honest work continue
-            ctx.loopdata.failed_loops = 0 if succeeded else ctx.loopdata.failed_loops + 1
-            if max_loops and ctx.loopdata.failed_loops >= max_loops:
-                raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
-            # on_prompt again before the follow-up model call
+        # a governor may decline the run at a stage without a tool call: the
+        # run ends in order with that status, the answer so far is kept
+        result = ChatResult()
+        try:
+            # on_begin: once, on the raw incoming request, before any model call.
+            # begin/prompt act on the accumulated conversation (no single handed-in
+            # work object), so they refine the messages: a guard may mutate
+            # ctx.messages in place (returning None) or hand back a fresh
+            # conversation, and refine_messages records the step either way
+            for governor in at_begin:
+                ctx.refine_messages(governor, governor.on_begin(ctx), stage=GOVERNOR_STAGE_ON_BEGIN)
+            # on_prompt: before each model call, on the outgoing messages
             for governor in at_prompt:
                 ctx.refine_messages(governor, governor.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
             result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
-            # on_answer again after the follow-up model call
+            # on_answer: after each model call, on the model answer; the result is
+            # the handed-in work object, so the step is recorded through supersede
             for governor in at_answer:
                 result = ctx.supersede(governor, governor.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
-        # on_close: once, on the final result, after the loop
-        for governor in at_close:
-            result = ctx.supersede(governor, governor.on_close(ctx, result), result, stage=GOVERNOR_STAGE_ON_CLOSE)
-        # the run result: the final answer (a ChatResult), plus the run's
-        # history and counters lifted off the context (which ends here). the
-        # answer is just the model answer; the trace and status ride alongside
-        return TokeoAiResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace)
+            while result.tool_calls:
+                # max_steps caps the tool rounds of one request; 0 is unlimited.
+                # reaching it aborts loudly: a silent empty answer hides the cause
+                if max_steps and ctx.loopdata.steps >= max_steps:
+                    raise TokeoAiError(f'ai max_steps ({max_steps}) reached, execution aborted')
+                ctx.track(self, ChatMessage(self._assistant_turn(result)))
+                succeeded = False
+                for call in result.tool_calls:
+                    if call.arguments is not None and not isinstance(call.arguments, dict):
+                        # arguments that are no json object are refused before any
+                        # guard: no guessing, the model gets the reason and the
+                        # trace keeps the raw value on the answer it came with
+                        content = f'error: arguments must be a JSON object, got {type(call.arguments).__name__}'
+                        ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
+                        continue
+                    if tool_governed:
+                        # the invocation is tracked inside _exec_governed at
+                        # creation and handed back, the outcome is read off it
+                        invocation, content = self._exec_governed(call, at_call, at_return, ctx, agent_obj, profile, deny)
+                        ok = (
+                            invocation.decision != Invocation.DENY
+                            and invocation.error is None
+                            and (invocation.result is None or invocation.result.state.exception is None)
+                        )
+                    else:
+                        # the lean path is as resilient as the guard pipeline: an
+                        # unknown or failing tool (or a deny/exhausted sandbox
+                        # chain) becomes feedback the model may correct itself on,
+                        # instead of an exception killing the whole loop
+                        try:
+                            tool_result = self._exec_in_sandbox(
+                                call.name,
+                                call.arguments or {},
+                                agent_obj,
+                                profile,
+                                deny,
+                                None,
+                                ctx,
+                            )
+                            # the sandbox always returns a ToolResult; a tool that
+                            # raised is carried in its state, not thrown here
+                            if tool_result.state.exception is not None:
+                                content = f'error: {tool_result.state.exception}'
+                                ok = False
+                            else:
+                                content = tool_result.value.as_str if tool_result.value else ''
+                                ok = True
+                        except Exception as err:
+                            content = f'error: {type(err).__name__}: {err}'
+                            ok = False
+                    succeeded = succeeded or ok
+                    ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
+                ctx.loopdata.steps += 1
+                # max_loops caps the consecutive rounds without one successful
+                # call (every call denied or failing); 0 is unlimited. this stops
+                # a model stuck repeating broken calls, while any successful call
+                # resets the counter and lets honest work continue
+                ctx.loopdata.failed_loops = 0 if succeeded else ctx.loopdata.failed_loops + 1
+                if max_loops and ctx.loopdata.failed_loops >= max_loops:
+                    raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
+                # on_prompt again before the follow-up model call
+                for governor in at_prompt:
+                    ctx.refine_messages(governor, governor.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
+                result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
+                # on_answer again after the follow-up model call
+                for governor in at_answer:
+                    result = ctx.supersede(governor, governor.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
+            # on_close: once, on the final result, after the loop
+            for governor in at_close:
+                result = ctx.supersede(governor, governor.on_close(ctx, result), result, stage=GOVERNOR_STAGE_ON_CLOSE)
+            # the run result: the final answer (a ChatResult), plus the run's
+            # history and counters lifted off the context (which ends here). the
+            # answer is just the model answer; the trace and status ride alongside
+            return TokeoAiResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace)
+        except TokeoAiRunDeclined as err:
+            declined = dict(stage=err.stage, reason=err.reason, by=err.by)
+            ctx.track(self, TokeoAiTraceNote(dict(declined=declined)))
+            return TokeoAiResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace, status=TokeoAiResult.DECLINED, declined=declined)
 
     def _assistant_turn(self, result):
         # rebuild the assistant message that requested the tool calls, in the

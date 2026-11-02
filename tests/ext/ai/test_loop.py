@@ -10,7 +10,7 @@ governors at the tool stages. The tools run in process.
 import pytest
 from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
-from tokeo.core.ai import TokeoAiError, TokeoAiProvider, ChatResult, ToolCall
+from tokeo.core.ai import TokeoAiError, TokeoAiProvider, TokeoAiGuard, TokeoAiResult, TokeoAiRunDeclined, ChatResult, ToolCall
 from tokeo.core.ai.data import Invocation
 
 SCRIPT = 'tests.ext.ai.test_loop:ScriptProvider'
@@ -59,6 +59,29 @@ class ScriptProvider(TokeoAiProvider):
         turn = script[index]
         calls = [ToolCall(id=f'c{index}_{n}', name=name, arguments=arguments) for n, (name, arguments) in enumerate(turn.get('calls', []))]
         return ChatResult(text=turn.get('text', ''), tool_calls=calls)
+
+
+class DecliningGuard(TokeoAiGuard):
+    """Declines the run at the stage named in its option stage."""
+
+    class Meta:
+        config_defaults = dict(stage='on_prompt')
+
+    def on_prompt(self, ctx):
+        if self._config('stage') == 'on_prompt':
+            raise TokeoAiRunDeclined('on_prompt', 'not today', by='human')
+
+    def on_answer(self, ctx, result):
+        if self._config('stage') == 'on_answer':
+            raise TokeoAiRunDeclined('on_answer', 'not this answer', by='auto')
+
+
+def declining_config(stage):
+    """loop_config with an agent whose one governor declines at the stage."""
+    cfg = loop_config([dict(text='hello')])
+    cfg['ai']['guards']['decline'] = dict(type='tests.ext.ai.test_loop:DecliningGuard', options=dict(stage=stage))
+    cfg['ai']['agents']['declining'] = dict(type='fundi', options=dict(governors=['decline']))
+    return cfg
 
 
 def loop_config(script, **agent_options):
@@ -240,3 +263,29 @@ def test_ask_returns_the_text_of_the_answer():
     """ask('hi') gives 'done' after the echo round, as plain text."""
     with LoopTest(config_defaults=loop_config([call('moin'), dict(text='done')])) as app:
         assert app.ai.ask('hi', agent='plain') == 'done'
+
+
+# declined
+
+
+def test_a_run_without_decline_is_done():
+    """A plain run answers 'hello' with the status done."""
+    with LoopTest(config_defaults=loop_config([dict(text='hello')])) as app:
+        result = app.ai.chat([dict(role='user', content='hi')], agent='plain')
+        assert (result.status, result.declined) == (TokeoAiResult.DONE, None)
+
+
+def test_a_decline_at_on_prompt_ends_the_run_in_order():
+    """Declined at on_prompt: no model call, status declined with stage and who."""
+    with LoopTest(config_defaults=declining_config('on_prompt')) as app:
+        result = app.ai.chat([dict(role='user', content='hi')], agent='declining')
+        assert result.status == TokeoAiResult.DECLINED
+        assert result.declined == dict(stage='on_prompt', reason='not today', by='human')
+        assert app.ai._provider(SCRIPT).seen == []
+
+
+def test_a_decline_at_on_answer_keeps_the_answer_so_far():
+    """Declined at on_answer: the answer 'hello' stays, the status is declined."""
+    with LoopTest(config_defaults=declining_config('on_answer')) as app:
+        result = app.ai.chat([dict(role='user', content='hi')], agent='declining')
+        assert (result.status, result.answer.text, result.declined['by']) == (TokeoAiResult.DECLINED, 'hello', 'auto')

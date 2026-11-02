@@ -296,11 +296,15 @@ class TokeoAiLoopdata:
         ```max_steps```
     - **failed_loops** (int): Consecutive rounds with no successful tool call,
         against ```max_loops```; reset by any successful call
+    - **confirmations** (list): Every confirm decision of the run in order,
+        each a dict (stage, subject, verdict, decision, by, who, at), for the
+        app to keep and learn from
 
     """
 
     steps: int = 0
     failed_loops: int = 0
+    confirmations: list = field(default_factory=list)
 
 
 class TokeoAiTurndata(dict):
@@ -366,9 +370,18 @@ class TokeoAiResult:
     - **answer** (ChatResult): The final model reply in full
     - **loopdata** (TokeoAiLoopdata): The loop's live counters for the run
     - **trace** (list): The run's ```TraceStep``` history, in order
+    - **status** (str): ```DONE```, or ```DECLINED``` when a governor declined
+        the run at a stage without a tool call
+    - **declined** (dict|None): On ```DECLINED``` the stage, the reason, and
+        who decided (```by```)
 
     """
+
+    DONE = 'done'
+    DECLINED = 'declined'
 
     answer: ChatResult = field(default_factory=ChatResult)
     loopdata: TokeoAiLoopdata = field(default_factory=TokeoAiLoopdata)
     trace: list = field(default_factory=list)
+    status: str = DONE
+    declined: dict | None = None
