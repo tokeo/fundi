@@ -22,11 +22,11 @@ project) mounted and importable; the snippet can then use framework helpers.
     wasm guest must mount the app to import it, the guest can read that mounted
     code: acceptable for trusted snippets, not for model-generated untrusted
     code. For untrusted code use ```python_untrusted_exec```, which runs in the
-    guest with only the pact contract mounted.
+    guest with nothing of tokeo mounted.
 """
 
 from tokeo.core.ai.tools.python_exec import TokeoAiPythonExecTool
-from tokeo.pact.ai.pysnippet import run_snippet
+from tokeo.core.ai.pysnippet import run_snippet
 
 
 class TokeoAiPythonTrustedExecTool(TokeoAiPythonExecTool):

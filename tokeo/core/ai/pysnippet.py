@@ -7,18 +7,17 @@ magic variable: the snippet delivers a value by ending on an expression (the
 jupyter form), by a ```return```, or by an assignment whose bound value is then
 handed back. The block runs at module level like a script, so ```global``` and
 functions that read its names work; a top-level ```return``` ends the run and
-hands its value back. A block that delivers none yields ```None```, the
-contract's 'no value', which the caller reports as such.
+hands its value back. A block that delivers none yields ```None```, 'no
+value', which the caller reports as such.
 
-It is kept dependency-free (the standard library ```ast``` only) so the same run
-works in process and inside an isolated sandbox guest, which mounts this contract
-but never the rest of tokeo.
+It uses only the standard library, so the same run works in process and in the
+wasm guest, which gets a copy of this module but never the rest of tokeo.
 """
 
 import ast
 
 
-class TokeoPactSnippetError(Exception):
+class TokeoAiSnippetError(Exception):
     """
     A snippet form the run cannot take.
 
@@ -37,7 +36,7 @@ def run_snippet(code, namespace=None):
     The snippet is parsed (not executed) first, so its structure decides how it
     delivers. The value comes from the last top-level statement; printed text is
     never the value (it goes to stdout). A block that delivers no value yields
-    ```None```, the contract's 'no value'. An empty block yields ```None``` too.
+    ```None```, 'no value'. An empty block yields ```None``` too.
 
     Forms that deliver a value:
 
@@ -74,7 +73,7 @@ def run_snippet(code, namespace=None):
     ### Raises
 
     - **SyntaxError**: The snippet does not parse (surfaced to the caller as is)
-    - **TokeoPactSnippetError**: The snippet uses a top-level ```await```, which
+    - **TokeoAiSnippetError**: The snippet uses a top-level ```await```, which
         this wrap does not support
 
     """
@@ -84,7 +83,7 @@ def run_snippet(code, namespace=None):
     # a top-level await cannot run at module level; reject it cleanly rather
     # than let the later compile fail with a cryptic message
     if _has_toplevel_async(tree):
-        raise TokeoPactSnippetError('top-level await is not supported')
+        raise TokeoAiSnippetError('top-level await is not supported')
     # an empty body (blank source or comments only) carries no value
     if not tree.body:
         return None

@@ -22,7 +22,7 @@ Fundi is the AI extension for [Tokeo](https://github.com/tokeo/tokeo). It adds a
 
 Where Tokeo gives you the event-driven CLI framework, Fundi gives that framework a governed way to talk to AI providers: typed message and tool contracts, an agent pipeline where every tool call passes through guards, sandboxes that contain what the tools do, and a full trace of every run. The same agent definitions drive a deterministic mock provider, a model you train yourself, and any large OpenAI-compatible endpoint. A switch between them is an edit of the profile and not a refactor.
 
-Fundi is the source-available core of that runtime, and consists of these parts: the code under ```tokeo.core.ai``` and ```tokeo.pact.ai```, the extension ```tokeo.ext.ai``` that wires it into an application, and its tests under ```tests/core/ai```, ```tests/pact/ai``` and ```tests/ext/ai```. It is its own distribution that lives in the shared ```tokeo``` namespace, is installed alongside Tokeo, inherits Tokeo's ```tokeo``` command, and you reach it through ```tokeo ai ...```. The concrete tools, guards, and providers a project builds on top of fundi are generated into your own application and belong to you.
+Fundi is the source-available core of that runtime, and consists of these parts: the code under ```tokeo.core.ai```, the extension ```tokeo.ext.ai``` that wires it into an application, and its tests under ```tests/core/ai``` and ```tests/ext/ai```. It is its own distribution that lives in the shared ```tokeo``` namespace, is installed alongside Tokeo, inherits Tokeo's ```tokeo``` command, and you reach it through ```tokeo ai ...```. The concrete tools, guards, and providers a project builds on top of fundi are generated into your own application and belong to you.
 
 <br/>
 

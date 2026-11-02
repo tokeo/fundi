@@ -10,8 +10,8 @@ platform, and is interrupted by an epoch timeout. It is opt-in, needs the
 
 This document covers when to use it, the two ```python-exec``` tools, how
 to install a WASI Python build into a project's ```./wasm``` folder, every option,
-the file-bridge mechanics, the two trust models, the pact contract mount, the
-WASI standard-library shims, and troubleshooting.
+the file-bridge mechanics, the two trust models, what the guest receives, the
+WASI standard-library shim, and troubleshooting.
 
 
 ## Contents
@@ -23,8 +23,8 @@ WASI standard-library shims, and troubleshooting.
 - [Options](#options)
 - [How it runs: the file bridge](#how-it-runs-over-the-file-bridge)
 - [The two trust models in depth](#the-two-trust-models-in-depth)
-- [The pact contract mount](#the-pact-contract-mount)
-- [The WASI stdlib shims](#the-wasi-stdlib-shims)
+- [What the guest receives](#what-the-guest-receives)
+- [The WASI stdlib shim](#the-wasi-stdlib-shim)
 - [What isolation does and does not give you](#what-isolation-does-and-does-not-give-you)
 - [Troubleshooting](#troubleshooting)
 
@@ -66,9 +66,9 @@ For code you must not trust (model-generated, foreign). It carries the marker
 argument directly in the guest without rebuilding the tool there. The guest
 therefore rebuilds no tool from tokeo: no framework mount is needed and the
 untrusted snippet is walled off from the framework, your app, and the host. It
-still uses the small pact contract to shape its result (see the trust models
-below), which is dependency-free and changes none of that. This is the safe
-default for anything a model writes.
+gets only copies of a few stdlib-only helper modules (see what the guest
+receives below), which change none of that. This is the safe default for
+anything a model writes.
 
 ### ```python_trusted_exec```
 
@@ -202,8 +202,8 @@ ai:
       type: tokeo.core.ai.tools.python_trusted_exec:TokeoAiPythonTrustedExecTool
 
   sandboxes:
-    # untrusted: strong isolation, the guest sees its stdlib and the pact
-    # contract only: no framework, no app, no host paths
+    # untrusted: strong isolation, the guest sees its stdlib and /io only:
+    # no framework, no app, no host paths
     wasm_untrusted:
       type: tokeo.core.ai.sandboxes.wasm:TokeoAiWasmSandbox
       tools:
@@ -236,13 +236,15 @@ ai:
     untrusted_coder:
       type: fundi
       options:
-        sandboxes:
-          - wasm_untrusted
+        tools: [run_untrusted]
+        governors: []
+        sandboxes: [wasm_untrusted]
     trusted_coder:
       type: fundi
       options:
-        sandboxes:
-          - wasm_trusted
+        tools: [run_trusted]
+        governors: []
+        sandboxes: [wasm_trusted]
 ```
 
 When tokeo, your app, and the dependencies are all installed into the same
@@ -268,7 +270,7 @@ python -c "import cement, os; print(os.path.dirname(os.path.dirname(cement.__fil
 | ```env``` | no | The guest environment: scrubbed and empty by default, only the listed keys are set, ```${NAME}``` expands against this map, then the host env, then ```''```. |
 | ```timeout``` | no | Wall-clock seconds before the guest is interrupted (epoch). Enforced in-process; there is no child to kill. |
 | ```memory_mb``` | no | A hard memory cap in MB via Wasmtime store limits. A runaway allocation traps the guest. Platform-independent. |
-| ```shim_wasi_stdlib``` | no (default ```true```) | Mount the bundled ```multiprocessing```/```threading``` shims ahead of the stdlib so a framework that imports those names at load can be rebuilt in the guest. Only relevant on the trusted/rebuild path. |
+| ```shim_wasi_stdlib``` | no (default ```true```) | Put the bundled ```multiprocessing``` shim ahead of the stdlib so a framework that imports it at load can be rebuilt in the guest. Only on the trusted/rebuild path; the untrusted guest never gets it. |
 
 .. warning::
 
@@ -283,39 +285,39 @@ There is no stdin runner here. For each call the sandbox:
 
 1. Creates a private temporary directory and mounts it read-write at ```/io```,
    the only writable surface the guest gets besides an optional ```/work```.
-2. Writes the task (the tool's dotted path, the arguments, and its options) to
-   ```/io/task.json```, and a small guest entry script to ```/io/entry.py```.
-3. Mounts the stdlib read-only at ```/lib```, the requested ```mounts``` read-only
-   at their guest paths, the pact contract under the ```/pkg``` package root, and
-   (by default) the bundled shims at ```/pkg/shims```.
+2. Writes the task (the arguments; on the trusted path also the tool's module,
+   class, and options) to ```/io/task.json```, a small guest entry script to
+   ```/io/entry.py```, and copies of the guest modules to ```/io/_guest``` (see
+   what the guest receives below).
+3. Mounts the stdlib read-only at ```/lib``` and the requested ```mounts```
+   read-only at their guest paths.
 4. Runs the interpreter on the entry script with a scrubbed environment, a hard
-   memory cap, and an epoch deadline.
+   memory cap, and an epoch deadline. The guest's stdout and stderr go to files
+   the host keeps outside ```/io```, out of the guest's reach.
 5. The guest entry either runs the ```code``` argument directly (untrusted,
-   ```_GUEST_ENTRY_EXEC_PYSNIPPET```) or rebuilds the tool from its dotted path
-   and calls it (trusted, ```_GUEST_ENTRY_EXEC_TOOL```); the two are detailed
-   under the trust models below. Either way it
-   builds a ```ToolResult``` with the pact contract and writes it to
-   ```/io/reply.json```. A tool (or snippet) that raises is not a failure of the
-   bridge: it is caught around its own call and returned as a normal reply with
-   no value and the message in ```state.exception```. A failure of the machinery
-   around it (an unimportable tool, a bad task, an encode error) is the other
-   kind, written as ```{"error": ...}```.
-6. The host reads ```/io/reply.json```: a normal reply is rebuilt into a
-   ```ToolResult```, an ```{"error": ...}``` reply is raised as a
-   ```TokeoAiError```.
+   ```_GUEST_ENTRY_EXEC_PYSNIPPET```) or rebuilds the tool and calls it
+   (trusted, ```_GUEST_ENTRY_EXEC_TOOL```); the two are detailed under the trust
+   models below. Either way it delivers only the value, as data in
+   ```/io/value.json```: its model-facing string, its json, and whether the json
+   is incomplete. No file means no value.
+6. The host builds the ```ToolResult```: the value from ```/io/value.json``` (read
+   with ```json.loads``` up to ```REPLY_LIMIT``` bytes), the states from what it
+   observed itself. A clean exit leaves ```exception``` empty. A tool or snippet
+   that raises exits with code 1: the result has no value and the last stderr
+   line as ```exception``` (a tool error, A). A failure of the entry's own
+   machinery (the task, the guest modules, the tool import) exits with code 3
+   and is raised as a ```TokeoAiError``` (a machinery error, B), as are a crash,
+   a timeout, and a broken value.
 
-Only JSON-able arguments and the result's two string views (```as_str``` and
-```as_json```) cross the bridge; the host rebuilds ```as_data``` from
-```as_json``` on the other side, so a value's structured form survives without
-the guest having to send a possibly non-JSON-able object. The tool's own
-```print()``` output is captured and folded into ```state.stdout``` rather than
-left to corrupt the single JSON reply. The guest's stderr is captured too, so a
-failed run reports why the interpreter aborted instead of a bare wasm backtrace.
+Only JSON-able arguments and the value as data cross the bridge; the host
+rebuilds ```as_data``` from ```as_json```, so a value's structured form survives
+without the guest having to send a possibly non-JSON-able object. The guest
+cannot set ```stdout```, ```stderr```, or ```exception``` of its result: the host
+reads them from the captures and the exit code.
 
 The whole path, host and guest across the file bridge, at a glance: the
 host writes the task and picks the entry, the guest runs it and writes the
-reply, the host turns that reply back into a ```ToolResult``` (or raises on a
-machinery error):
+value, the host builds the ```ToolResult``` (or raises on a machinery error):
 
 <svg width="100%" viewBox="0 0 680 600" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" role="img" aria-label="Full host and guest file-bridge flow of the wasm sandbox">
   <defs>
@@ -342,7 +344,7 @@ machinery error):
   <rect x="60" y="204" width="240" height="74" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
   <text x="180" y="226" text-anchor="middle" font-size="14" font-weight="500" fill="#042C53">_run_guest: mount + start</text>
   <text x="180" y="246" text-anchor="middle" font-size="12" fill="#0C447C">/lib stdlib, /io scratch</text>
-  <text x="180" y="264" text-anchor="middle" font-size="12" fill="#0C447C">/pkg pact, /pkg/shims</text>
+  <text x="180" y="264" text-anchor="middle" font-size="12" fill="#0C447C">capture stdout, stderr</text>
 
   <path d="M300 241 L378 241" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah3)"/>
   <rect x="380" y="204" width="240" height="74" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
@@ -352,26 +354,26 @@ machinery error):
 
   <line x1="500" y1="278" x2="500" y2="304" stroke="#888780" stroke-width="1.5" marker-end="url(#ah3)"/>
   <rect x="380" y="306" width="240" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text x="500" y="329" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">import pact via /pkg</text>
-  <text x="500" y="347" text-anchor="middle" font-size="12" fill="#3C3489">build value/state reply</text>
+  <text x="500" y="329" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">encode the value</text>
+  <text x="500" y="347" text-anchor="middle" font-size="12" fill="#3C3489">with _guest.json</text>
 
   <line x1="500" y1="362" x2="500" y2="386" stroke="#888780" stroke-width="1.5" marker-end="url(#ah3)"/>
   <rect x="380" y="388" width="240" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-  <text x="500" y="413" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">write /io/reply.json</text>
+  <text x="500" y="413" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">write /io/value.json</text>
 
   <path d="M378 410 L302 410" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah3)"/>
   <rect x="60" y="388" width="240" height="44" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
-  <text x="180" y="413" text-anchor="middle" font-size="14" font-weight="500" fill="#042C53">read /io/reply.json</text>
+  <text x="180" y="413" text-anchor="middle" font-size="14" font-weight="500" fill="#042C53">read exit code, value</text>
 
   <line x1="150" y1="432" x2="150" y2="456" stroke="#888780" stroke-width="1.5" marker-end="url(#ah3)"/>
   <rect x="60" y="458" width="240" height="48" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.5"/>
   <text x="180" y="479" text-anchor="middle" font-size="14" font-weight="500" fill="#501313">error to TokeoAiError</text>
-  <text x="180" y="496" text-anchor="middle" font-size="12" fill="#791F1F">machinery failure (B)</text>
+  <text x="180" y="496" text-anchor="middle" font-size="12" fill="#791F1F">exit 3, crash, timeout (B)</text>
 
   <line x1="210" y1="432" x2="210" y2="524" stroke="#888780" stroke-width="1.5" marker-end="url(#ah3)"/>
   <rect x="60" y="526" width="240" height="48" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-  <text x="180" y="547" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">_rebuild to ToolResult</text>
-  <text x="180" y="564" text-anchor="middle" font-size="12" fill="#0F6E56">value + state to caller</text>
+  <text x="180" y="547" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">build the ToolResult</text>
+  <text x="180" y="564" text-anchor="middle" font-size="12" fill="#0F6E56">guest value, host states</text>
 </svg>
 
 
@@ -383,17 +385,16 @@ entry the sandbox chooses, based on the tool's ```wasm_exec_pysnippet``` marker.
 Pysnippet path (untrusted). The guest runs the ```code``` argument as-is. It
 rebuilds no tool from tokeo, so the box needs no framework mount, no app, and no
 dependency tree. The model-generated code sees only the WASI standard library,
-its own snippet, and the pact contract (see below), nothing of the framework,
-your app, or any host path you did not mount. That is the strongest isolation
-the sandbox offers: the code cannot reach the framework even though it can build
-a result with it.
+its own snippet, and the copied guest modules (see below), nothing of the
+framework, your app, or any host path you did not mount. That is the strongest
+isolation the sandbox offers.
 
 The exec-pysnippet guest entry (```_GUEST_ENTRY_EXEC_PYSNIPPET```) in detail: it
-imports the pact contract including ```run_snippet```, reads the ```code```
-argument, and runs it directly; no tool is loaded, so no ```importlib```
-and no framework. A snippet that raises, fails to parse, or uses an
-unsupported form is the same tool error (A); the value/state reply and the
-machinery error (B) are built exactly as on the exec-tool path:
+imports ```run_snippet``` and the json encoder from ```_guest```, reads the
+```code``` argument, runs it directly, and writes the value; no tool is loaded,
+so no ```importlib``` and no framework. A snippet that raises, fails to parse,
+or uses an unsupported form exits with code 1, a tool error (A); a failure
+before the snippet runs exits with code 3, a machinery error (B):
 
 <svg width="100%" viewBox="0 0 680 520" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" role="img" aria-label="Flow of the exec-pysnippet guest entry">
   <defs>
@@ -403,8 +404,8 @@ machinery error (B) are built exactly as on the exec-tool path:
   </defs>
 
   <rect x="240" y="30" width="200" height="50" rx="8" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
-  <text x="340" y="50" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">import pact</text>
-  <text x="340" y="68" text-anchor="middle" font-size="12" fill="#5F5E5A">+ run_snippet (no importlib)</text>
+  <text x="340" y="50" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">import _guest</text>
+  <text x="340" y="68" text-anchor="middle" font-size="12" fill="#5F5E5A">json + run_snippet (no importlib)</text>
 
   <line x1="340" y1="80" x2="340" y2="98" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
   <rect x="240" y="100" width="200" height="56" rx="8" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
@@ -414,38 +415,38 @@ machinery error (B) are built exactly as on the exec-tool path:
   <line x1="340" y1="156" x2="340" y2="174" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
   <rect x="240" y="176" width="200" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
   <text x="340" y="199" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">run_snippet(code, ns)</text>
-  <text x="340" y="217" text-anchor="middle" font-size="12" fill="#3C3489">under stdout-capture</text>
+  <text x="340" y="217" text-anchor="middle" font-size="12" fill="#3C3489">stdout to the host capture</text>
 
   <rect x="40" y="180" width="170" height="48" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
   <text x="125" y="201" text-anchor="middle" font-size="14" font-weight="500" fill="#412402">snippet fails = A</text>
-  <text x="125" y="218" text-anchor="middle" font-size="12" fill="#633806">raise/parse/await</text>
+  <text x="125" y="218" text-anchor="middle" font-size="12" fill="#633806">exit 1, no value</text>
   <line x1="240" y1="204" x2="212" y2="204" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
 
   <line x1="340" y1="232" x2="340" y2="250" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
   <rect x="240" y="252" width="200" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text x="340" y="275" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">None or wrap value</text>
-  <text x="340" y="293" text-anchor="middle" font-size="12" fill="#3C3489">create_tool_result</text>
+  <text x="340" y="275" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">None or encode value</text>
+  <text x="340" y="293" text-anchor="middle" font-size="12" fill="#3C3489">as_str, as_json, incomplete</text>
 
   <path d="M125 228 L125 280 L238 280" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
 
   <line x1="340" y1="308" x2="340" y2="326" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
   <rect x="240" y="328" width="200" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text x="340" y="351" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">fold stdout, encode</text>
-  <text x="340" y="369" text-anchor="middle" font-size="12" fill="#3C3489">value as_str/as_json, state</text>
+  <text x="340" y="351" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">no value: no file</text>
+  <text x="340" y="369" text-anchor="middle" font-size="12" fill="#3C3489">the host reads the states</text>
 
   <line x1="340" y1="384" x2="340" y2="450" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
   <rect x="240" y="452" width="200" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-  <text x="340" y="477" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">write /io/reply.json</text>
+  <text x="340" y="477" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">write /io/value.json</text>
 
   <rect x="470" y="176" width="170" height="64" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.5"/>
-  <text x="555" y="197" text-anchor="middle" font-size="14" font-weight="500" fill="#501313">outer except = B</text>
-  <text x="555" y="215" text-anchor="middle" font-size="12" fill="#791F1F">task/encode/json fail</text>
-  <text x="555" y="231" text-anchor="middle" font-size="12" fill="#791F1F">dict(error=...)</text>
+  <text x="555" y="197" text-anchor="middle" font-size="14" font-weight="500" fill="#501313">setup fails = B</text>
+  <text x="555" y="215" text-anchor="middle" font-size="12" fill="#791F1F">task or _guest import</text>
+  <text x="555" y="231" text-anchor="middle" font-size="12" fill="#791F1F">exit 3</text>
   <path d="M440 128 L555 128 L555 174" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
   <path d="M555 240 L555 474 L442 474" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
 </svg>
 
-Tool path (trusted). The guest imports the tool by its dotted path
+Tool path (trusted). The guest imports the tool by its module and class
 (```tokeo.core.ai.tools...```) and calls it. That import chain needs tokeo, the
 app, and their dependencies present on the guest's ```PYTHONPATH```, so the trusted
 sandbox mounts those trees read-only. The cost is real and intentional: every
@@ -453,12 +454,12 @@ dependency the rebuilt tool pulls in must be mounted, and the executed code can
 read all of it. That visibility is the price of "may use the framework", and it
 is exactly why this path is for trusted input only.
 
-The exec-tool guest entry (```_GUEST_ENTRY_EXEC_TOOL```) in detail: it
-imports the pact contract, reads the task, rebuilds the tool with ```app=
-None``` and calls its ```exec``` under an stdout capture. A tool that raises
-is caught as a tool error (A): a result with no value and the message in
-```state.exception```; anything outside that call (the load, the encode)
-is a machinery error (B):
+The exec-tool guest entry (```_GUEST_ENTRY_EXEC_TOOL```) in detail: it reads
+the task, rebuilds the tool with ```app=None``` and calls its ```exec```. A
+returned ```ToolResult``` hands over its value; its states are not taken, the
+host tells them. A tool that raises exits with code 1, a tool error (A); a
+failure before the call (the task, the import, the setup) exits with code 3, a
+machinery error (B):
 
 <svg width="100%" viewBox="0 0 680 560" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" role="img" aria-label="Flow of the exec-tool guest entry">
   <defs>
@@ -468,8 +469,8 @@ is a machinery error (B):
   </defs>
 
   <rect x="240" y="30" width="200" height="50" rx="8" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
-  <text x="340" y="50" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">import pact</text>
-  <text x="340" y="68" text-anchor="middle" font-size="12" fill="#5F5E5A">data, tool (via /pkg)</text>
+  <text x="340" y="50" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">import _guest</text>
+  <text x="340" y="68" text-anchor="middle" font-size="12" fill="#5F5E5A">json (+ mounted tokeo)</text>
 
   <line x1="340" y1="80" x2="340" y2="98" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
   <rect x="240" y="100" width="200" height="44" rx="8" fill="#F1EFE8" stroke="#888780" stroke-width="0.5"/>
@@ -483,98 +484,87 @@ is a machinery error (B):
   <line x1="340" y1="220" x2="340" y2="238" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
   <rect x="240" y="240" width="200" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
   <text x="340" y="263" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">tool.exec</text>
-  <text x="340" y="281" text-anchor="middle" font-size="12" fill="#3C3489">under stdout-capture</text>
+  <text x="340" y="281" text-anchor="middle" font-size="12" fill="#3C3489">stdout to the host capture</text>
 
   <rect x="40" y="244" width="170" height="48" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
   <text x="125" y="265" text-anchor="middle" font-size="14" font-weight="500" fill="#412402">tool raises = A</text>
-  <text x="125" y="282" text-anchor="middle" font-size="12" fill="#633806">value None, exception</text>
+  <text x="125" y="282" text-anchor="middle" font-size="12" fill="#633806">exit 1, no value</text>
   <line x1="240" y1="268" x2="212" y2="268" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
 
   <line x1="340" y1="296" x2="340" y2="314" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
   <rect x="240" y="316" width="200" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text x="340" y="339" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">normalize result</text>
-  <text x="340" y="357" text-anchor="middle" font-size="12" fill="#3C3489">None / wrap / passthrough</text>
+  <text x="340" y="339" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">take the value</text>
+  <text x="340" y="357" text-anchor="middle" font-size="12" fill="#3C3489">None / encode / ToolResult</text>
 
   <path d="M125 292 L125 344 L238 344" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
 
   <line x1="340" y1="372" x2="340" y2="390" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
   <rect x="240" y="392" width="200" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text x="340" y="415" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">fold stdout, _encode</text>
-  <text x="340" y="433" text-anchor="middle" font-size="12" fill="#3C3489">value as_str/as_json, state</text>
+  <text x="340" y="415" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">no value: no file</text>
+  <text x="340" y="433" text-anchor="middle" font-size="12" fill="#3C3489">the host reads the states</text>
 
   <line x1="340" y1="448" x2="340" y2="488" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
   <rect x="240" y="490" width="200" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-  <text x="340" y="515" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">write /io/reply.json</text>
+  <text x="340" y="515" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">write /io/value.json</text>
 
   <rect x="470" y="240" width="170" height="64" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.5"/>
-  <text x="555" y="261" text-anchor="middle" font-size="14" font-weight="500" fill="#501313">outer except = B</text>
-  <text x="555" y="279" text-anchor="middle" font-size="12" fill="#791F1F">load/encode/json fail</text>
-  <text x="555" y="295" text-anchor="middle" font-size="12" fill="#791F1F">dict(error=...)</text>
+  <text x="555" y="261" text-anchor="middle" font-size="14" font-weight="500" fill="#501313">setup fails = B</text>
+  <text x="555" y="279" text-anchor="middle" font-size="12" fill="#791F1F">task, import, setup</text>
+  <text x="555" y="295" text-anchor="middle" font-size="12" fill="#791F1F">exit 3</text>
   <path d="M440 192 L555 192 L555 238" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
   <path d="M555 304 L555 512 L442 512" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah)"/>
 </svg>
 
-A useful way to read the contrast: the untrusted path mounts only the contract
-it needs to shape a result and asks no further questions; the trusted path
+A useful way to read the contrast: the untrusted path mounts nothing beyond the
+stdlib and asks no further questions; the trusted path
 mounts several trees and makes each grant of visibility explicit in the
 configuration. Both behaviors are the same deny-by-default principle seen from
 opposite ends.
 
 
-## The pact contract mount
+## What the guest receives
 
-Both guest entries build their reply the way the host would: with
-```create_tool_result``` from the ```tokeo.pact``` contract, and they deliver
-the snippet's value through the same contract (its last line or a ```return```).
-So the sandbox makes pact importable in every guest, on both paths, the
-untrusted one too.
+Besides the stdlib at ```/lib```, the guest gets nothing of tokeo. For each run
+the sandbox copies the few modules the guest entries need into ```/io/_guest```,
+a package next to the entry script:
 
-This does not weaken the isolation. The pact contract is deliberately tiny and
-dependency-free: the result dataclasses, a pure json encode, and the snippet
-wrap, with nothing from the framework, no IO, no network, no secrets, and no
-import beyond the standard library and itself. Mounting it is the same kind of
-grant as the ```/io``` json hand-off point: a narrow, inert surface the guest
-reads to shape a result, not a door into tokeo. The untrusted snippet can see
-the shape of a ```ToolResult``` and the encoder that builds it; it gains nothing
-it could turn against the host.
+| Module | Purpose in the guest |
+| --- | --- |
+| ```tokeo.core.utils.json``` | encodes the value like the host |
+| ```tokeo.core.utils.date```, ```tokeo.core.utils.date_compat``` | used by the json encoder |
+| ```tokeo.core.ai.pysnippet``` | runs the snippet and finds its value |
 
-The mount cannot be a single leaf, because ```tokeo.pact.*``` is a dotted
-import: the guest must be able to walk ```tokeo``` then ```pact``` then the
-subpackage as real directories. ```/lib``` is the user's stdlib mount and lists
-no ```tokeo``` child, so a leaf at ```/lib/tokeo/pact/<name>``` would fail at the
-very first step of that walk. Instead the sandbox builds a small package root,
-mounted at ```/pkg``` and placed on the guest's ```PYTHONPATH```: it holds the
-real namespace chain ```tokeo/pact``` as plain directories (PEP 420 namespace,
-no ```__init__```), with an empty stub per subpackage as a mount point, and then
-mounts each real subpackage over its stub.
+The list is ```GUEST_MODULES``` in ```wasm.py```. The source of each module comes
+from the import system of the host, so the guest always runs the code the host
+runs. A missing source ends the run with an error. The rules:
 
-```tokeo.pact``` is a split namespace package: ```tokeo.pact.utils``` ships in
-tokeo, ```tokeo.pact.ai``` in fundi, each at its own single location on disk.
-The sandbox walks the namespace and mounts every subpackage it finds at
-```/pkg/tokeo/pact/<name>```, so a future pact subpackage is carried into the
-guest with no change to the sandbox.
+- No package or repository is mounted for this; the copies live and die with the
+  run's ```/io```, there is no cache.
+- Every module of the list imports only the standard library or another module
+  of the list; a test checks that by the syntax tree.
+- The guest writes only ```/io``` and ```/work```; everything else is read-only.
+- The guest hands back only data: the value in ```/io/value.json```, read with
+  ```json.loads``` up to ```REPLY_LIMIT``` bytes. The run states are the host's.
+- ```PYTHONDONTWRITEBYTECODE=1```: the guest writes no bytecode next to the
+  copies.
+
+The guest encodes a value with the same json module as the host, and a test runs
+values of several kinds through both to show the encodings match.
 
 
-## The WASI stdlib shims
+## The WASI stdlib shim
 
-WASI has no processes or threads, so ```multiprocessing``` and ```threading``` are
-absent from the WASI standard library. Some frameworks (cement among them)
-import a couple of names from those modules at load time (for type annotations)
-even when they never start a thread or process. Without help, importing such a
+WASI has no processes, so ```multiprocessing``` is absent from the WASI
+standard library. Some frameworks (cement among them) import a name from it at
+load time even when they never start a process. Without help, rebuilding such a
 framework in the guest fails with ```ModuleNotFoundError```.
 
-The sandbox ships minimal shims (```wasi_shims/multiprocessing.py``` and
-```wasi_shims/threading.py```) that provide exactly those names. The lock and
-thread-local types are no-ops (which is correct in a guest that can never run a
-second thread), and any attempt to start a real ```Thread``` or ```Process``` raises
-a clear error rather than silently doing nothing. The shims are ours, like the pact
-contract, so they live under the ```/pkg``` package root rather than inside the
-user's stdlib: mounted read-only at ```/pkg/shims``` and placed first on
-```PYTHONPATH```, so they stand in for the absent modules, controlled by
-```shim_wasi_stdlib``` (on by default).
-
-This only matters on the trusted/rebuild path: the untrusted path imports no
-framework and needs no shims.
+The sandbox ships a minimal shim (```wasi_shims/multiprocessing.py```) that
+provides that name; any attempt to start a real ```Process``` raises a clear
+error. On the trusted path, and only there, it is copied to ```/io/_shims``` and
+placed first on ```PYTHONPATH```, controlled by ```shim_wasi_stdlib``` (on by
+default). The untrusted guest imports no framework and never gets it.
+```threading``` needs no shim: the WASI builds bring it themselves.
 
 
 ## What isolation does and does not give you
@@ -620,9 +610,8 @@ the interpreter could not find its standard library at boot. Confirm the
 mounted. Add a ```/deps``` mount for the ```site-packages``` root and put it on
 ```PYTHONPATH```.
 
-"No module named multiprocessing" or "threading" (trusted path): the WASI
-stdlib shims are off or not mounted. Leave ```shim_wasi_stdlib``` at its default
-(```True```).
+"No module named multiprocessing" (trusted path): the WASI stdlib shim is off.
+Leave ```shim_wasi_stdlib``` at its default (```True```).
 
 "No module named tokeo" or your app (trusted path): the tokeo or app
 source root is not mounted. The trusted tool is rebuilt from

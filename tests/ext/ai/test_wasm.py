@@ -204,10 +204,8 @@ def test_untrusted_guest_cannot_import_the_framework():
     """
     Untrusted, import tokeo.core.ai fails with ModuleNotFoundError and no value.
 
-    The untrusted path mounts the pact contract (tokeo.pact) but no framework,
-    so the bare tokeo namespace and tokeo.pact resolve by design while
-    tokeo.core does not. The failure is a tool exception on the result (A): the
-    framework stays invisible even though the inert contract is visible.
+    Nothing of tokeo enters the untrusted guest, only copies of the guest
+    modules under _guest. The failure is a tool exception on the result (A).
     """
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')
@@ -278,3 +276,87 @@ def test_wasm_guest_cannot_write_a_read_only_mount():
         assert out.value is None
         assert 'PermissionError' in (out.state.exception or '')
     assert not os.path.exists(probe)
+
+
+needs_build = pytest.mark.skipif(
+    not _have_build,
+    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
+)
+
+
+def run_untrusted(code):
+    """Run the code by the untrusted tool in its wasm sandbox, return the result."""
+    with WasmTest(config_defaults=wasm_ai_config()) as app:
+        agent = app.ai._agent('untrusted_coder')
+        return app.ai._exec_in_sandbox('run_untrusted', dict(code=code), agent, None, None, None, None)
+
+
+@needs_build
+def test_the_host_tells_stdout_and_stderr():
+    """print out and err, then 7: the value 7, stdout and stderr as captured."""
+    out = run_untrusted('import sys\nprint("out")\nprint("err", file=sys.stderr)\n7')
+    assert out.value.as_str == '7'
+    assert (out.state.stdout, out.state.stderr, out.state.exception) == ('out\n', 'err\n', None)
+
+
+@needs_build
+def test_the_host_tells_the_exception_of_a_raising_snippet():
+    """1/0 gives no value and the last stderr line as the exception."""
+    out = run_untrusted('1/0')
+    assert out.value is None
+    assert out.state.exception == 'ZeroDivisionError: division by zero'
+    assert 'Traceback' in out.state.stderr
+
+
+@needs_build
+def test_the_guest_cannot_forge_its_stdout():
+    """A file /io/stdout written by the guest is not the captured stdout."""
+    out = run_untrusted('open("/io/stdout", "w").write("forged")\nopen("/io/stderr", "w").write("forged")\n1')
+    assert (out.state.stdout, out.state.stderr) == (None, None)
+
+
+@needs_build
+def test_a_failed_guest_machinery_is_an_error():
+    """An exit with code 3 is the guest machinery failing: TokeoAiError."""
+    with pytest.raises(TokeoAiError, match='failed in the wasm sandbox'):
+        run_untrusted('import sys\nsys.exit(3)')
+
+
+@needs_build
+def test_the_untrusted_guest_sees_only_lib_and_io():
+    """/lib and /io exist in the untrusted guest, /etc, /home, /tmp, /usr not."""
+    out = run_untrusted('import os\n[os.path.isdir(p) for p in ("/lib", "/io", "/etc", "/home", "/tmp", "/usr")]')
+    assert out.value.as_data == [True, True, False, False, False, False]
+
+
+@needs_build
+def test_the_untrusted_guest_cannot_leave_by_a_symlink():
+    """A symlink in /io to ../../etc does not open a host file."""
+    out = run_untrusted('import os\nos.symlink("../../../../../etc", "/io/up")\nopen("/io/up/hostname").read()')
+    assert out.value is None
+    assert out.state.exception is not None
+
+
+@needs_build
+def test_the_untrusted_guest_has_no_shims_and_writes_no_bytecode():
+    """threading comes from /lib, and the guest writes no bytecode."""
+    out = run_untrusted('import sys, threading\n[threading.__file__, sys.dont_write_bytecode]')
+    assert out.value.as_data == ['/lib/threading.py', True]
+
+
+@needs_build
+@pytest.mark.parametrize(
+    'code',
+    ['"text"', '42', '(1, 2)', '{"a": [1, 2.5, None]}', 'datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)', 'object()'],
+)
+def test_guest_and_host_encode_a_value_alike(code):
+    """A value encodes in the guest as create_tool_result does on the host."""
+    from datetime import datetime, timezone
+    from tokeo.core.ai.tool import create_tool_result
+
+    value = eval(code, dict(datetime=datetime, timezone=timezone))
+    host = create_tool_result(value)
+    out = run_untrusted(f'from datetime import datetime, timezone\n{code}')
+    assert (out.value.as_json, out.state.incomplete) == (host.value.as_json, host.state.incomplete)
+    if code != 'object()':
+        assert out.value.as_str == host.value.as_str

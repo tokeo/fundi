@@ -12,7 +12,7 @@ snippet's own names stay local; the passed namespace is the run context, not
 the result channel.
 """
 
-from tokeo.pact.ai.pysnippet import run_snippet, TokeoPactSnippetError
+from tokeo.core.ai.pysnippet import run_snippet, TokeoAiSnippetError
 
 import pytest
 
@@ -107,14 +107,14 @@ def test_comment_only_delivers_none():
 
 
 def test_top_level_await_is_rejected():
-    """A top-level await cannot run in the plain wrap: TokeoPactSnippetError."""
-    with pytest.raises(TokeoPactSnippetError):
+    """A top-level await cannot run in the plain wrap: TokeoAiSnippetError."""
+    with pytest.raises(TokeoAiSnippetError):
         run_snippet('import asyncio\nawait asyncio.sleep(0)')
 
 
 def test_top_level_async_for_is_rejected():
-    """A top-level async for is refused like await: TokeoPactSnippetError."""
-    with pytest.raises(TokeoPactSnippetError):
+    """A top-level async for is refused like await: TokeoAiSnippetError."""
+    with pytest.raises(TokeoAiSnippetError):
         run_snippet('async for i in gen():\n    pass')
 
 

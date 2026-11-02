@@ -6,11 +6,15 @@ and the in-process exec paths, driven directly without an app. Runs through the
 agent chain live in ```tests/ext/ai/test_wasm.py```.
 """
 
+import os
 import sys
+import ast
+import importlib.util
 import pytest
 
 from tokeo.core.ai import TokeoAiError
-from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox
+from tokeo.core.ai.sandboxes import wasm
+from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox, GUEST_MODULES
 from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExecTool
 from tokeo.core.ai.tools.python_trusted_exec import TokeoAiPythonTrustedExecTool
 
@@ -152,3 +156,30 @@ def test_untrusted_exec_without_a_value_returns_none():
     """A snippet ending on a for loop delivers None, read as 'no value'."""
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert tool.exec(code='total = 0\nfor i in range(10):\n    total += i') is None
+
+
+def test_guest_modules_import_only_the_stdlib_or_each_other():
+    """Each module of GUEST_MODULES imports the stdlib or another of the list."""
+    names = {name.rpartition('.')[2] for name in GUEST_MODULES}
+    for name in GUEST_MODULES:
+        with open(importlib.util.find_spec(name).origin) as f:
+            tree = ast.parse(f.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                found = [alias.name.partition('.')[0] for alias in node.names]
+                assert all(module in sys.stdlib_module_names for module in found), (name, found)
+            elif isinstance(node, ast.ImportFrom) and node.level:
+                found = [node.module] if node.module else [alias.name for alias in node.names]
+                assert set(found) <= names, (name, found)
+            elif isinstance(node, ast.ImportFrom):
+                assert node.module.partition('.')[0] in sys.stdlib_module_names, (name, node.module)
+
+
+def test_wasm_refuses_a_guest_module_without_source(tmp, monkeypatch):
+    """A guest module no.such.module that does not exist aborts the run."""
+    pytest.importorskip('wasmtime')
+    monkeypatch.setattr(wasm, 'GUEST_MODULES', ('no.such.module',))
+    sandbox = TokeoAiWasmSandbox(None)
+    sandbox._setup(None, 'wasm', dict(options=dict(runtime=os.path.join(tmp.dir, 'python.wasm'), stdlib=tmp.dir)))
+    with pytest.raises(TokeoAiError, match="guest module 'no.such.module' has no source file"):
+        sandbox.exec(TokeoAiPythonUntrustedExecTool(None), dict(code='1'))

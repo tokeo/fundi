@@ -2,8 +2,8 @@
 The ```python_untrusted_exec``` tool: run model-generated Python in isolation.
 
 This is the CodeAct pattern for code you must not trust. The snippet runs by the
-exec-pysnippet guest path that imports nothing from tokeo except the pact
-contract; the wasm guest sees its standard library, the contract, and the code
+exec-pysnippet guest path that imports nothing from tokeo; the wasm guest sees
+its standard library, copies of the few stdlib-only guest modules, and the code
 itself, never the framework. That keeps the isolation total: the model-generated
 code cannot read tokeo's own modules.
 
@@ -11,8 +11,8 @@ code cannot read tokeo's own modules.
 
 : ```wasm_exec_pysnippet = True``` tells the wasm sandbox to run the ```code```
     argument via run_snippet in the guest, without rebuilding this tool there,
-    so only the pact contract is mounted and the untrusted code stays walled off
-    from the framework. The snippet delivers its answer by ending on an expression
+    so nothing of tokeo is mounted and the untrusted code stays walled off from
+    the framework. The snippet delivers its answer by ending on an expression
     (the jupyter form) or by a ```return```; the same delivery runs in process
     (for tests or a trusted agent that deliberately chose no sandbox), so the tool
     is self-contained either way.
@@ -32,7 +32,7 @@ code cannot read tokeo's own modules.
 """
 
 from tokeo.core.ai.tools.python_exec import TokeoAiPythonExecTool
-from tokeo.pact.ai.pysnippet import run_snippet
+from tokeo.core.ai.pysnippet import run_snippet
 
 
 class TokeoAiPythonUntrustedExecTool(TokeoAiPythonExecTool):
@@ -41,13 +41,11 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiPythonExecTool):
 
     Danger: runs arbitrary code; only ever behind the wasm sandbox or a
     hardened, disposable docker container. The wasm path runs the code via
-    run_snippet in the guest with only the pact contract mounted, so the
-    framework stays invisible to it.
+    run_snippet in the guest with nothing of tokeo mounted, so the framework
+    stays invisible to it.
     """
 
-    # the wasm sandbox runs the code argument via run_snippet in the guest
-    # instead of rebuilding this tool there: only the pact contract is mounted,
-    # total isolation for untrusted code
+    # the wasm sandbox runs the code in the guest without rebuilding this tool
     wasm_exec_pysnippet = True
 
     class Meta:
