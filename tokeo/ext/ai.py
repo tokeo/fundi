@@ -122,6 +122,7 @@ from tokeo.core.ai.guards.audit import TokeoAiTraceAuditGuard
 from tokeo.core.ai.guards.policy import TokeoAiToolPolicyGuard, TokeoAiDenyPolicyGuard, TokeoAiAbortPolicyGuard
 from tokeo.core.ai.guards.validate import TokeoAiToolSchemaValidator
 from tokeo.core.ai.guards.redact import TokeoAiRegexRedactGuard
+from tokeo.core.ai.guards.confirm import CONFIRM_HOOK, TokeoAiConfirmGuard, TokeoAiChannelConfirmGuard
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
@@ -726,11 +727,12 @@ class TokeoAi(MetaMixin):
         # step), one that mutates in place or returns nothing leaves it (an
         # unchanged step; the guard is still on the trace, attributable)
         for governor in call_governors:
+            # after a no only a confirm guard runs: a person may lift it
+            if invocation.decision == Invocation.DENY and not isinstance(governor, TokeoAiConfirmGuard):
+                continue
             invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
-            if invocation.decision == Invocation.DENY:
-                if not invocation.reason:
-                    invocation.reason = f'blocked by {self._governor_label(governor)}'
-                break
+            if invocation.decision == Invocation.DENY and not invocation.reason:
+                invocation.reason = f'blocked by {self._governor_label(governor)}'
         if invocation.decision != Invocation.DENY:
             try:
                 # the seam: the agent's sandbox chain contains the exec (a hard
@@ -1464,6 +1466,8 @@ def ai_extend_app(app):
     # built-in guard: masks secret-looking spans by regex at the tool stages
     # (the redact *type* TokeoAiRedactGuard is a base to derive from, unregistered)
     app.ai.register('governor', 'regex_redact', TokeoAiRegexRedactGuard)
+    # built-in guard: asks the tokeo_ai_confirm channels, records who decided
+    app.ai.register('governor', 'confirm', TokeoAiChannelConfirmGuard)
     app.ai._setup(app)
 
 
@@ -1522,6 +1526,8 @@ def load(app):
         entry in the application extensions
 
     """
+    # the channel a confirm guard asks, see TokeoAiChannelConfirmGuard
+    app.hook.define(CONFIRM_HOOK)
     app.hook.register('post_setup', ai_extend_app)
     # after the post_setup hooks of the project, which may register aliases
     app.hook.register('post_setup', ai_lint_on_setup, weight=100)

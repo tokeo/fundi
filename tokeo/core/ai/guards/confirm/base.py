@@ -8,10 +8,8 @@ does nothing on its own; it is the class you derive from to write a confirm
 guard, so the agent's guard list and the trace can say "this is a confirm step"
 while your subclass decides what to ask and how to apply the answer.
 
-No ready-to-use confirm implementation ships in this package yet: the confirm
-machinery (the input channel, the answer levels, the remembering of choices) is
-not built. This is the type it will be built on, available now so a guard can
-already be typed as a confirm.
+The ready-to-use confirm is ```TokeoAiChannelConfirmGuard``` (the ```confirm```
+alias) in ```channel.py```, built on this type.
 """
 
 from tokeo.core.ai import TokeoAiGuard
