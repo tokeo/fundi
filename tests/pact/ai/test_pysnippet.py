@@ -16,7 +16,6 @@ from tokeo.pact.ai.pysnippet import run_snippet, TokeoPactSnippetError
 
 import pytest
 
-
 # ---- value delivery: the snippet hands a value back -----------------------
 
 

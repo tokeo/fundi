@@ -10,7 +10,6 @@ the synthesis only builds the tool call (the sandbox would run it).
 
 from tokeo.core.ai.providers.mock import TokeoAiMockProvider
 
-
 # a tool spec shaped like the code-running tool: a single ```code``` parameter
 _CODE_TOOL = {
     'type': 'function',

@@ -3,19 +3,15 @@ Tests for the wasm sandbox itself.
 
 The runtime guarantees (memory cap, timeout, exit status, option validation)
 and the in-process exec paths, driven directly without an app. Runs through the
-agent chain live in ```tests/ext/ai/test_ai_wasm.py```.
+agent chain live in ```tests/ext/ai/test_wasm.py```.
 """
 
 import pytest
-
 
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox
 from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExecTool
 from tokeo.core.ai.tools.python_trusted_exec import TokeoAiPythonTrustedExecTool
-
-wasmtime = pytest.importorskip('wasmtime')
-
 
 # a guest that grows memory forever, trapping once the store limit refuses
 _GROW_WAT = r"""(module (memory (export "memory") 1)
@@ -29,6 +25,7 @@ _SPIN_WAT = r"""(module (memory (export "memory") 1)
 
 
 def _run_wat(wat, memory_mb=None, timeout=None):
+    wasmtime = pytest.importorskip('wasmtime')
     config = wasmtime.Config()
     if timeout:
         config.epoch_interruption = True
@@ -55,12 +52,14 @@ def _run_wat(wat, memory_mb=None, timeout=None):
 def test_wasm_memory_cap_is_hard():
     # the store limit makes the guest trap instead of eating host memory,
     # platform-independent, the gap the subprocess sandbox has on macos
+    wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.Trap):
         _run_wat(_GROW_WAT, memory_mb=8)
 
 
 def test_wasm_timeout_interrupts_a_spin():
     # an endless loop is stopped by the epoch tick, in-process, no child kill
+    wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.Trap):
         _run_wat(_SPIN_WAT, timeout=1)
 
@@ -78,6 +77,7 @@ def _exit_wat(code):
 
 def test_wasm_exit_status_zero_is_a_clean_run():
     # the guest interpreter exits via proc_exit; status 0 carries no failure
+    wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.ExitTrap) as info:
         _run_wat(_exit_wat(0))
     assert getattr(info.value, 'code', None) == 0
@@ -85,6 +85,7 @@ def test_wasm_exit_status_zero_is_a_clean_run():
 
 def test_wasm_exit_status_nonzero_is_a_failure():
     # a nonzero status is what the sandbox turns into a TokeoAiError
+    wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.ExitTrap) as info:
         _run_wat(_exit_wat(1))
     assert getattr(info.value, 'code', None) == 1
@@ -93,6 +94,7 @@ def test_wasm_exit_status_nonzero_is_a_failure():
 def test_wasm_needs_a_runtime():
     # without a runtime/stdlib the sandbox refuses with a clear reason rather
     # than silently doing nothing
+    pytest.importorskip('wasmtime')
     sandbox = TokeoAiWasmSandbox(None)
     sandbox._setup(None)
     tool = TokeoAiPythonUntrustedExecTool(None)

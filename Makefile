@@ -13,7 +13,7 @@ help:
 	@echo "  dev - install dev components"
 	@echo "  prod - install prod components"
 	@echo "  doc - create and (serve) documentation"
-	@echo "  test (debug=1) files=tests/file - run tests"
+	@echo "  test (debug=1) (STRESSTESTS=1) files=tests/file - run tests"
 	@echo "  fmt (source=module) = run formatter"
 	@echo "  lint (source=module) = run linter"
 	@echo "  sdist - create source tgz"
@@ -30,7 +30,6 @@ clean:
 	rm -rf html
 	rm -rf tmp
 	rm -rf build/
-	mkdir -p tmp/tests
 
 venv:
 	@if [ "0${VIRTUAL_ENV}" != "0" ]; then echo "Please deactivate venv before continue!"; exit 1; fi
@@ -71,7 +70,7 @@ doc:
 ifdef verbose
 verbosity=${verbose}
 else
-verbosity=v
+verbosity=vrfEs
 endif
 
 # check for log-level and enable print statement outputs on debug
@@ -95,18 +94,21 @@ ifndef files
 files=tests/
 endif
 
+# run the stress tests too by STRESSTESTS=1
+ifndef STRESSTESTS
+STRESSTESTS=0
+endif
+
 # limit the tests to run by files and tests filters
 # make test files=test_logging.py tests=logging debug=1
 test:
 	@if [ "0${VIRTUAL_ENV}"${no_venv} = "0" ]; then echo "No venv activated! Add no_venv=1 to enforce make."; exit 1; fi
-	rm -rf tmp/tests
-	mkdir -p tmp/tests
 	CEMENT_LOG=0 \
+	STRESSTESTS=$(STRESSTESTS) \
 	python -m pytest \
 		-${verbosity} \
 		$(allow_print) \
 		$(cov_report) \
-		--basetemp=tmp/tests \
 		$(log_level) \
 		-k "$(tests)" \
 		$(files)

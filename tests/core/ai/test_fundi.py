@@ -3,13 +3,32 @@ Tests for the sandbox helpers that need no app.
 
 Environment scrubbing, the runner's memory cap fallbacks, and the shared
 ```_setup``` contract of the ai classes, all driven directly. Everything that
-goes through the agent chain lives in ```tests/ext/ai/test_ai_fundi.py```.
+goes through the agent chain lives in ```tests/ext/ai/test_ai.py```.
 """
 
 import pytest
-from tokeo.core.ai import TokeoAiError
-from tests.core.ai.tools import GreetTool
+from tokeo.core.ai import TokeoAiError, TokeoAiTool
+from tokeo.core.ai.tool import create_tool_result
 from tokeo.core.ai.sandboxes._common import expand_env
+
+
+class GreetTool(TokeoAiTool):
+    """Greet with a configurable prefix; proves a tool reads its own options."""
+
+    class Meta:
+        description = 'greet the given name'
+        parameters = {
+            'type': 'object',
+            'properties': {'name': {'type': 'string'}},
+            'required': ['name'],
+        }
+        # the tool's outward surface: what a project may set under ```options```
+        config_defaults = dict(
+            prefix='hello',
+        )
+
+    def exec(self, **arguments):
+        return create_tool_result(f"{self._config('prefix')} {arguments.get('name', '')}")
 
 
 def test_expand_env_scrubs_and_expands(monkeypatch):
@@ -117,7 +136,7 @@ def test_an_object_without_setup_is_not_initialized():
     # error instead of running on silently guessed settings; only _setup can
     # hand in a config name (the property has no setter)
     tool = GreetTool(None)
-    assert tool.config_name == 'tests.core.ai.tools.GreetTool'
+    assert tool.config_name == 'tests.core.ai.test_fundi.GreetTool'
     with pytest.raises(TokeoAiError, match='GreetTool: config options were not set by setup'):
         tool._config('prefix')
     with pytest.raises(AttributeError):
@@ -130,7 +149,7 @@ def test_a_setup_without_a_config_yields_the_class_defaults():
     # write into it can never bleed into the class-level dict
     tool = GreetTool(None)
     tool._setup(None)
-    assert tool.config_name == 'tests.core.ai.tools.GreetTool'
+    assert tool.config_name == 'tests.core.ai.test_fundi.GreetTool'
     assert tool._config('prefix') == 'hello'
     tool._config_options['prefix'] = 'poked'
     assert GreetTool.Meta.config_defaults == {'prefix': 'hello'}

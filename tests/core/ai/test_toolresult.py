@@ -4,7 +4,7 @@ Tests for the ToolResult model itself.
 ```create_tool_result``` and the three coherent views (```as_str```,
 ```as_json```, ```as_data```) in isolation: no app, no sandbox. What a
 finished tool call carries once the extension handed it over lives in
-```tests/ext/ai/test_ai_toolresult.py```.
+```tests/ext/ai/test_toolresult.py```.
 """
 
 from tokeo.core.ai import ToolResult

@@ -15,25 +15,24 @@ from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError, TokeoAiFundiAgent, TokeoAiAgent
 from tokeo.core.ai import TokeoAiProvider, TokeoAiSandbox, TokeoAiTool, TokeoAiGovernor
-from tests.core.ai.tools import GreetTool
+from tests.ext.ai.ai_tests_helper import GreetTool
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
 
-
 # dotted paths to the importable test tools the worker loads in a child
-ECHO = 'tests.core.ai.tools.EchoTool'
-CWD = 'tests.core.ai.tools.CwdTool'
-GREET = 'tests.core.ai.tools.GreetTool'
-ENV = 'tests.core.ai.tools.EnvTool'
+ECHO = 'tests.ext.ai.ai_tests_helper.EchoTool'
+CWD = 'tests.ext.ai.ai_tests_helper.CwdTool'
+GREET = 'tests.ext.ai.ai_tests_helper.GreetTool'
+ENV = 'tests.ext.ai.ai_tests_helper.EnvTool'
 
 # the jailed options every platform can enforce; the memory cap is added on
 # linux only: macos cannot bind RLIMIT_AS/DATA below the already mapped
 # address space and the runner refuses sham caps by design
-JAILED_OPTIONS = dict(timeout=5, cwd='tmp/sbx')
+JAILED_OPTIONS = dict(timeout=5)
 if sys.platform == 'linux':
     JAILED_OPTIONS['memory_mb'] = 256
-SLEEP = 'tests.core.ai.tools.SleepTool'
+SLEEP = 'tests.ext.ai.ai_tests_helper.SleepTool'
 
 
 class FundiTest(TokeoTest):
@@ -147,11 +146,13 @@ def test_subprocess_runs_in_a_child(tmp):
         assert run(app, 'echo', 'mixed', text='from-child') == 'from-child'
 
 
-def test_subprocess_cwd_takes_effect():
-    with FundiTest(config_defaults=ai_config()) as app:
-        # the jailed sandbox sets cwd to tmp/sbx; the tool reports it back
+def test_subprocess_cwd_takes_effect(tmp_path):
+    cfg = ai_config()
+    cfg['ai']['sandboxes']['jailed']['options']['cwd'] = str(tmp_path / 'sbx')
+    with FundiTest(config_defaults=cfg) as app:
+        # the jailed sandbox runs in its cwd, made on demand; the tool reports it
         out = run(app, 'cwd', 'mixed')
-        assert out.endswith('tmp/sbx')
+        assert out == str(tmp_path / 'sbx')
 
 
 def test_subprocess_env_is_scrubbed():
@@ -353,7 +354,7 @@ def test_linter_flags_max_steps_that_is_no_whole_number_of_0_or_more(value):
 def test_subprocess_resolves_registry_alias_tools():
     # the import path crosses the boundary as the canonical path of the
     # LOADED class, so a registry alias in the config simply works
-    from tests.core.ai.tools import EchoTool
+    from tests.ext.ai.ai_tests_helper import EchoTool
 
     cfg = ai_config()
     cfg['ai']['tools']['shorty'] = dict(type='echo_short')
@@ -367,7 +368,7 @@ def test_subprocess_refuses_classes_a_child_cannot_import():
     # a nested class has no top-level module path the child could import;
     # the sandbox refuses early with the reason (a script's __main__ case
     # fails the same guard; ```python -m``` resolves via the module spec)
-    from tests.core.ai.tools import EchoTool
+    from tests.ext.ai.ai_tests_helper import EchoTool
 
     Ghost = type('GhostTool', (EchoTool,), {'__qualname__': 'Outer.GhostTool'})
     with FundiTest(config_defaults=ai_config()) as app:

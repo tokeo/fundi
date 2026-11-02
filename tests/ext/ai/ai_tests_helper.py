@@ -1,9 +1,9 @@
 """
-Importable tools for the fundi/sandbox tests.
+The tools the tests of the ai extension run in the sandboxes.
 
-They live in a real module (not a closure) so the subprocess sandbox worker
-can import them by dotted path in a fresh interpreter, exactly as a project's
-tools are imported. Each is a minimal ```TokeoAiTool```.
+They live in a real module, not a closure, so the subprocess sandbox imports
+them by their dotted path in a fresh interpreter, exactly as the tools of a
+project are imported. Each one is a minimal ```TokeoAiTool```.
 """
 
 import os

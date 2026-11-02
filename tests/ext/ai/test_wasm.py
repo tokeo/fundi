@@ -7,6 +7,7 @@ tested in ```tests/core/ai/test_wasm.py```.
 """
 
 import os
+import importlib.util
 import pytest
 
 from cement.utils.misc import init_defaults
@@ -16,49 +17,11 @@ from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox
 from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExecTool
 
-wasmtime = pytest.importorskip('wasmtime')
-
-
-# a guest that grows memory forever, trapping once the store limit refuses
-_GROW_WAT = r"""(module (memory (export "memory") 1)
-  (func (export "_start")
-    (loop $g (if (i32.eq (memory.grow (i32.const 1)) (i32.const -1))
-      (then unreachable)) (br $g))))"""
-
-# a guest that spins forever, interrupted only by an epoch tick
-_SPIN_WAT = r"""(module (memory (export "memory") 1)
-  (func (export "_start") (loop $s (br $s))))"""
-
-
-def _run_wat(wat, memory_mb=None, timeout=None):
-    config = wasmtime.Config()
-    if timeout:
-        config.epoch_interruption = True
-    engine = wasmtime.Engine(config)
-    store = wasmtime.Store(engine)
-    if memory_mb:
-        store.set_limits(memory_size=memory_mb * 1024 * 1024)
-    linker = wasmtime.Linker(engine)
-    linker.define_wasi()
-    store.set_wasi(wasmtime.WasiConfig())
-    module = wasmtime.Module(engine, wat)
-    instance = linker.instantiate(store, module)
-    start = instance.exports(store)['_start']
-    if timeout:
-        store.set_epoch_deadline(1)
-        import threading
-
-        ticker = threading.Timer(timeout, engine.increment_epoch)
-        ticker.daemon = True
-        ticker.start()
-    start(store)
-
 
 def test_wasm_missing_mount_path_names_the_path(tmp):
     # a mount whose host path does not exist must fail with a clear message
-    # naming the path, not a bare wasmtime "failed to add preopen dir". the
-    # repo tmp fixture is used (not pytest's tmp_path) so the suite's
-    # tmp/tests/.gitkeep is not wiped by pytest's basetemp management
+    # naming the path, not a bare wasmtime "failed to add preopen dir"
+    pytest.importorskip('wasmtime')
     runtime = os.path.join(tmp.dir, 'python.wasm')
     with open(runtime, 'wb') as f:
         f.write(b'\x00asm')
@@ -111,8 +74,8 @@ import cement  # noqa: E402
 
 _DEPS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(cement.__file__)))
 
-# skip the build-dependent tests unless an actual build is present
-_have_build = os.path.exists(_RUNTIME) and os.path.isdir(_STDLIB)
+# skip the build-dependent tests unless wasmtime and an actual build are present
+_have_build = importlib.util.find_spec('wasmtime') is not None and os.path.exists(_RUNTIME) and os.path.isdir(_STDLIB)
 
 
 class WasmTest(TokeoTest):
@@ -188,7 +151,7 @@ def wasm_ai_config():
 
 @pytest.mark.skipif(
     not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
+    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_untrusted_exec_through_the_agent_chain():
     # the untrusted tool runs the snippet directly in the guest (no app
@@ -211,7 +174,7 @@ def test_untrusted_exec_through_the_agent_chain():
 
 @pytest.mark.skipif(
     not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
+    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_trusted_exec_through_the_agent_chain():
     # the trusted tool is rebuilt in the guest from the mounted tokeo source;
@@ -234,7 +197,7 @@ def test_trusted_exec_through_the_agent_chain():
 
 @pytest.mark.skipif(
     not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
+    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_untrusted_guest_cannot_import_the_framework():
     # the untrusted path mounts the pact contract (tokeo.pact) but no framework,
@@ -259,7 +222,7 @@ def test_untrusted_guest_cannot_import_the_framework():
 
 @pytest.mark.skipif(
     not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
+    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_wasm_guest_has_no_network():
     # the guest must not reach the network; the syscalls do not exist in its
@@ -283,7 +246,7 @@ def test_wasm_guest_has_no_network():
 
 @pytest.mark.skipif(
     not _have_build,
-    reason=f'no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
+    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_wasm_guest_cannot_write_a_read_only_mount():
     # the stdlib is mounted at /lib with fs_mutable off: a write there fails in
