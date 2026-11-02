@@ -9,6 +9,10 @@ All examples are YAML under a top-level ```ai:``` key. Where a value reads
 ```module:Class```, it is a class path, the module and the class apart by a
 ```:```; where it reads an alias, it is a built-in registered under that name. A
 path with dots only (```module.Class```) is refused with a hint to the ```:```.
+Every key that takes a list (```tools```, ```governors```, ```sandboxes```,
+```deny```, ```omit```, ```except```, a stage list) also takes a single value,
+read as a list of one. A key the section does not know, and an option the class
+does not declare in its ```config_defaults```, is an error.
 
 ## 1. The shape of ```ai:```
 
