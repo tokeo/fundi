@@ -286,31 +286,6 @@ def test_no_agent_offers_no_tool():
 
 
 # --------------------------------------------------------------------------------------
-# set_sandbox override
-# --------------------------------------------------------------------------------------
-
-
-def test_set_sandbox_overrides_the_chain():
-    """set_sandbox('jailed') beats plain's chain for echo; None restores it."""
-    with FundiTest(config_defaults=ai_config()) as app:
-        # force everything into jailed regardless of the agent; echo under the
-        # plain agent would be in_process, but the override wins
-        app.ai.set_sandbox('jailed')
-        agent = app.ai._agent('plain')
-        assert isinstance(app.ai._sandbox_for('echo', agent), TokeoAiSubprocessSandbox)
-        # clearing restores the per-agent chain
-        app.ai.set_sandbox(None)
-        assert isinstance(app.ai._sandbox_for('echo', agent), TokeoAiInProcessSandbox)
-
-
-def test_set_sandbox_rejects_unknown():
-    """set_sandbox('does_not_exist') raises TokeoAiError right away."""
-    with FundiTest(config_defaults=ai_config()) as app:
-        with pytest.raises(TokeoAiError):
-            app.ai.set_sandbox('does_not_exist')
-
-
-# --------------------------------------------------------------------------------------
 # env expansion helper
 # --------------------------------------------------------------------------------------
 

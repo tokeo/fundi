@@ -216,10 +216,6 @@ class TokeoAi(MetaMixin):
         self._agent_objs = {}
         self._governor_objs = {}
         self._sandbox_objs = {}
-        # an app-wide sandbox override set via ```set_sandbox```; when set it
-        # replaces the agent's sandbox chain for every tool (a deliberate,
-        # process-global choice, e.g. force everything into a container)
-        self._sandbox_override = None
         # whether a run records its trace (read from config in _setup); the loop
         # passes it to each context it builds
         self._trace_enabled = True
@@ -580,25 +576,6 @@ class TokeoAi(MetaMixin):
             self._sandbox_objs[config_name] = obj
         return obj
 
-    def set_sandbox(self, name):
-        """
-        Force every tool into one sandbox for this process, or clear it.
-
-        An app-wide override that replaces the agent's sandbox chain: a
-        deliberate, global choice (for example, run everything in a container
-        regardless of the agent). It does not touch the agent's hard ```deny```.
-
-        ### Args
-
-        - **name** (str|None): A configured sandbox name, or ```None``` to
-            clear the override and return to the per-agent chain
-
-        """
-        # validate eagerly so a bad name fails here, not deep in a later call
-        if name is not None:
-            self._sandbox(name)
-        self._sandbox_override = name
-
     def _sandbox_tools_contain(self, name, tool_name):
         # do the tools of sandbox ```name``` contain ```tool_name```? delegates
         # to the shared resolver (config.sandboxes), which knows ```_all``` and
@@ -606,12 +583,11 @@ class TokeoAi(MetaMixin):
         return sandbox_contains_tool(self._sandboxes.get(name), tool_name, self._resolve_tools)
 
     def _sandbox_for(self, tool_name, agent_obj):
-        # choose the sandbox a tool runs in. the app-wide override wins; else
-        # walk the agent's ordered chain via the shared resolver and take the
-        # first sandbox whose tools contain the tool. None means the chain is
-        # exhausted, which the caller turns into a deny (deny-by-default)
-        if self._sandbox_override is not None:
-            return self._sandbox(self._sandbox_override)
+        # choose the sandbox a tool runs in: walk the agent's ordered chain via
+        # the shared resolver and take the first sandbox whose tools contain the
+        # tool. None means the chain is exhausted, which the caller turns into a
+        # deny (deny-by-default). where a sandbox name points is the config's
+        # choice, e.g. per environment file, never a switch in the process
         if agent_obj is None:
             return None
         name = sandbox_for(tool_name, agent_obj._config('sandboxes'), self._sandboxes.get, self._resolve_tools)
