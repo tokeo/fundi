@@ -214,8 +214,10 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             invocation.decision, invocation.reason = Invocation.ALLOW, None
             raise TokeoAiConfirmChanged(invocation)
         if answer.answer == TokeoAiConfirmAnswer.NO:
+            # a no that keeps the no of a guard keeps its reason too
             invocation.decision = Invocation.DENY
-            invocation.reason = answer.reason or no_reason
+            if verdict is None or answer.reason:
+                invocation.reason = answer.reason or no_reason
         elif verdict is not None and answer.by == TokeoAiConfirmAnswer.HUMAN:
             # a person lifts the no of a guard; the record keeps the verdict
             invocation.decision = Invocation.ALLOW

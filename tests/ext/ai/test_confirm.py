@@ -116,6 +116,12 @@ def test_an_auto_answer_does_not_lift_the_no_of_a_guard():
     assert tool_contents(result) == ["denied: tool 'echo' is not permitted by policy"]
 
 
+def test_a_default_no_keeps_the_reason_of_the_guard():
+    """tool_policy denies echo, no channel: the policy's reason stays."""
+    result, _ = run(confirm_config([call('moin'), dict(text='done')], policy=True))
+    assert tool_contents(result) == ["denied: tool 'echo' is not permitted by policy"]
+
+
 def test_no_answer_lifts_the_limits_of_the_config():
     """echo denied by the call: a human once does not make it run."""
     result, _ = run(confirm_config([call('moin'), dict(text='done')]), HUMAN_ONCE, deny='echo')
