@@ -255,13 +255,15 @@ flowchart TD
     A note is shown by ```ai lint```, not during ```ask```/```chat```. An error
     stops both: the run aborts and ```ai lint``` reports it.
 
-### 4.6 Asking a person with ```confirm```
+### 4.6 Confirming the state with ```confirm```
 
 The built-in guard ```confirm``` stops at the stages it takes part in and asks a
-channel: a function on the cement hook ```tokeo_ai_confirm``` that gets
-```(app, request)``` and returns a ```TokeoAiConfirmAnswer``` or ```None```.
-```ai ask``` and ```ai chat``` register a terminal channel when they run in a
-terminal; an app registers its own (a web page, a chat, a rule, a model).
+channel to confirm the state the guards before it reached (```allow``` or
+```deny``` with the reason). A channel is a function on the cement hook
+```tokeo_ai_confirm``` that gets ```(app, request)``` and returns a
+```TokeoAiConfirmAnswer``` or ```None```. ```ai ask``` and ```ai chat``` register
+a terminal channel when they run in a terminal; an app registers its own (a web
+page, a chat, a classifier, a model).
 
 ```yaml
 guards:
@@ -269,38 +271,42 @@ guards:
     type: confirm
     options:
       tools: [filesystem]       # the calls asked at the tool stages (all if unset)
-      auto_allow: [calc]        # allowed by rule, nobody is asked
-      auto_deny: [shell]        # declined by rule
-      default: deny             # no channel answers: no
+      default: no               # no channel answers: no (or yes)
 agents:
   careful:
     type: fundi
     options:
-      governors: [readonly, {ask_first: [on_call]}]
+      governors: [spam_check, {ask_first: [on_call]}]
 ```
 
-The answers:
+The answers, each may carry a note:
 
 | Answer | Effect |
 |--------|--------|
-| ```no``` | ```on_call``` skips the call, ```on_return``` replaces the result, every other stage ends the run with the status ```declined``` |
-| ```once``` | goes on this time |
-| ```run``` | goes on, and the same is not asked again in this run |
-| ```change``` | sets new content, the stage runs again, so the change passes every guard of the stage |
+| ```yes``` | the state of the guards stands |
+| ```yes_run``` | the same, and the same question (stage, content and state 1:1) is not asked again in this run |
+| ```no``` | the state becomes deny: ```on_call``` skips the call, ```on_return``` replaces the result, every other stage ends the run with the status ```declined``` |
+| ```no_retry``` | not like this: the note (required) goes to ```ctx.notes```, the stage runs again, its guards judge anew with the notes, and the channel is asked again |
 
-Who decided is always recorded: ```human```, ```auto``` (a rule or a function of
-the app), or ```default```. Every decision lands in
-```result.loopdata.confirmations``` and on the trace.
+Without an answer the option ```default``` decides: ```no``` turns every state
+into deny, ```yes``` confirms the state of the guards.
 
 .. important::
 
-    A no always wins. The one exception: the no of a guard before a confirm can
-    be lifted by a person (```once``` or ```run``` by ```human```), and that is
-    recorded with the verdict it lifted. An ```auto``` or ```default``` answer
-    never lifts it. The limits of the config (what the agent offers, the deny
-    sets, the sandbox chain) nobody lifts: an agent can never do more than its
-    config allows. After a change a person can change again or say no, but no
-    longer lift a no.
+    A confirm turns a yes into a no, never a no into a yes, and it changes no
+    config. A no of a guard turns into a yes only when a guard judges anew with
+    the notes (after a ```no_retry```) and that new state is confirmed. The
+    limits of the config (what the agent offers, the deny sets, the sandbox
+    chain) stand anyway: an agent can never do more than its config allows. A
+    retry runs at most 10 times per stage, then the run is declined.
+
+Every answer says who decided, ```by``` is required: ```human``` for a person,
+```auto``` for a function of the app; without an answer it is ```default```.
+Every answer lands in ```result.loopdata.confirmations``` (stage, content, state
+before and after, answer, note, by, who, time) and on the trace, a note also in
+```ctx.notes```. The guards read ```ctx.notes```; a later run gets the notes by
+```chat(..., notes=result.loopdata.confirmations)```. Whether the model sees a
+note is a guard's decision, confirm never hands it on by itself.
 
 ## 5. The execution walls in ```sandboxes```
 
@@ -526,6 +532,9 @@ text = app.ai.ask(
 # -> str: the assistant text
 ```
 
+A run a governor declined raises ```TokeoAiRunDeclined``` (stage, reason, by);
+```chat``` returns it as the status of its result instead.
+
 ### 9.2 Full control and the full result with ```chat```
 
 ```chat()``` takes a ```messages``` list and returns the whole ```TokeoAiResult```:
@@ -559,6 +568,7 @@ The call arguments and where each is resolved:
 | ```deny``` | narrow the toolset | added to agent + profile deny |
 | ```max_steps``` / ```max_loops``` | per-call budgets | nearest wins: call → agent → ```ai:``` base |
 | ```userdata``` | your own context, carried through | untouched by the framework |
+| ```notes``` | notes of confirm answers from earlier runs | read by the guards as ```ctx.notes``` |
 
 ### 9.3 Budgets resolve nearest-wins
 

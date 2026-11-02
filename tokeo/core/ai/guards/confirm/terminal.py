@@ -25,7 +25,6 @@ import json
 import getpass
 
 from tokeo.core.ai import Invocation
-from tokeo.core.ai.governor import GOVERNOR_STAGE_ON_CALL
 from tokeo.core.ai.guards.confirm.channel import TokeoAiConfirmAnswer
 
 
@@ -33,10 +32,10 @@ def terminal_channel(read, write):
     """
     Build a confirm channel that asks a person in the terminal.
 
-    It shows the stage, the guard, what is to be confirmed and the no of a guard
-    before, then reads one of the allowed answers by its first letter. A change
-    reads the new content: a JSON object of arguments at ```on_call```, a text
-    otherwise. The answer is a person's (```by='human'```) with the login name.
+    It shows the stage, the guard, what is to be confirmed, the state the
+    guards reached and the notes so far, then reads an answer by its key and a
+    note. A ```no_retry``` needs a note. The answer is a person's
+    (```by='human'```) with the login name.
 
     ### Args
 
@@ -48,6 +47,12 @@ def terminal_channel(read, write):
     - **callable**: The channel ```(app, request) -> TokeoAiConfirmAnswer```
 
     """
+    keys = dict(
+        y=TokeoAiConfirmAnswer.YES,
+        r=TokeoAiConfirmAnswer.YES_RUN,
+        n=TokeoAiConfirmAnswer.NO,
+        t=TokeoAiConfirmAnswer.NO_RETRY,
+    )
 
     def channel(app, request):
         subject = request.subject
@@ -58,30 +63,20 @@ def terminal_channel(read, write):
         else:
             shown = getattr(subject, 'text', subject)
         write(f'confirm {request.stage} ({request.guard}): {shown}')
-        if request.verdict:
-            write(f'  a guard said no: {request.verdict.get("reason")}')
-        choices = {answer[0]: answer for answer in request.answers}
-        prompt = '  ' + ', '.join(f'[{answer[0]}]{answer[1:]}' for answer in request.answers) + '? '
+        state = request.state
+        write(f'  state: {state["decision"]}' + (f' ({state["reason"]})' if state.get('reason') else ''))
+        for note in request.notes:
+            write(f'  note: {note.get("note")}')
         answer = None
-        while answer is None:
-            answer = choices.get(read(prompt).strip().lower()[:1])
-        content = None
-        while answer == TokeoAiConfirmAnswer.CHANGE and content is None:
-            text = read('  new content: ')
-            if request.stage != GOVERNOR_STAGE_ON_CALL:
-                content = text
-                continue
-            try:
-                content = json.loads(text)
-            except ValueError:
-                content = None
-            if not isinstance(content, dict):
-                write('  the arguments are a JSON object, e.g. {"text": "moin"}')
-                content = None
+        while answer not in request.answers:
+            answer = keys.get(read('  [y]es, yes_[r]un, [n]o, no_re[t]ry? ').strip().lower()[:1])
+        note = read('  note (empty for none): ').strip() or None
+        while answer == TokeoAiConfirmAnswer.NO_RETRY and not note:
+            note = read('  note (required for no_retry): ').strip() or None
         try:
             who = getpass.getuser()
         except Exception:
             who = None
-        return TokeoAiConfirmAnswer(answer, who=who, content=content)
+        return TokeoAiConfirmAnswer(answer, by=TokeoAiConfirmAnswer.HUMAN, who=who, note=note)
 
     return channel

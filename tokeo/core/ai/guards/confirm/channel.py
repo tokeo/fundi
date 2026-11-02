@@ -7,13 +7,14 @@
 # project root for the full license text. Use is subject to its conditions.
 
 """
-The ```confirm``` guard: ask a channel before the run goes on.
+The ```confirm``` guard: a channel confirms the state the guards reached.
 
 At each stage it takes part in, the guard builds a ```TokeoAiConfirmRequest```
-and asks the channels registered on the cement hook ```tokeo_ai_confirm```. A
-channel is a function ```(app, request)``` that returns a
-```TokeoAiConfirmAnswer``` or ```None```; the first answer counts. Without one the
-option ```default``` decides.
+with the content, the state the guards before it reached (```allow``` or
+```deny``` with the reason) and all notes so far, and asks the channels on the
+cement hook ```tokeo_ai_confirm```. A channel is a function ```(app, request)```
+that returns a ```TokeoAiConfirmAnswer``` or ```None```; the first answer counts.
+Without one the option ```default``` decides.
 
 ```yaml
 ai:
@@ -22,27 +23,31 @@ ai:
       type: confirm
       options:
         tools: [filesystem]    # only these calls at the tool stages
-        auto_allow: [calc]     # allowed by rule, nobody is asked
-        default: deny          # no channel answers: no
+        default: no            # no channel answers: no
   agents:
     careful:
       type: fundi
       options:
-        governors: [{ask_first: [on_call]}]
+        governors: [spam_check, {ask_first: [on_call]}]
 ```
 
 ### Notes
 
-: Who decided is always recorded: ```human``` (a channel answered as a
-    person), ```auto``` (a rule or a function of the app, also a model), or
-    ```default```. Only a ```human``` answer counts as a human confirmation, and
-    only it can lift the no of a guard before; the limits of the config (what the
-    agent offers, the deny set, the sandbox chain) no answer lifts.
+: The answers: ```yes``` (the state stands), ```yes_run``` (the same, and the
+    question 1:1 the same is not asked again in this run), ```no``` (the state
+    becomes deny), ```no_retry``` (not like this: the note goes to
+    ```ctx.notes``` and the stage runs again, the guards judge anew, then the
+    channel is asked again). Every answer may carry a note, ```no_retry```
+    must. A confirm turns a yes into a no, never a no into a yes: that only
+    happens when a guard judges anew with the notes and the new state is
+    confirmed.
 
-: Every decision is appended to ```result.loopdata.confirmations``` and tracked
-    on the trace, for the app to keep and learn from.
+: Every answer is recorded in ```result.loopdata.confirmations``` and on the
+    trace, a note also in ```ctx.notes```; ```chat(notes=...)``` hands notes of
+    earlier runs to the guards of a new one.
 """
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -55,15 +60,14 @@ from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_RETURN,
     GOVERNOR_STAGE_ON_CLOSE,
 )
-from tokeo.core.ai.tool import create_tool_result
 from tokeo.core.ai.guards.confirm.base import TokeoAiConfirmGuard
-from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmChanged
+from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmRetry
 
 #: The cement hook a confirm channel registers on.
 CONFIRM_HOOK = 'tokeo_ai_confirm'
 
-#: How often a person may change one content before the run is declined.
-CONFIRM_CHANGES = 5
+#: How often one stage may be retried before the run is declined.
+CONFIRM_RETRIES = 10
 
 
 @dataclass
@@ -78,9 +82,10 @@ class TokeoAiConfirmRequest:
     - **subject**: What is to be confirmed: the ```Invocation``` at the tool
         stages, the ```ChatResult``` at ```on_answer```/```on_close```, the
         messages at ```on_begin```/```on_prompt```
-    - **verdict** (dict|None): The no of a guard before, ```decision``` and
-        ```reason```; a human answer may lift it
-    - **answers** (tuple): The answers allowed here
+    - **state** (dict): The state the guards reached, ```decision```
+        (```allow``` or ```deny```) and ```reason```
+    - **notes** (list): Every note so far, also from earlier runs
+    - **answers** (tuple): The answers allowed
     - **userdata**: The caller's ```userdata``` of the run, e.g. who is asked
 
     """
@@ -88,7 +93,8 @@ class TokeoAiConfirmRequest:
     stage: str
     guard: str
     subject: object
-    verdict: dict | None
+    state: dict
+    notes: list
     answers: tuple
     userdata: object = None
 
@@ -100,195 +106,157 @@ class TokeoAiConfirmAnswer:
 
     ### Args
 
-    - **answer** (str): ```NO```, ```ONCE```, ```RUN``` (the same again in
-        this run is allowed without asking), or ```CHANGE```
-    - **by** (str): ```HUMAN``` or ```AUTO```, who decided
-    - **who** (str|None): The person or rule that decided, for the record
-    - **reason** (str|None): Why, for the record and a declined run
-    - **content**: With ```CHANGE``` the new content: the arguments (dict) at
-        ```on_call```, the result value at ```on_return```, the text of the last
-        message at ```on_begin```/```on_prompt```, the answer text at
-        ```on_answer```/```on_close```
+    - **answer** (str): ```YES```, ```YES_RUN```, ```NO``` or ```NO_RETRY```
+    - **by** (str): ```HUMAN``` or ```AUTO```, who decided; required, so an app
+        function never passes for a person
+    - **who** (str|None): The person or function that decided
+    - **note** (str|None): The note; required with ```NO_RETRY```
 
     """
 
+    YES = 'yes'
+    YES_RUN = 'yes_run'
     NO = 'no'
-    ONCE = 'once'
-    RUN = 'run'
-    CHANGE = 'change'
+    NO_RETRY = 'no_retry'
     HUMAN = 'human'
     AUTO = 'auto'
     DEFAULT = 'default'
 
     answer: str
-    by: str = HUMAN
+    by: str
     who: str | None = None
-    reason: str | None = None
-    content: object = None
+    note: str | None = None
 
 
 class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
     """
-    Ask the ```tokeo_ai_confirm``` channels at every stage it takes part in.
+    Ask the ```tokeo_ai_confirm``` channels to confirm the state of a stage.
 
     A no skips the call at ```on_call```, replaces the result at
     ```on_return```, and ends the run with the status ```declined``` at the
-    other stages. A change sets the new content and runs the stage again, so it
-    passes every guard of the stage; after a change a person can change again
-    or say no, but no longer lift a no.
+    other stages. A no_retry runs the stage again with the note.
     """
 
     class Meta:
         """The confirm options, overridden per guard by its entry's options."""
 
         # tools: the calls asked at the tool stages, None = all. default: the
-        # answer without a channel, deny or allow. auto_allow, auto_deny: tools
-        # decided by rule without asking
+        # answer when no channel answers, no or yes
         config_defaults = dict(
             tools=None,
-            default='deny',
-            auto_allow=[],
-            auto_deny=[],
+            default='no',
         )
 
         # the options that hold tool and group names, checked by the linter
-        tool_name_options = ('tools', 'auto_allow', 'auto_deny')
+        tool_name_options = ('tools',)
 
     def on_begin(self, ctx):
-        """Ask before the run starts; a no declines the run."""
-        self._decline_on_no(ctx, GOVERNOR_STAGE_ON_BEGIN, ctx.messages)
+        """Confirm before the run starts; a no declines the run."""
+        self._confirm_run(ctx, GOVERNOR_STAGE_ON_BEGIN, ctx.messages)
 
     def on_prompt(self, ctx):
-        """Ask before each model call; a no declines the run."""
-        self._decline_on_no(ctx, GOVERNOR_STAGE_ON_PROMPT, ctx.messages)
+        """Confirm before each model call; a no declines the run."""
+        self._confirm_run(ctx, GOVERNOR_STAGE_ON_PROMPT, ctx.messages)
 
     def on_answer(self, ctx, result):
-        """Ask on each model answer; a no declines the run."""
-        self._decline_on_no(ctx, GOVERNOR_STAGE_ON_ANSWER, result)
+        """Confirm each model answer; a no declines the run."""
+        self._confirm_run(ctx, GOVERNOR_STAGE_ON_ANSWER, result)
 
     def on_close(self, ctx, result):
-        """Ask on the final answer; a no declines the run."""
-        self._decline_on_no(ctx, GOVERNOR_STAGE_ON_CLOSE, result)
+        """Confirm the final answer; a no declines the run."""
+        self._confirm_run(ctx, GOVERNOR_STAGE_ON_CLOSE, result)
 
     def on_call(self, ctx, invocation):
-        """Ask before a tool call; a no skips it, a human yes lifts a no."""
-        self._decide_call(ctx, GOVERNOR_STAGE_ON_CALL, invocation, 'declined by confirmation')
+        """Confirm a tool call; a no skips it."""
+        self._confirm_call(ctx, GOVERNOR_STAGE_ON_CALL, invocation, 'declined by confirmation')
 
     def on_return(self, ctx, invocation):
-        """Ask on a tool result; a no replaces it, a human yes lifts a no."""
-        self._decide_call(ctx, GOVERNOR_STAGE_ON_RETURN, invocation, 'denied by confirmation')
+        """Confirm a tool result; a no replaces it."""
+        self._confirm_call(ctx, GOVERNOR_STAGE_ON_RETURN, invocation, 'denied by confirmation')
 
-    def _decline_on_no(self, ctx, stage, subject):
-        # the stages without a tool call: a no ends the run in order
-        answer = self._ask(ctx, stage, subject, None, stage, f'{stage}:{ctx.loopdata.steps}')
-        if answer is None:
-            return
-        if answer.answer == TokeoAiConfirmAnswer.CHANGE:
-            if isinstance(subject, list):
-                subject[-1]['content'] = str(answer.content)
-                raise TokeoAiConfirmChanged()
-            subject.text = str(answer.content)
-            raise TokeoAiConfirmChanged(subject)
+    def _confirm_run(self, ctx, stage, subject):
+        # the stages without a tool call: the guards there cannot deny, the
+        # state is allow; a no ends the run in order
+        state = dict(decision=Invocation.ALLOW, reason=None)
+        answer = self._ask(ctx, stage, subject, state, f'{stage}:{ctx.loopdata.steps}')
+        if answer.answer == TokeoAiConfirmAnswer.NO_RETRY:
+            raise TokeoAiConfirmRetry(None if isinstance(subject, list) else subject)
         if answer.answer == TokeoAiConfirmAnswer.NO:
-            raise TokeoAiRunDeclined(stage, answer.reason or 'declined by confirmation', by=answer.by)
+            raise TokeoAiRunDeclined(stage, answer.note or 'declined by confirmation', by=answer.by)
 
-    def _decide_call(self, ctx, stage, invocation, no_reason):
+    def _confirm_call(self, ctx, stage, invocation, no_reason):
         # the tool stages: only the configured tools are asked
         tools = self._config('tools', stage=stage)
         if tools is not None and invocation.name not in self.app.ai.tool_names(tools):
             return
-        verdict = None
-        if invocation.decision == Invocation.DENY:
-            verdict = dict(decision=invocation.decision, reason=invocation.reason)
-        answer = self._ask(ctx, stage, invocation, verdict, f'{stage}:{invocation.name}', f'{stage}:{invocation.id}')
-        if answer is None:
-            return
-        if answer.answer == TokeoAiConfirmAnswer.CHANGE:
-            # the change is checked anew by the guards, it lifts nothing itself
-            if stage == GOVERNOR_STAGE_ON_CALL:
-                if not isinstance(answer.content, dict):
-                    raise TokeoAiError(f'confirm guard {self.config_name!r}: changed arguments must be a dict')
-                invocation.arguments = dict(answer.content)
-            else:
-                invocation.result, invocation.error = create_tool_result(answer.content), None
+        state = dict(decision=invocation.decision, reason=invocation.reason)
+        answer = self._ask(ctx, stage, invocation, state, f'{stage}:{invocation.id}')
+        if answer.answer == TokeoAiConfirmAnswer.NO_RETRY:
+            # the guards of the stage judge the same call anew, with the notes
             invocation.decision, invocation.reason = Invocation.ALLOW, None
-            raise TokeoAiConfirmChanged(invocation)
-        if answer.answer == TokeoAiConfirmAnswer.NO:
-            # a no that keeps the no of a guard keeps its reason too
-            invocation.decision = Invocation.DENY
-            if verdict is None or answer.reason:
-                invocation.reason = answer.reason or no_reason
-        elif verdict is not None and answer.by == TokeoAiConfirmAnswer.HUMAN:
-            # a person lifts the no of a guard; the record keeps the verdict
-            invocation.decision = Invocation.ALLOW
-            invocation.reason = f'allowed by confirmation over: {verdict["reason"]}'
+            raise TokeoAiConfirmRetry(invocation)
+        if answer.answer == TokeoAiConfirmAnswer.NO and invocation.decision != Invocation.DENY:
+            invocation.decision, invocation.reason = Invocation.DENY, answer.note or no_reason
 
-    def _ask(self, ctx, stage, subject, verdict, key, change_key):
-        # the answer for this request: remembered for the run, by rule, by a
-        # channel, or the default; recorded on the result and the trace. None
-        # when content a person changed passed the guards of the stage
-        state = ctx.turndata.setdefault(f'{self.config_name}:confirm', dict(run={}, changed=set()))
-        if change_key in state['changed']:
-            if verdict is None:
-                return None
-            answers = (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.CHANGE)
+    def _ask(self, ctx, stage, subject, state, retry_key):
+        # the answer: recalled for the run when the question is 1:1 the same,
+        # else from a channel, else the default; recorded on the result and
+        # the trace, a note also in ctx.notes
+        memory = ctx.turndata.setdefault(f'{self.config_name}:confirm', dict(run={}, retries={}))
+        if isinstance(subject, Invocation):
+            summary = dict(tool=subject.name, arguments=subject.arguments)
+        elif isinstance(subject, list):
+            summary = dict(messages=[dict(role=m.get('role'), content=m.get('content')) for m in subject])
         else:
-            answers = (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.ONCE, TokeoAiConfirmAnswer.RUN, TokeoAiConfirmAnswer.CHANGE)
-        remembered = state['run']
-        answer = remembered.get(key) if verdict is None else None
+            summary = dict(text=getattr(subject, 'text', None))
+        question = json.dumps([stage, summary, state], sort_keys=True, default=str)
+        answers = (TokeoAiConfirmAnswer.YES, TokeoAiConfirmAnswer.YES_RUN, TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.NO_RETRY)
+        answer = memory['run'].get(question)
         recalled = answer is not None
         if answer is None:
-            answer = self._rule(stage, subject, verdict)
-        if answer is None:
-            request = TokeoAiConfirmRequest(stage, self.config_name, subject, verdict, answers, ctx.userdata)
+            request = TokeoAiConfirmRequest(stage, self.config_name, subject, state, list(ctx.notes), answers, ctx.userdata)
             for result in self.app.hook.run(CONFIRM_HOOK, self.app, request):
                 if result is not None:
                     answer = result
                     break
         if answer is None:
             default = self._config('default', stage=stage)
-            if default not in ('deny', 'allow'):
-                raise TokeoAiError(f'confirm guard {self.config_name!r}: default must be deny or allow, got {default!r}')
-            allow = default == 'allow' and verdict is None
-            answer = TokeoAiConfirmAnswer(TokeoAiConfirmAnswer.ONCE if allow else TokeoAiConfirmAnswer.NO, by=TokeoAiConfirmAnswer.DEFAULT)
-        if answer.answer not in answers:
-            raise TokeoAiError(f'confirm guard {self.config_name!r}: answer {answer.answer!r} is not one of {answers}')
-        if answer.answer == TokeoAiConfirmAnswer.CHANGE:
-            if answer.content is None:
-                raise TokeoAiError(f'confirm guard {self.config_name!r}: a change needs the new content')
-            state['changed'].add(change_key)
-        if answer.answer == TokeoAiConfirmAnswer.RUN and verdict is None:
-            remembered[key] = answer
-        if isinstance(subject, Invocation):
-            summary = dict(tool=subject.name, arguments=subject.arguments)
-        elif isinstance(subject, list):
-            summary = dict(message=(subject[-1] if subject else {}).get('content'))
-        else:
-            summary = dict(text=getattr(subject, 'text', None))
+            if default not in (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.YES):
+                raise TokeoAiError(f'confirm guard {self.config_name!r}: default must be no or yes, got {default!r}')
+            answer = TokeoAiConfirmAnswer(default, by=TokeoAiConfirmAnswer.DEFAULT)
+        elif not recalled:
+            if answer.answer not in answers:
+                raise TokeoAiError(f'confirm guard {self.config_name!r}: answer {answer.answer!r} is not one of {answers}')
+            if answer.by not in (TokeoAiConfirmAnswer.HUMAN, TokeoAiConfirmAnswer.AUTO):
+                raise TokeoAiError(f'confirm guard {self.config_name!r}: an answer must say by human or auto, got {answer.by!r}')
+        retries = memory['retries'].get(retry_key, 0)
+        if answer.answer == TokeoAiConfirmAnswer.NO_RETRY:
+            if not answer.note:
+                raise TokeoAiError(f'confirm guard {self.config_name!r}: no_retry needs a note')
+            if retries >= CONFIRM_RETRIES:
+                raise TokeoAiRunDeclined(stage, f'retried more than {CONFIRM_RETRIES} times in a confirm', by=answer.by)
+            memory['retries'][retry_key] = retries + 1
+        if answer.answer == TokeoAiConfirmAnswer.YES_RUN:
+            memory['run'][question] = answer
+        after = state['decision']
+        if answer.answer == TokeoAiConfirmAnswer.NO:
+            after = Invocation.DENY
         record = dict(
             stage=stage,
             guard=self.config_name,
             subject=summary,
-            verdict=verdict,
+            state_before=state,
             answer=answer.answer,
+            state_after=after,
+            note=answer.note,
             by=answer.by,
             who=answer.who,
-            reason=answer.reason,
-            content=answer.content,
+            retry=retries,
             recalled=recalled,
             at=datetime.now(timezone.utc).isoformat(),
         )
         ctx.loopdata.confirmations.append(record)
+        if answer.note:
+            ctx.notes.append(record)
         ctx.track(self, record, stage=stage)
         return answer
-
-    def _rule(self, stage, subject, verdict):
-        # the auto rules of the config, at the tool stages only; a rule never
-        # lifts the no of a guard
-        if not isinstance(subject, Invocation):
-            return None
-        if subject.name in self.app.ai.tool_names(self._config('auto_deny', stage=stage)):
-            return TokeoAiConfirmAnswer(TokeoAiConfirmAnswer.NO, by=TokeoAiConfirmAnswer.AUTO, who='auto_deny')
-        if verdict is None and subject.name in self.app.ai.tool_names(self._config('auto_allow', stage=stage)):
-            return TokeoAiConfirmAnswer(TokeoAiConfirmAnswer.ONCE, by=TokeoAiConfirmAnswer.AUTO, who='auto_allow')
-        return None

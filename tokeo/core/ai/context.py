@@ -67,6 +67,8 @@ class TokeoAiContext:
         find the caller's own context by it. Its content is the caller's
         concern (a string, an id, a struct); the only guarantee is that it
         arrives unchanged. Defaults to ```None```
+    - **notes** (list|None): Notes of confirm answers from earlier runs; the
+        notes of this run are appended, readable as ```ctx.notes```
     - **trace** (bool): Whether to record the step history. ```True``` (the
         default) builds the full trace; ```False``` skips appending steps
         while the typed caches (messages, invocations, results) still fill
@@ -79,7 +81,7 @@ class TokeoAiContext:
     # an instance of (isinstance, so a subclass lands in its base's view too)
     _CACHED = (ChatMessage, Invocation, ChatResult)
 
-    def __init__(self, messages=None, turndata_preset=None, userdata=None, trace=True):
+    def __init__(self, messages=None, turndata_preset=None, userdata=None, trace=True, notes=None):
         # whether to record the step history; the caches always fill
         self._record_trace = trace
         # the one chronological stream of every tracked object
@@ -94,6 +96,9 @@ class TokeoAiContext:
         # the caller's opaque carry-through value; set once, never touched by
         # the framework, constant for the run (not history, not a counter)
         self.userdata = userdata
+        # the notes of confirm answers, from earlier runs and this one, for the
+        # guards to judge with
+        self.notes = list(notes or [])
         # seed the incoming conversation, as ChatMessage so it is typed in the
         # cache; a plain dict is wrapped, an existing ChatMessage kept as is. the
         # context itself is the origin of these seed steps (the incoming request,

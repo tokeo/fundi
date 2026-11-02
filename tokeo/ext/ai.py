@@ -125,9 +125,8 @@ from tokeo.core.ai.guards.validate import TokeoAiToolSchemaValidator
 from tokeo.core.ai.guards.redact import TokeoAiRegexRedactGuard
 from tokeo.core.ai.guards.confirm import (
     CONFIRM_HOOK,
-    CONFIRM_CHANGES,
     TokeoAiConfirmGuard,
-    TokeoAiConfirmChanged,
+    TokeoAiConfirmRetry,
     TokeoAiChannelConfirmGuard,
 )
 from tokeo.core.ai.guards.confirm.terminal import terminal_channel
@@ -713,18 +712,17 @@ class TokeoAi(MetaMixin):
             invocation.sandbox = sandbox.config_name
         return self._exec_lifecycle(tool, sandbox, arguments or {}, ctx)
 
-    def _govern(self, stage, governors, step, subject):
+    def _govern(self, governors, step, subject):
         # run the governors of a stage over the subject, step(governor,
-        # subject) -> subject. a person who changes the content in a confirm
-        # starts the stage again, so the change passes every guard of it
-        for _ in range(CONFIRM_CHANGES + 1):
+        # subject) -> subject. a no_retry in a confirm starts the stage again,
+        # its guards judge anew with the notes; the confirm bounds the retries
+        while True:
             try:
                 for governor in governors:
                     subject = step(governor, subject)
                 return subject
-            except TokeoAiConfirmChanged as changed:
-                subject = changed.subject if changed.subject is not None else subject
-        raise TokeoAiRunDeclined(stage, f'changed more than {CONFIRM_CHANGES} times in a confirm', by='human')
+            except TokeoAiConfirmRetry as retry:
+                subject = retry.subject if retry.subject is not None else subject
 
     def _exec_governed(self, call, call_governors, return_governors, ctx, agent_obj, profile, call_deny=None):
         # run one tool call through the guard pipeline: the on_call guards may
@@ -763,7 +761,7 @@ class TokeoAi(MetaMixin):
                 invocation.reason = f'blocked by {self._governor_label(governor)}'
             return invocation
 
-        invocation = self._govern(GOVERNOR_STAGE_ON_CALL, call_governors, on_call, invocation)
+        invocation = self._govern(call_governors, on_call, invocation)
         if invocation.decision != Invocation.DENY:
             try:
                 # the seam: the agent's sandbox chain contains the exec (a hard
@@ -783,7 +781,7 @@ class TokeoAi(MetaMixin):
                 # the pipeline is resilient: a failing tool is recorded and the
                 # loop continues, instead of crashing the whole call
                 invocation.error = f'{type(err).__name__}: {err}'
-        invocation = self._govern(GOVERNOR_STAGE_ON_RETURN, return_governors, on_return, invocation)
+        invocation = self._govern(return_governors, on_return, invocation)
         # the text fed back to the model for this call; the invocation is
         # returned too, so the loop reads the outcome off the object it has
         if invocation.decision == Invocation.DENY:
@@ -811,6 +809,7 @@ class TokeoAi(MetaMixin):
         max_loops=None,
         turndata_preset=None,
         userdata=None,
+        notes=None,
     ):
         """
         Run the agent loop and return the run's ```TokeoAiResult```.
@@ -852,6 +851,9 @@ class TokeoAi(MetaMixin):
         - **userdata**: An opaque value carried through the run on the context,
             untouched by the framework, for a guard or confirm hook to read back
             the caller's own context; its content is the caller's concern
+        - **notes** (list|None): Notes of confirm answers from earlier runs,
+            e.g. ```result.loopdata.confirmations``` of a run before; the
+            guards read them as ```ctx.notes```
 
         ### Returns
 
@@ -906,7 +908,7 @@ class TokeoAi(MetaMixin):
         # incoming messages are tracked at construction, so ctx.messages is the
         # conversation history. the current result is a local, handed to the
         # stages and tracked, not a context field
-        ctx = TokeoAiContext(messages=messages, turndata_preset=turndata_preset, userdata=userdata, trace=self._trace_enabled)
+        ctx = TokeoAiContext(messages=messages, turndata_preset=turndata_preset, userdata=userdata, trace=self._trace_enabled, notes=notes)
 
         def on_messages(stage):
             # begin and prompt refine the conversation, no work object
@@ -932,13 +934,13 @@ class TokeoAi(MetaMixin):
             # work object), so they refine the messages: a guard may mutate
             # ctx.messages in place (returning None) or hand back a fresh
             # conversation, and refine_messages records the step either way
-            self._govern(GOVERNOR_STAGE_ON_BEGIN, at_begin, on_messages(GOVERNOR_STAGE_ON_BEGIN), None)
+            self._govern(at_begin, on_messages(GOVERNOR_STAGE_ON_BEGIN), None)
             # on_prompt: before each model call, on the outgoing messages
-            self._govern(GOVERNOR_STAGE_ON_PROMPT, at_prompt, on_messages(GOVERNOR_STAGE_ON_PROMPT), None)
+            self._govern(at_prompt, on_messages(GOVERNOR_STAGE_ON_PROMPT), None)
             result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
             # on_answer: after each model call, on the model answer; the result is
             # the handed-in work object, so the step is recorded through supersede
-            result = self._govern(GOVERNOR_STAGE_ON_ANSWER, at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
+            result = self._govern(at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
             while result.tool_calls:
                 # max_steps caps the tool rounds of one request; 0 is unlimited.
                 # reaching it aborts loudly: a silent empty answer hides the cause
@@ -1000,12 +1002,12 @@ class TokeoAi(MetaMixin):
                 if max_loops and ctx.loopdata.failed_loops >= max_loops:
                     raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
                 # on_prompt again before the follow-up model call
-                self._govern(GOVERNOR_STAGE_ON_PROMPT, at_prompt, on_messages(GOVERNOR_STAGE_ON_PROMPT), None)
+                self._govern(at_prompt, on_messages(GOVERNOR_STAGE_ON_PROMPT), None)
                 result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
                 # on_answer again after the follow-up model call
-                result = self._govern(GOVERNOR_STAGE_ON_ANSWER, at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
+                result = self._govern(at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
             # on_close: once, on the final result, after the loop
-            result = self._govern(GOVERNOR_STAGE_ON_CLOSE, at_close, on_result(GOVERNOR_STAGE_ON_CLOSE), result)
+            result = self._govern(at_close, on_result(GOVERNOR_STAGE_ON_CLOSE), result)
             # the run result: the final answer (a ChatResult), plus the run's
             # history and counters lifted off the context (which ends here). the
             # answer is just the model answer; the trace and status ride alongside
@@ -1042,6 +1044,7 @@ class TokeoAi(MetaMixin):
         agent=None,
         turndata_preset=None,
         userdata=None,
+        notes=None,
     ):
         """
         Send a single user prompt through the loop and return the reply text.
@@ -1064,10 +1067,16 @@ class TokeoAi(MetaMixin):
         - **userdata**: An opaque value carried through the run on the context,
             untouched by the framework, for a guard or confirm hook to read back
             the caller's own context; its content is the caller's concern
+        - **notes** (list|None): Notes of confirm answers from earlier runs
 
         ### Returns
 
         - **str**: The assistant text
+
+        ### Raises
+
+        - **TokeoAiRunDeclined**: When a governor declined the run; the status
+            of a run is only in ```chat```'s result
 
         """
         messages = [{'role': 'user', 'content': prompt}]
@@ -1081,7 +1090,11 @@ class TokeoAi(MetaMixin):
             agent=agent,
             turndata_preset=turndata_preset,
             userdata=userdata,
+            notes=notes,
         )
+        if result.status == TokeoAiResult.DECLINED:
+            declined = result.declined
+            raise TokeoAiRunDeclined(declined['stage'], declined['reason'], by=declined['by'])
         return result.answer.text
 
 

@@ -8,14 +8,15 @@ raises to abort. Both are re-exported here, so the short path
 
 The ready-to-use implementation is the ```confirm``` guard
 (```TokeoAiChannelConfirmGuard```): it asks the channels on the cement hook
-```tokeo_ai_confirm``` and records every decision.
+```tokeo_ai_confirm``` to confirm the state the guards reached, and records
+every answer.
 """
 
-from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmGuardError, TokeoAiConfirmChanged
+from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmGuardError, TokeoAiConfirmRetry
 from tokeo.core.ai.guards.confirm.base import TokeoAiConfirmGuard
 from tokeo.core.ai.guards.confirm.channel import (
     CONFIRM_HOOK,
-    CONFIRM_CHANGES,
+    CONFIRM_RETRIES,
     TokeoAiConfirmRequest,
     TokeoAiConfirmAnswer,
     TokeoAiChannelConfirmGuard,
@@ -23,10 +24,10 @@ from tokeo.core.ai.guards.confirm.channel import (
 
 __all__ = [
     'TokeoAiConfirmGuardError',
-    'TokeoAiConfirmChanged',
+    'TokeoAiConfirmRetry',
     'TokeoAiConfirmGuard',
     'CONFIRM_HOOK',
-    'CONFIRM_CHANGES',
+    'CONFIRM_RETRIES',
     'TokeoAiConfirmRequest',
     'TokeoAiConfirmAnswer',
     'TokeoAiChannelConfirmGuard',

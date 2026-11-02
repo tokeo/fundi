@@ -21,20 +21,20 @@ class TokeoAiConfirmGuardError(TokeoAiGuardError):
     """
 
 
-class TokeoAiConfirmChanged(Exception):
+class TokeoAiConfirmRetry(Exception):
     """
-    Raised by a confirm guard after a person changed the content.
+    Raised by a confirm guard on the answer no_retry.
 
-    Not an error: the loop catches it and runs the stage again, so the changed
-    content passes every guard of the stage.
+    Not an error: the loop catches it and runs the stage again, so its guards
+    judge anew with the note in ```ctx.notes```.
 
     ### Args
 
-    - **subject**: The changed work object of the stage, or ```None``` for
-        the messages
+    - **subject**: The work object of the stage, or ```None``` for the
+        messages
 
     """
 
     def __init__(self, subject=None):
-        super().__init__('content changed in a confirm')
+        super().__init__('retried in a confirm')
         self.subject = subject
