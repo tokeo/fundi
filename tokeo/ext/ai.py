@@ -215,8 +215,7 @@ class TokeoAi(MetaMixin):
         self._provider_objs = {}
         self._tool_objs = {}
         self._agent_objs = {}
-        # the implicit agent, built on first use; kept apart from the cache so
-        # no name a call or a command passes can reach it
+        # apart from the cache, so no name reaches it
         self._agent_implicit = None
         self._governor_objs = {}
         self._sandbox_objs = {}
@@ -262,10 +261,7 @@ class TokeoAi(MetaMixin):
         # a sandbox item ({type, tools, except, options}); there are no groups
         # here (a sandbox lists tool/group names under its own ```tools```)
         self._sandboxes = self._config('sandboxes', fallback={}) or {}
-        # the ```ai.tools``` map uses the uniform form: a dict value is an item
-        # ({type, options}), a string its short form without options, a list
-        # value a named group of member names. split it once into the two maps
-        # the loop works with
+        # ai.tools: a dict is an item, a string its short form, a list a group
         self._tool_items, self._tool_groups = {}, {}
         for name, value in (self._config('tools', fallback={}) or {}).items():
             if isinstance(value, list):
@@ -276,9 +272,7 @@ class TokeoAi(MetaMixin):
                 self._tool_items[name] = value
 
     def _license_notice(self):
-        # log the license notice once per process until ai.license_acknowledged
-        # is true: at every ai command and at the first ai call from code. the
-        # flag is shared without a lock, a second notice in a race is harmless
+        # once per process until acknowledged; a race may log it twice
         if self._show_license_notice:
             self._show_license_notice = False
             self.app.log.info(self.FUNDI_LICENSE_NOTICE)
@@ -509,11 +503,8 @@ class TokeoAi(MetaMixin):
         return obj
 
     def _agent_or_default(self, agent, profile=None):
-        # resolve the agent to run via the shared resolver (config.profiles):
-        # an explicit call argument wins, else the profile's stated ```agent```,
-        # else ```ai.defaults.agent```. there is always an agent: where none
-        # results, the run gets the implicit agent, a fundi agent with an empty
-        # config that offers no tool and runs on the ai-level budgets
+        # call, then profile, then ai.defaults.agent; none results: the
+        # implicit agent, a fundi agent with an empty config
         name = resolve_agent_name(agent, profile, self._defaults.get('agent'))
         if name is not None:
             return self._agent(name)

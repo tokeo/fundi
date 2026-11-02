@@ -28,9 +28,7 @@ class TokeoAiProvider:
     class Meta:
         """Provider meta-data; a provider defines its own option keys."""
 
-        # the keys a profile may set under ```options``` for this provider,
-        # with their defaults (base_url, key, timeout ...). empty here: the base
-        # has none; the linter reports any other key as an error
+        # the keys a profile may set under options, with their defaults
         config_defaults = {}
 
     def __init__(self, app, *args, **kw):

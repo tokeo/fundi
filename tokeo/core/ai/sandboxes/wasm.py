@@ -280,8 +280,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         - **TokeoAiError**: On a missing runtime, a timeout, or a guest error
 
         """
-        # WHY lazy import: wasmtime is an opt-in extra (tokeo-fundi[wasm]); only
-        # this sandbox needs it, so import on use and name the install on absence
+        # wasmtime is the optional extra tokeo-fundi[wasm], imported on use
         try:
             import wasmtime
         except ImportError:

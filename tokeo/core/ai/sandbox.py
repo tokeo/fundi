@@ -165,10 +165,9 @@ class TokeoAiSandbox(MetaMixin):
         """
         Validate the item's ```options``` for the linter.
 
-        The linter checks the keys against ```Meta.config_defaults``` itself;
-        the values are the class's business. The base accepts any value; a
-        derivation that checks its values overrides this and returns error
-        strings.
+        The linter checks the keys against ```Meta.config_defaults```. The base
+        accepts any value; a derivation that checks its values overrides this
+        and returns error strings.
 
         ### Args
 

@@ -311,12 +311,8 @@ class TokeoAiLinter:
         self._lint_option_keys(section.rstrip('s'), f'{path}.options', item.get('type'), item.get('options'))
 
     def _validate_agent_options(self, section, name, item):
-        # the base agent's known option keys: the tools selection points into
-        # ```ai.tools```, the guards selection into ```ai.guards```, and the
-        # budgets are numbers; other keys may be a custom agent's own Meta keys
         path = f'ai.{section}.{name}'
-        # a yaml key null reads as None, no name; a name with a leading __ is
-        # the framework's (the implicit agent), never a configured agent
+        # a yaml key null is None; a leading __ belongs to the framework
         if not isinstance(name, str):
             self._add(path, 'an agent name must be a string')
             return
@@ -327,14 +323,13 @@ class TokeoAiLinter:
             return
         options = item.get('options')
         path = f'{path}.options'
-        # every agent names its governors, an empty list is a deliberate choice
+        # governors are required, [] is a deliberate choice
         if not isinstance(options, dict) or 'governors' not in options:
             self._add(f'{path}.governors', 'must list governors (an empty list is allowed)')
         elif options.get('governors') == []:
             self._add(f'{path}.governors', 'is empty, the agent runs without governors', level='note')
         if not isinstance(options, dict):
             return
-        # every list option takes a single entry as a list of one
         tool_names = set(self._value('tools') or {})
         self._lint_names(f'{path}.tools', options.get('tools'), tool_names, 'tool or group')
         # the guards composition: each entry is a bare name or a one-key
@@ -343,10 +338,7 @@ class TokeoAiLinter:
         self._lint_guard_composition(f'{path}.governors', options.get('governors'))
         self._lint_guard_omit(f'{path}.omit', options.get('omit'))
         self._lint_budgets(path, options)
-        # the sandbox chain references ```ai.sandboxes``` by name, in order; an
-        # empty or absent chain means no sandbox lists a tool -> denied
         self._lint_names(f'{path}.sandboxes', options.get('sandboxes'), set(self._value('sandboxes') or {}), 'sandbox')
-        # deny is a hard exclusion of tool/group names
         self._lint_names(f'{path}.deny', options.get('deny'), tool_names, 'tool or group')
         # union/conflict: run the one resolver so the linter reports exactly
         # what a run would do. a not-decidable conflict raises (caught as an
@@ -355,7 +347,7 @@ class TokeoAiLinter:
         self._lint_guard_resolution(path, options)
 
     def _lint_budgets(self, path, values):
-        # max_steps and max_loops, at ai level or on an agent: 0 = unlimited
+        # at ai level or on an agent
         for key in ('max_steps', 'max_loops'):
             value = values.get(key)
             if value is not None and not is_int_ge(value, 0):
@@ -460,11 +452,7 @@ class TokeoAiLinter:
                 self._add(path, _unknown('governor', entry, known))
 
     def _validate_sandbox(self, section, name, item):
-        # a sandbox item: a resolvable ```type```, the required ```tools```
-        # selection (tool/group names), an optional ```except``` skip set
-        # (single or list), and the class's own ```options```: their keys are
-        # the class's config_defaults, their values the class checks itself
-        # through ```validate_options```
+        # option values are checked by the class in validate_options
         path = f'ai.{section}.{name}'
         if not self._lint_long_form(path, item, 'sandbox'):
             return
@@ -536,18 +524,14 @@ class TokeoAiLinter:
             return []
 
     def _lint_keys(self, path, keys, allowed, what='key'):
-        # an error for any key outside the allowed set, with a closest-match
-        # hint: a key nobody reads is a typo, never silently ignored
+        # a key nobody reads is a typo, never silently ignored
         for key in keys:
             if key not in allowed:
                 self._add(f'{path}.{key}', _unknown(what, key, allowed))
 
     def _lint_option_keys(self, kind, path, type_value, options):
-        # the options a class reads are the keys of its Meta.config_defaults;
-        # any other key is never read (```guards``` for ```governors``` would
-        # run an agent without governors), so it is an error. the class whose
-        # own Meta declares config_defaults nearest in the MRO is the one cement
-        # merges last; a class declaring none is not checked here
+        # the allowed options are the config_defaults of the nearest Meta in
+        # the MRO declaring them; a class without any is not checked
         if not isinstance(options, dict) or not isinstance(type_value, str):
             return
         try:
@@ -561,8 +545,7 @@ class TokeoAiLinter:
                 return
 
     def _lint_long_form(self, path, item, what):
-        # sandboxes, agents and profiles always need more than the type, so they
-        # have no short form; a string there gets the long form as a hint
+        # sandboxes, agents and profiles have no short form
         if isinstance(item, dict):
             return True
         if isinstance(item, str):
@@ -598,8 +581,7 @@ class TokeoAiLinter:
             if tools:
                 self._add('ai.tools', 'must be a mapping of name to item or group')
             return
-        # a dict value is an item, a string its short form, a list value is a
-        # group; else it is wrong
+        # a dict is an item, a string its short form, a list a group
         items, groups = {}, {}
         for name, value in tools.items():
             if isinstance(value, list):
@@ -649,8 +631,7 @@ class TokeoAiLinter:
             self._lint_keys(path, profile, _PROFILE_KEYS)
             self._lint_options(path, profile)
             self._lint_type('provider', path, profile)
-            # the provider's connection options are its config_defaults keys;
-            # model_params is passed through to the server unchecked
+            # model_params is passed through unchecked
             self._lint_option_keys('provider', f'{path}.options', profile.get('type'), profile.get('options'))
             if profile.get('model_params') is not None and not isinstance(profile['model_params'], dict):
                 self._add(f'{path}.model_params', 'must be a mapping')
