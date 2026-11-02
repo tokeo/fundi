@@ -38,6 +38,8 @@ SLEEP = 'tests.ext.ai.lib.ai_tests_helper:SleepTool'
 SPAWN = 'tests.ext.ai.lib.ai_tests_helper:SpawnTool'
 CHATTER = 'tests.ext.ai.lib.ai_tests_helper:ChatterTool'
 
+# the argv of the ai lint command: the setup steps aside, the lint reports
+LINT = ['ai', 'lint']
 # every tool of the config, offered by the agents that exercise the sandboxes
 TOOLS = ['echo', 'cwd', 'env', 'sleep', 'greeter', 'plain_greeter']
 
@@ -285,7 +287,7 @@ def test_linter_flags_an_unknown_name_in_tool_policy():
     """A tool_policy deny of 'no_such' is flagged, the name matches no tool."""
     cfg = ai_config()
     cfg['ai']['guards'] = {'readonly': dict(type='tool_policy', options=dict(deny=['echo', 'no_such']))}
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert [i.path for i in issues if 'no_such' in i.message] == ['ai.guards.readonly.options.deny']
 
@@ -295,7 +297,7 @@ def test_linter_flags_the_reserved_agent_name_null(name):
     """An agent declared as null, also a yaml key null, is flagged as reserved."""
     cfg = ai_config()
     cfg['ai']['agents'][name] = dict(type='fundi', options=dict(governors=[]))
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert any(i.level == 'error' and 'reserved for the implicit agent' in i.message for i in issues)
 
@@ -304,7 +306,7 @@ def test_linter_flags_an_agent_without_governors():
     """An agent that does not list governors is an error, [] only a note."""
     cfg = ai_config()
     cfg['ai']['agents']['bare'] = dict(type='fundi', options=dict(tools=['echo'], sandboxes=['allow']))
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = {i.path: i.level for i in TokeoAiLinter(app).lint()}
         assert issues['ai.agents.bare.options.governors'] == 'error'
         assert issues['ai.agents.plain.options.governors'] == 'note'
@@ -314,7 +316,7 @@ def test_linter_flags_the_all_catch_all():
     """tools: _all on a sandbox is flagged, there is no catch-all."""
     cfg = ai_config()
     cfg['ai']['sandboxes']['allow']['tools'] = '_all'
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert any(i.path == 'ai.sandboxes.allow.tools' and 'no catch-all' in i.message for i in issues)
 
@@ -471,6 +473,26 @@ def test_linter_accepts_a_profile_in_its_layout():
     assert lint_errors(cfg) == {}
 
 
+def test_setup_aborts_on_a_lint_error():
+    """An unknown key toolss ends the setup with the lint report, not later."""
+    cfg = ai_config()
+    cfg['ai']['toolss'] = []
+    with pytest.raises(TokeoAiError, match=r"invalid ai configuration[\s\S]*ai\.toolss: unknown key 'toolss'"):
+        with FundiTest(config_defaults=cfg):
+            pass
+
+
+def test_setup_logs_a_lint_warning():
+    """Without license_acknowledged the setup logs the warning and goes on."""
+    logged = []
+
+    def record(app):
+        app.log.warning = logged.append
+
+    with FundiTest(config_defaults=ai_config(), hooks=[('post_setup', record, 50)]):
+        assert any('ai.license_acknowledged' in message for message in logged)
+
+
 def test_the_agent_null_offers_no_tool():
     """Under the agent null echo is refused, even though a sandbox would take it."""
     with FundiTest(config_defaults=ai_config()) as app:
@@ -485,7 +507,7 @@ def test_the_agent_null_offers_no_tool():
 
 def test_linter_accepts_a_sound_sandbox_config():
     """The linter reports no error for the base ai_config()."""
-    with FundiTest(config_defaults=ai_config()) as app:
+    with FundiTest(argv=LINT, config_defaults=ai_config()) as app:
         issues = TokeoAiLinter(app).lint()
         errors = [i for i in issues if i.level == 'error']
         assert errors == [], errors
@@ -495,7 +517,7 @@ def test_linter_flags_unknown_sandbox_in_chain():
     """A chain naming the undeclared sandbox 'ghost' is a linter error."""
     cfg = ai_config()
     cfg['ai']['agents']['plain']['options']['sandboxes'] = ['ghost']
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert any('ghost' in i.message and i.level == 'error' for i in issues)
 
@@ -504,7 +526,7 @@ def test_linter_accepts_a_tuple_as_list():
     """A chain built in python as tuple ('jailed',) lints clean like a yaml list."""
     cfg = ai_config()
     cfg['ai']['agents']['plain']['options']['sandboxes'] = ('jailed',)
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert [i for i in issues if i.path.endswith('.sandboxes')] == []
 
@@ -513,14 +535,14 @@ def test_linter_flags_missing_sandbox_tools():
     """A sandbox without tools is flagged: tools is required."""
     cfg = ai_config()
     del cfg['ai']['sandboxes']['jailed']['tools']
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert any('required' in i.message for i in issues)
 
 
 def lint_errors(cfg):
     """The error issues of the linter for a config, as {path: message}."""
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         return {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
 
 
@@ -584,11 +606,11 @@ def test_linter_flags_an_unknown_key_as_error(section, path):
 def test_linter_warns_when_license_acknowledged_is_missing():
     """Without license_acknowledged the linter warns; set, even to false, none."""
     cfg = ai_config()
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert [(i.path, i.level) for i in issues if 'license_acknowledged' in i.path] == [('ai.license_acknowledged', 'warning')]
     cfg['ai']['license_acknowledged'] = False
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert [i for i in issues if 'license_acknowledged' in i.path] == []
 
@@ -598,7 +620,7 @@ def test_linter_flags_max_steps_that_is_no_whole_number_of_0_or_more(value):
     """A bool, negative, float or str max_steps is flagged; 0 means unlimited."""
     cfg = ai_config()
     cfg['ai']['agents']['plain']['options']['max_steps'] = value
-    with FundiTest(config_defaults=cfg) as app:
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert any(i.path.endswith('.max_steps') for i in issues)
 
@@ -611,8 +633,10 @@ def test_subprocess_resolves_registry_alias_tools():
     cfg['ai']['tools']['shorty'] = dict(type='echo_short')
     cfg['ai']['sandboxes']['jailed']['tools'].append('shorty')
     cfg['ai']['agents']['mixed']['options']['tools'].append('shorty')
-    with FundiTest(config_defaults=cfg) as app:
-        app.ai.register('tool', 'echo_short', EchoTool)
+    # the project registers the alias in a post_setup hook: weight 50 runs after
+    # app.ai exists (weight 0) and before the lint (weight 100)
+    hooks = [('post_setup', lambda app: app.ai.register('tool', 'echo_short', EchoTool), 50)]
+    with FundiTest(config_defaults=cfg, hooks=hooks) as app:
         assert run(app, 'shorty', 'mixed', text='hi') == 'hi'
 
 
@@ -679,10 +703,18 @@ def test_two_declarations_of_one_class_stay_separate():
         assert GreetTool.Meta.config_defaults == {'prefix': 'hello'}
 
 
+class DescribedGreetTool(GreetTool):
+    """A greeter that declares an option named like its Meta description."""
+
+    class Meta:
+        config_defaults = dict(prefix='hello', description=None)
+
+
 def test_options_do_not_reach_the_class_meta():
     """An option named description stays an option, the spec keeps the Meta text."""
     cfg = ai_config()
-    cfg['ai']['tools']['greeter']['options'] = dict(prefix='moin', description='REWRITTEN')
+    options = dict(prefix='moin', description='REWRITTEN')
+    cfg['ai']['tools']['greeter'] = dict(type='tests.ext.ai.test_ai:DescribedGreetTool', options=options)
     with FundiTest(config_defaults=cfg) as app:
         spec = app.ai._tool_specs(['greeter'])[0]['function']
         assert spec['description'] == 'greet the given name'

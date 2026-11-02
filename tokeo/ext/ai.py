@@ -1458,14 +1458,15 @@ def ai_extend_app(app):
     app.ai._setup(app)
 
 
-def ai_lint_on_run(app):
+def ai_lint_on_setup(app):
     """
-    Cement pre-run hook: lint the ai configuration before an ai command.
+    Cement post-setup hook: lint the ai configuration once at setup.
 
-    Runs inside ```app.run``` (unlike ```post_setup```), so a typo in the ai config
-    surfaces as a clean error through the application's own handler instead of a
-    traceback. It guards only ```ai``` commands and steps aside for ```ai lint```
-    and ```--help```, so the report and the help text stay reachable.
+    Runs on every path (cli, worker, web) after ```ai_extend_app``` and after
+    the post-setup hooks of the project (it has the weight 100), so an alias a
+    project registers on ```app.ai``` in its own post-setup hook is known.
+    ```ai lint``` and ```--help``` step aside, so the report and the help text
+    stay reachable with a broken configuration.
 
     ### Args
 
@@ -1474,17 +1475,18 @@ def ai_lint_on_run(app):
     ### Raises
 
     - **TokeoAiError**: If the configuration has an error-level problem; the
-        message lists every issue (warnings included) and points at ```ai lint```
+        message lists every issue and points at ```ai lint```. A warning goes
+        to the log and does not stop the start
 
     """
     argv = list(app.argv or [])
     tokens = [arg for arg in argv if not arg.startswith('-')]
-    # only guard ai commands; let --help and the lint command itself through
-    if not tokens or tokens[0] != 'ai':
-        return
-    if '-h' in argv or '--help' in argv or (len(tokens) >= 2 and tokens[1] == 'lint'):
+    if tokens[:2] == ['ai', 'lint'] or '-h' in argv or '--help' in argv:
         return
     issues = TokeoAiLinter(app).lint()
+    for issue in issues:
+        if issue.level == 'warning':
+            app.log.warning(f'ai config: {issue.path}: {issue.message}')
     if any(issue.level == 'error' for issue in issues):
         report = '\n'.join(f'  {issue.level}: {issue.path}: {issue.message}' for issue in issues)
         raise TokeoAiError(f'invalid ai configuration (run "ai lint" for the full report):\n{report}')
@@ -1501,15 +1503,17 @@ def load(app):
     ### Notes
 
     - Registers a post_setup hook that creates ```app.ai```, registers the
-        built-in providers on it, and sets it up once the configuration is
+        built-in providers on it, sets it up once the configuration is
         available
-    - Registers a pre_run hook that lints the ai configuration before an ai
-        command, so a typo fails with a clean message rather than a traceback
+    - Registers a post_setup hook of weight 100 that lints the ai
+        configuration after the project's own post_setup hooks: an error
+        ends the start with a clear message on every path (cli, worker, web)
     - A project or third-party provider/tool is named by a class path ```type``` in
         the config and imported on demand, so it needs no registration and no
         entry in the application extensions
 
     """
     app.hook.register('post_setup', ai_extend_app)
-    app.hook.register('pre_run', ai_lint_on_run)
+    # after the post_setup hooks of the project, which may register aliases
+    app.hook.register('post_setup', ai_lint_on_setup, weight=100)
     app.handler.register(AiController)

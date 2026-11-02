@@ -541,8 +541,14 @@ class MyGuard(TokeoAiAuditGuard):
 ```ai lint``` checks the whole ```ai:``` section: unknown keys, unknown options
 (every key under ```options``` is one of the class's ```Meta.config_defaults```),
 unknown references, malformed items, unknown stages, empty stage lists, group
-cycles, and the guard conflicts. A key nobody reads is never silently ignored. It
-is also run automatically before ```ask```/```chat```, aborting the run on an error.
+cycles, and the guard conflicts. A key nobody reads is never silently ignored.
+
+The same lint runs once when ```app.ai``` is set up, on every path (a command,
+a worker, a web app, your own code): an error ends the start with the report, a
+warning goes to the log. It runs after the project's own ```post_setup```
+hooks, so an alias registered there with ```app.ai.register``` is known. Only
+```ai lint``` and ```--help``` start with a broken configuration, so the report
+and the help stay reachable.
 
 ```bash
 myapp ai lint              # reports errors, warnings, and notes
