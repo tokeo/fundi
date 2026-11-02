@@ -32,8 +32,8 @@ import signal
 import tempfile
 import subprocess
 
-from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
-from tokeo.core.ai.sandboxes._common import _importable_path, expand_env
+from tokeo.core.ai import TokeoAiSandbox, TokeoAiError
+from tokeo.core.ai.sandboxes._common import _importable_path, expand_env, result_from_reply
 
 
 class TokeoAiSubprocessSandbox(TokeoAiSandbox):
@@ -151,13 +151,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
             out.seek(0)
             err.seek(0)
             proc = subprocess.CompletedProcess(cmd, proc.returncode, out.read().decode(), err.read().decode())
-        reply = self._decode(proc, dotted)
-        # WHY raise on error: an "error" reply is a sandbox-machinery failure
-        # (a bad job, an unenforceable cap, an unimportable tool); the tool's
-        # own throw is not here, it rides in state.exception of a normal reply
-        if 'error' in reply:
-            raise TokeoAiError(f'tool {dotted!r} failed in the subprocess sandbox: {reply["error"]}')
-        return self._rebuild(reply)
+        return result_from_reply(proc.stdout, proc.stderr, dotted, 'subprocess')
 
     def _end_group(self, proc):
         # kill every process of the call's group; the group may be gone already
@@ -165,37 +159,3 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-
-    def _decode(self, proc, dotted):
-        # the runner writes exactly one json document to stdout; anything else
-        # (an empty stdout, a crash before the json) is a sandbox-level failure
-        try:
-            return json.loads(proc.stdout or '')
-        except json.JSONDecodeError:
-            detail = (proc.stderr or '').strip()[:200] or 'no output'
-            raise TokeoAiError(f'tool {dotted!r} produced no valid result in the subprocess sandbox: {detail}')
-
-    def _rebuild(self, reply):
-        # turn the runner's JSON back into a ToolResult: a null value stays
-        # None (the tool delivered nothing), otherwise the two string views
-        # cross and as_data is reconstructed from as_json; only the JSON view
-        # of a value survives a process boundary, so a raw datetime returns as
-        # its encoded form; the run states are carried across as recorded
-        value_doc = reply.get('value')
-        if value_doc is None:
-            value = None
-        else:
-            as_json = value_doc.get('as_json', '')
-            value = ToolValue(
-                as_str=value_doc.get('as_str', ''),
-                as_json=as_json,
-                as_data=json.loads(as_json) if as_json else None,
-            )
-        state_doc = reply.get('state') or {}
-        state = ToolStates(
-            incomplete=state_doc.get('incomplete', False),
-            stdout=state_doc.get('stdout'),
-            stderr=state_doc.get('stderr'),
-            exception=state_doc.get('exception'),
-        )
-        return ToolResult(value=value, state=state)
