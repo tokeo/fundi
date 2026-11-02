@@ -5,9 +5,10 @@ A snippet is a bare block of statements, so it cannot use a top-level ```return`
 and has no natural place to leave its answer. This module gives it one without a
 magic variable: the snippet delivers a value by ending on an expression (the
 jupyter form), by a ```return```, or by an assignment whose bound value is then
-handed back; the block is wrapped into a function so that ```return``` is legal
-and its value is captured on the call. A block that delivers none yields
-```None```, the contract's 'no value', which the caller reports as such.
+handed back. The block runs at module level like a script, so ```global``` and
+functions that read its names work; a top-level ```return``` ends the run and
+hands its value back. A block that delivers none yields ```None```, the
+contract's 'no value', which the caller reports as such.
 
 It is kept dependency-free (the standard library ```ast``` only) so the same run
 works in process and inside an isolated sandbox guest, which mounts this contract
@@ -19,10 +20,11 @@ import ast
 
 class TokeoPactSnippetError(Exception):
     """
-    A snippet form this wrap cannot run.
+    A snippet form the run cannot take.
 
     Raised for a top-level ```await``` (or ```async for```/```async with```): a
-    plain function wrap cannot make it legal, and an async wrap is out of scope.
+    block run at module level cannot make it legal, and an async run is out of
+    scope.
     The caller treats it as a tool error (recorded as the snippet's exception
     (A) with no value delivered), not as a machinery error.
     """
@@ -30,7 +32,7 @@ class TokeoPactSnippetError(Exception):
 
 def run_snippet(code, namespace=None):
     """
-    Wrap and run a snippet, returning the value it delivered or ```None```.
+    Run a snippet at module level, returning the value it delivered or ```None```.
 
     The snippet is parsed (not executed) first, so its structure decides how it
     delivers. The value comes from the last top-level statement; printed text is
@@ -79,42 +81,68 @@ def run_snippet(code, namespace=None):
     # parse, never exec: the structure is read safely first, and a parse error
     # is the snippet's own syntax error, surfaced to the caller unchanged
     tree = ast.parse(code or '')
-    # a top-level await cannot run in a plain function wrap; reject it cleanly
-    # rather than let the later compile fail with a cryptic message
+    # a top-level await cannot run at module level; reject it cleanly rather
+    # than let the later compile fail with a cryptic message
     if _has_toplevel_async(tree):
         raise TokeoPactSnippetError('top-level await is not supported')
     # an empty body (blank source or comments only) carries no value
     if not tree.body:
         return None
-    # the last top-level statement decides the delivered value
+    # a top-level return ends the run and hands its value back
+    tree = _TopLevelReturn().visit(tree)
+    # the last top-level statement decides the delivered value: a bare last
+    # expression is the value (jupyter form), an assignment delivers what it
+    # bound once the whole block ran, any other form delivers none
     last = tree.body[-1]
     if isinstance(last, ast.Expr):
-        # a bare last expression is the snippet's value (jupyter form): turn it
-        # into a return so the wrapping function hands that value back
-        tree.body[-1] = ast.copy_location(ast.Return(value=last.value), last)
+        head, value = tree.body[:-1], last.value
     else:
-        # an assignment on the last line carries a clear value too; append a
-        # return of the bound name (or mutated container / tuple) after it, so
-        # the assignment runs first and the value is then handed back
-        delivered = _assignment_value(last)
-        if delivered is not None:
-            tree.body.append(ast.copy_location(ast.Return(value=delivered), last))
-    # wrap the whole block in a function so a return (the snippet's own or the
-    # one just synthesised) is legal; falling through returns None by itself
-    wrapper = ast.FunctionDef(
-        name='__tokeo_snippet__',
-        args=ast.arguments(posonlyargs=[], args=[], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
-        body=tree.body,
-        decorator_list=[],
-    )
-    module = ast.Module(body=[wrapper], type_ignores=[])
-    # the synthesised nodes carry no positions; fill them so compile accepts them
-    ast.fix_missing_locations(module)
+        head, value = tree.body, _assignment_value(last)
     ns = namespace if namespace is not None else {}
-    exec(compile(module, '<python_exec>', 'exec'), ns)
-    # call the wrapper: its return is the delivered value; a fall-through gives
-    # None, which is the contract's 'no value delivered'
-    return ns['__tokeo_snippet__']()
+    ns[_RETURN] = _SnippetReturn
+    try:
+        # the block runs at module level in ns, like a script: global and the
+        # functions it defines see its names
+        exec(compile(ast.fix_missing_locations(ast.Module(body=head, type_ignores=[])), '<python_exec>', 'exec'), ns)
+        if value is None:
+            return None
+        expression = ast.fix_missing_locations(ast.copy_location(ast.Expression(body=value), last))
+        return eval(compile(expression, '<python_exec>', 'eval'), ns)
+    except _SnippetReturn as returned:
+        return returned.value
+    finally:
+        ns.pop(_RETURN, None)
+
+
+# the name the rewritten top-level returns raise by, reserved in the run
+_RETURN = '__tokeo_snippet_return__'
+
+
+class _SnippetReturn(BaseException):
+    # a top-level return of the snippet, carrying its value out of the run; a
+    # BaseException, so an ```except Exception``` of the snippet lets it pass
+
+    def __init__(self, value=None):
+        super().__init__()
+        self.value = value
+
+
+class _TopLevelReturn(ast.NodeTransformer):
+    # rewrite each return of the block itself into a raise of _SnippetReturn;
+    # the returns of its own functions, classes and lambdas stay as they are
+
+    def _keep(self, node):
+        return node
+
+    visit_FunctionDef = _keep
+    visit_AsyncFunctionDef = _keep
+    visit_ClassDef = _keep
+    visit_Lambda = _keep
+
+    def visit_Return(self, node):
+        value = node.value if node.value is not None else ast.Constant(value=None)
+        call = ast.Call(func=ast.Name(id=_RETURN, ctx=ast.Load()), args=[value], keywords=[])
+        return ast.copy_location(ast.Raise(exc=call, cause=None), node)
 
 
 def _assignment_value(stmt):
@@ -162,8 +190,8 @@ def _target_value(target):
 
 
 def _has_toplevel_async(tree):
-    # an await/async-for/async-with outside an async def cannot run in a plain
-    # function wrap; the same construct inside an async def is the snippet's own
+    # an await/async-for/async-with outside an async def cannot run at module
+    # level; the same construct inside an async def is the snippet's own
     # and stays legal, so it is not flagged
     inside_async = set()
     for node in ast.walk(tree):

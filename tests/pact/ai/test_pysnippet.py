@@ -138,13 +138,48 @@ def test_runtime_error_propagates():
 # ---- namespace is the run context, not the result channel -----------------
 
 
-def test_snippet_names_do_not_leak_into_the_namespace():
-    """'secret = 42' stays local: no snippet name leaks into the namespace."""
-    # the block becomes a function body, so runs do not bleed into each other
+def test_snippet_runs_at_module_level_in_its_namespace():
+    """'secret = 42' lands in the namespace the run uses, like a script."""
     namespace = {}
-    run_snippet('secret = 42\nsecret * 2', namespace)
-    leaked = [k for k in namespace if not k.startswith('__') and k != '__tokeo_snippet__']
-    assert leaked == []
+    assert run_snippet('secret = 42\nsecret * 2', namespace) == 84
+    assert namespace['secret'] == 42
+    # the name the returns raise by is not left behind
+    assert [k for k in namespace if k.startswith('__tokeo')] == []
+
+
+def test_runs_without_a_namespace_share_no_names():
+    """A second run without a namespace does not see 'secret' of the first."""
+    run_snippet('secret = 42')
+    with pytest.raises(NameError):
+        run_snippet('secret')
+
+
+def test_global_in_a_function_reaches_the_block():
+    """A function with global total adds 5 to the total of the block: 5."""
+    code = 'total = 0\ndef add(n):\n    global total\n    total += n\nadd(5)\nresult = total'
+    assert run_snippet(code) == 5
+
+
+def test_a_function_reads_a_name_of_the_block():
+    """A function reads base = 10 of the block: f(2) gives 12."""
+    assert run_snippet('base = 10\ndef f(n):\n    return base + n\nf(2)') == 12
+
+
+def test_top_level_return_ends_the_run():
+    """A return 10 inside a top-level if ends the run, x = 2 never runs."""
+    namespace = {}
+    assert run_snippet('x = 1\nif x:\n    return 10\nx = 2', namespace) == 10
+    assert namespace['x'] == 1
+
+
+def test_return_of_a_function_stays_its_own():
+    """A return inside def f stays the function's: f() gives 3."""
+    assert run_snippet('def f():\n    return 3\nf()') == 3
+
+
+def test_top_level_return_passes_an_except_exception():
+    """A return 7 inside try with except Exception still ends the run with 7."""
+    assert run_snippet('try:\n    return 7\nexcept Exception:\n    pass\n8') == 7
 
 
 def test_preset_globals_are_readable_by_the_snippet():
