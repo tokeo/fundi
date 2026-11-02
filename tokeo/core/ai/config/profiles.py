@@ -20,12 +20,6 @@ def _enabled(profile):
     return isinstance(profile, dict) and bool(profile.get('enabled', True))
 
 
-def _field(profile, key):
-    # a selector field may sit at the profile top level (purpose) or inside the
-    # provider options (model, base_url); read either place
-    return profile[key] if key in profile else (profile.get('options') or {}).get(key)
-
-
 def find_profile(profiles, key, value):
     """
     Resolve a single enabled profile by name or by a field value.
@@ -34,8 +28,8 @@ def find_profile(profiles, key, value):
 
     - **profiles** (dict): The ```ai.profiles``` mapping
     - **key** (str): ```profile``` or ```name``` matches the profile name; any
-        other key matches that field at the profile top level or in its
-        ```options```
+        other key (```model```, ```purpose```) matches that field at the
+        profile top level
     - **value**: The value the key must equal
 
     ### Returns
@@ -56,7 +50,7 @@ def find_profile(profiles, key, value):
     for name, profile in profiles.items():
         if not _enabled(profile):
             continue
-        if _field(profile, key) == value:
+        if profile.get(key) == value:
             return name, profile
     raise TokeoAiError(f'no enabled ai profile with {key}={value!r}')
 
@@ -152,6 +146,6 @@ def selectable_names(profiles, agent_names):
     return {
         'profile': [name for name, _ in enabled],
         'agent': list(agent_names),
-        'model': sorted({_field(p, 'model') for _, p in enabled} - {None}),
-        'purpose': sorted({_field(p, 'purpose') for _, p in enabled} - {None}),
+        'model': sorted({p.get('model') for _, p in enabled} - {None}),
+        'purpose': sorted({p.get('purpose') for _, p in enabled} - {None}),
     }

@@ -48,10 +48,10 @@ ai:
   profiles:
     assistant:
       type: oai_compat
-      options:
-        model: qwen2.5
-        base_url: http://localhost:11434/v1
+      model: qwen2.5
       agent: guarded
+      options:
+        base_url: http://localhost:11434/v1
 ```
 
 The full reference for the ```ai``` configuration (every section and notation,

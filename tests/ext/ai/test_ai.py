@@ -446,6 +446,31 @@ def test_linter_flags_a_short_form_where_the_long_form_is_required(section, name
     assert message.endswith('has no short form, write it as a mapping: {type: some_type, ...}')
 
 
+@pytest.mark.parametrize(
+    'profile, path',
+    [
+        (dict(type='mock', base_url='http://x/v1'), 'ai.profiles.p.base_url'),
+        (dict(type='oai_compat', model='m', options=dict(base_url='http://x/v1', model='m')), 'ai.profiles.p.options.model'),
+        (dict(type='mock', native_tools_call=True), 'ai.profiles.p.native_tools_call'),
+        (dict(type='mock', model_params='hot'), 'ai.profiles.p.model_params'),
+    ],
+    ids=['base_url_on_top', 'model_in_options', 'native_tools_call', 'model_params_no_mapping'],
+)
+def test_linter_holds_each_profile_setting_to_its_one_place(profile, path):
+    """base_url on top, model in options, a dropped key, a str model_params fail."""
+    cfg = ai_config()
+    cfg['ai']['profiles']['p'] = profile
+    assert path in lint_errors(cfg)
+
+
+def test_linter_accepts_a_profile_in_its_layout():
+    """model, model_params on top and the connection under options lint clean."""
+    cfg = ai_config()
+    options = dict(base_url='http://x/v1', key='k', timeout=30)
+    cfg['ai']['profiles']['p'] = dict(type='oai_compat', model='m', model_params=dict(anything=1), options=options)
+    assert lint_errors(cfg) == {}
+
+
 def test_the_agent_null_offers_no_tool():
     """Under the agent null echo is refused, even though a sandbox would take it."""
     with FundiTest(config_defaults=ai_config()) as app:

@@ -25,6 +25,14 @@ class TokeoAiProvider:
 
     """
 
+    class Meta:
+        """Provider meta-data; a provider defines its own option keys."""
+
+        # the keys a profile may set under ```options``` for this provider,
+        # with their defaults (base_url, key, timeout ...). empty here: the base
+        # has none; the linter reports any other key as an error
+        config_defaults = {}
+
     def __init__(self, app, *args, **kw):
         self.app = app
         # never declared under a config key; the property reports the class
@@ -70,8 +78,9 @@ class TokeoAiProvider:
 
         ### Args
 
-        - **profile** (dict): The resolved profile; carries ```model``` and any
-            provider-specific keys (such as ```base_url``` and ```key```)
+        - **profile** (dict): The resolved profile; carries ```model``` and,
+            under ```options```, the provider's own keys (its
+            ```Meta.config_defaults```, such as ```base_url``` and ```key```)
         - **messages** (list): Chat messages as plain OpenAI-style dicts
         - **tools** (list|None): Optional tool definitions for the call
         - **model_params** (dict|None): Per-call model parameters that override

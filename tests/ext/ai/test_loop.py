@@ -44,6 +44,9 @@ class ScriptProvider(TokeoAiProvider):
     ```seen```.
     """
 
+    class Meta:
+        config_defaults = dict(script=None)
+
     def __init__(self, app, *args, **kw):
         super().__init__(app, *args, **kw)
         self.seen = []

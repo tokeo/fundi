@@ -333,7 +333,7 @@ agents:
 
 ## 7. Model and agent bundles in ```profiles```
 
-A profile names a provider (the model, by ```type```) and binds an agent. A
+A profile names a provider (by ```type```) and a model, and binds an agent. A
 run selects one profile by name, by ```purpose```, by ```model```, or the default.
 
 ```yaml
@@ -345,12 +345,30 @@ profiles:
 
   assistant:
     type: oai_compat            # any OpenAI-compatible server
-    options:
-      model: "llama-3.1-8b"
-      base_url: http://localhost:8000/v1
-      # key: ${OPENAI_API_KEY}  # via config resolution, not clear text
+    model: "llama-3.1-8b"
     agent: guarded
+    options:                    # the provider's connection
+      base_url: http://localhost:8000/v1
+      timeout: 120
+      # key: ${OPENAI_API_KEY}  # via config resolution, not clear text
 ```
+
+Every setting has exactly one place:
+
+| Key | Place | Meaning |
+|-----|-------|---------|
+| ```type``` | top | the provider, an alias or ```module:Class``` |
+| ```purpose``` | top | a free-form selector |
+| ```agent``` | top | the agent the profile runs, or ```null``` |
+| ```deny``` | top | tools or groups this profile drops (7.1) |
+| ```enabled``` | top | ```false``` hides the profile, also from its name |
+| ```model``` | top | the model the provider asks for, also a selector |
+| ```model_params``` | top | passed through to the server, see 8 |
+| ```base_url```, ```key```, ```timeout``` | ```options``` | the connection of ```oai_compat``` |
+
+The keys under ```options``` are the provider's ```Meta.config_defaults```; a
+provider of your own declares its own there. Any other key, at the top or under
+```options```, is an error.
 
 .. important::
 
@@ -379,15 +397,16 @@ profiles:
 ## 8. Tuning the model by provider parameters
 
 The ```oai_compat``` provider passes a ```model_params``` block straight through to
-the endpoint. These steer *how* the model answers. No validation happens in tokeo;
-the endpoint owns the valid ranges, which vary by model.
+the endpoint. These steer *how* the model answers. ```model_params``` is not
+checked, it is passed through: the linter only demands a mapping, the endpoint
+owns the valid keys and ranges, which vary by model.
 
 ```yaml
 profiles:
   assistant:
     type: oai_compat
+    model: "llama-3.1-8b"
     options:
-      model: "llama-3.1-8b"
       base_url: http://localhost:8000/v1
     model_params:
       temperature: 0.2          # randomness, ~0.0-2.0 (lower = more focused)
@@ -414,13 +433,6 @@ Common keys and what they do:
 | ```response_format``` | request a shape, e.g. ```{type: json_object}``` |
 | ```tool_choice``` | ```auto``` / ```none``` / ```required```, or a named function |
 | ```model``` | override the profile's model for that call only |
-
-.. tip::
-
-    A profile value may sit at the top level or under ```options```; the provider
-    reads either place. Connection settings (```model```, ```base_url```, ```key```,
-    ```timeout```) conventionally live under ```options```; ```model_params``` sits
-    at the top level.
 
 ### 8.1 Overriding parameters per call (CLI)
 

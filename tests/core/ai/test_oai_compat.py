@@ -19,7 +19,7 @@ from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.providers.oai_compat import TokeoAiOaiCompatProvider
 
 # a profile in the uniform form: connection settings under ```options```
-_PROFILE = {'type': 'oai_compat', 'options': {'base_url': 'http://localhost:11434/v1', 'model': 'qwen2.5'}}
+_PROFILE = {'type': 'oai_compat', 'model': 'qwen2.5', 'options': {'base_url': 'http://localhost:11434/v1'}}
 
 
 def _provider_with(handler, monkeypatch):
@@ -126,7 +126,7 @@ def test_oai_compat_sends_tools_and_auth_only_when_present(monkeypatch):
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     # with a key and tools, both must travel
-    profile = {'options': {'base_url': 'http://x/v1', 'model': 'm', 'key': 'secret-token'}}
+    profile = {'model': 'm', 'options': {'base_url': 'http://x/v1', 'key': 'secret-token'}}
     provider = _provider_with(handler, monkeypatch)
     provider.chat(profile, [{'role': 'user', 'content': 'hi'}], tools=[{'name': 'calc'}])
     assert seen['auth'] == 'Bearer secret-token'
@@ -174,10 +174,12 @@ def test_oai_compat_http_error_status_raises_with_excerpt(monkeypatch):
 
 
 def test_oai_compat_requires_base_url_and_model():
-    """A profile without base_url raises TokeoAiError."""
+    """Without options.base_url, or with model only under options, it raises."""
     provider = TokeoAiOaiCompatProvider(None)
-    with pytest.raises(TokeoAiError):
-        provider.chat({'options': {'model': 'm'}}, [{'role': 'user', 'content': 'hi'}])
+    with pytest.raises(TokeoAiError, match='needs model and options.base_url'):
+        provider.chat({'model': 'm'}, [{'role': 'user', 'content': 'hi'}])
+    with pytest.raises(TokeoAiError, match='needs model and options.base_url'):
+        provider.chat({'options': {'base_url': 'http://x/v1', 'model': 'm'}}, [{'role': 'user', 'content': 'hi'}])
 
 
 def test_oai_compat_sends_profile_model_params(monkeypatch):
@@ -188,7 +190,7 @@ def test_oai_compat_sends_profile_model_params(monkeypatch):
         seen['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
-    profile = {'options': {'base_url': 'http://x/v1', 'model': 'm'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
+    profile = {'model': 'm', 'options': {'base_url': 'http://x/v1'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
     provider = _provider_with(handler, monkeypatch)
     provider.chat(profile, [{'role': 'user', 'content': 'hi'}])
     assert seen['body']['temperature'] == 0.2
@@ -205,7 +207,7 @@ def test_oai_compat_call_params_override_profile(monkeypatch):
         seen['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
-    profile = {'options': {'base_url': 'http://x/v1', 'model': 'm'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
+    profile = {'model': 'm', 'options': {'base_url': 'http://x/v1'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
     provider = _provider_with(handler, monkeypatch)
     # the call override wins key by key; unset keys keep the profile value
     provider.chat(profile, [{'role': 'user', 'content': 'hi'}], model_params={'temperature': 0.9})
@@ -221,7 +223,7 @@ def test_oai_compat_model_param_overrides_profile_model(monkeypatch):
         seen['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
-    profile = {'options': {'base_url': 'http://x/v1', 'model': 'from-profile'}}
+    profile = {'model': 'from-profile', 'options': {'base_url': 'http://x/v1'}}
     provider = _provider_with(handler, monkeypatch)
     # a model key in model_params targets a different model on the same endpoint
     provider.chat(profile, [{'role': 'user', 'content': 'hi'}], model_params={'model': 'override-model'})

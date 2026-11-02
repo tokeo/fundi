@@ -35,10 +35,11 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
 
     ### Notes
 
-    - Options (top-level or under ```options```): ```base_url``` (required, e.g.
-        ```http://localhost:11434/v1```), ```model``` (required), ```key```
-        (optional bearer token; omit for an open local endpoint), ```timeout```
-        (seconds, default 120; inference is slow, so the default is generous)
+    - The profile names the ```model``` (required) at its top level; the
+        connection is under ```options```: ```base_url``` (required, e.g.
+        ```http://localhost:11434/v1```), ```key``` (optional bearer token; omit
+        for an open local endpoint), ```timeout``` (seconds, default 120;
+        inference is slow, so the default is generous)
     - The unmodified server reply is kept on ```ChatResult.raw```, so a caller
         can always inspect exactly what came back
     - Errors become a clear ```TokeoAiError```: an unreachable endpoint, a
@@ -47,12 +48,14 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
 
     """
 
-    def _option(self, profile, key, default=None):
-        # a profile field may sit at the top level or inside ```options```; read
-        # either place, the same rule the handler uses to resolve model/base_url
-        if key in profile:
-            return profile[key]
-        return (profile.get('options') or {}).get(key, default)
+    class Meta:
+        """The connection options of a profile, with their defaults."""
+
+        config_defaults = dict(
+            base_url=None,
+            key=None,
+            timeout=120,
+        )
 
     def chat(self, profile, messages, tools=None, model_params=None):
         """
@@ -60,8 +63,9 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
 
         ### Args
 
-        - **profile** (dict): The resolved profile; carries ```base_url```,
-            ```model```, optional ```key``` and ```timeout```
+        - **profile** (dict): The resolved profile; carries ```model``` and,
+            under ```options```, ```base_url```, optional ```key``` and
+            ```timeout```
         - **messages** (list): Chat messages as plain OpenAI-style dicts
         - **tools** (list|None): OpenAI-style function specs to offer; sent
             only when non-empty
@@ -80,12 +84,11 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
             timeout, or a non-2xx response
 
         """
-        base_url = self._option(profile, 'base_url')
-        model = self._option(profile, 'model')
+        options = dict(self.Meta.config_defaults, **(profile.get('options') or {}))
+        base_url, key, timeout = options['base_url'], options['key'], options['timeout']
+        model = profile.get('model')
         if not base_url or not model:
-            raise TokeoAiError('oai_compat profile needs both base_url and model')
-        key = self._option(profile, 'key')
-        timeout = self._option(profile, 'timeout', 120)
+            raise TokeoAiError('oai_compat profile needs model and options.base_url')
 
         # model parameters: the profile's model_params are the base, the call's
         # override them key by key, so a caller tweaks one request without editing

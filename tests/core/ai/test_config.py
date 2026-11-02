@@ -258,7 +258,7 @@ def test_sandbox_for_exhausted_chain_returns_none():
 
 
 _PROFILES = {
-    'mock': {'type': 'mock', 'agent': 'guarded', 'purpose': 'mocking', 'options': {'model': 'm1'}},
+    'mock': {'type': 'mock', 'agent': 'guarded', 'purpose': 'mocking', 'model': 'm1'},
     'off': {'type': 'mock', 'enabled': False},
 }
 
@@ -269,7 +269,7 @@ def test_profile_default_when_no_selector():
 
 
 def test_profile_by_purpose_and_model():
-    """purpose 'mocking' and model 'm1' (from options) each select mock."""
+    """purpose 'mocking' and model 'm1' each select mock."""
     assert resolve_profile(_PROFILES, None, purpose='mocking')[0] == 'mock'
     assert resolve_profile(_PROFILES, None, model='m1')[0] == 'mock'
 

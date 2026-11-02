@@ -53,8 +53,6 @@ _PROFILE_KEYS = {
     'deny',
     'enabled',
     'model',
-    'native_tools_call',
-    'tools_parser',
     'model_params',
     'options',
 }
@@ -647,6 +645,11 @@ class TokeoAiLinter:
             self._lint_keys(path, profile, _PROFILE_KEYS)
             self._lint_options(path, profile)
             self._lint_type('provider', path, profile)
+            # the provider's connection options are its config_defaults keys;
+            # model_params is passed through to the server unchecked
+            self._lint_option_keys('provider', f'{path}.options', profile.get('type'), profile.get('options'))
+            if profile.get('model_params') is not None and not isinstance(profile['model_params'], dict):
+                self._add(f'{path}.model_params', 'must be a mapping')
             if 'enabled' in profile and not isinstance(profile['enabled'], bool):
                 self._add(f'{path}.enabled', 'must be true or false')
             # a profile binds the agent (composition); null opts out on
