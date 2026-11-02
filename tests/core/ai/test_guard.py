@@ -67,6 +67,44 @@ def test_tool_policy_allowlist_restricts_to_its_members():
         assert blocked.decision == Invocation.DENY
 
 
+def _files_config():
+    """An ai config with the group filesystem of read_file and append_file."""
+    return {'ai': {'tools': {'filesystem': ['read_file', 'append_file']}}}
+
+
+def test_tool_policy_deny_resolves_a_group_to_its_members():
+    """deny [filesystem] denies append_file, a member of the group."""
+    with AiTest(config_defaults=_files_config()) as app:
+        guard = TokeoAiToolPolicyGuard(app)
+        guard._setup(app, 'policy', {'options': {'deny': ['filesystem']}})
+        invocation = Invocation(id='t1', name='append_file', arguments={})
+        guard.on_call(ctx=None, invocation=invocation)
+        assert invocation.decision == Invocation.DENY
+
+
+def test_tool_policy_allow_resolves_a_group_to_its_members():
+    """allow [filesystem] keeps read_file and denies calc."""
+    with AiTest(config_defaults=_files_config()) as app:
+        guard = TokeoAiToolPolicyGuard(app)
+        guard._setup(app, 'policy', {'options': {'allow': ['filesystem']}})
+        permitted = Invocation(id='t1', name='read_file', arguments={})
+        guard.on_call(ctx=None, invocation=permitted)
+        assert permitted.decision == Invocation.ALLOW
+        blocked = Invocation(id='t2', name='calc', arguments={})
+        guard.on_call(ctx=None, invocation=blocked)
+        assert blocked.decision == Invocation.DENY
+
+
+def test_tool_policy_single_name_is_a_list_of_one():
+    """allow 'rewrite_file' denies write_file, no match as part of the text."""
+    with AiTest() as app:
+        guard = TokeoAiToolPolicyGuard(app)
+        guard._setup(app, 'policy', {'options': {'allow': 'rewrite_file'}})
+        invocation = Invocation(id='t1', name='write_file', arguments={})
+        guard.on_call(ctx=None, invocation=invocation)
+        assert invocation.decision == Invocation.DENY
+
+
 def test_deny_policy_softly_denies_at_the_tool_stages():
     """The deny guard sets DENY at on_call and on_return, no raise, loop goes on."""
     with AiTest() as app:

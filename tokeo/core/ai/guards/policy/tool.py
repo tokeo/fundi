@@ -32,9 +32,11 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
 
     The rules are read from ```_meta``` (set from the guard entry's
     ```options```): ```deny``` is a denylist and always wins; ```allow```, when set,
-    is an allowlist that restricts calls to its members. With neither rule the
-    guard permits every call (it then only documents intent). A denial is soft:
-    ```decision``` is set to ```deny``` and the loop continues.
+    is an allowlist that restricts calls to its members. Both take tool and group
+    names, a group stands for its members and a single name is a list of one.
+    With neither rule the guard permits every call (it then only documents
+    intent). A denial is soft: ```decision``` is set to ```deny``` and the loop
+    continues.
 
     """
 
@@ -50,6 +52,9 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
             deny=[],
         )
 
+        # the options that hold tool and group names, checked by the linter
+        tool_name_options = ('allow', 'deny')
+
     def on_call(self, ctx, invocation):
         """
         Deny the call when the policy forbids the tool; otherwise allow.
@@ -64,11 +69,13 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
             ```decision``` is set to ```deny``` with a ```reason```
 
         """
+        # tool and group names, a single name is a list of one, a group
+        # stands for its members as everywhere in the config
         name = invocation.name
-        denied = name in (self._config('deny', stage=GOVERNOR_STAGE_ON_CALL) or [])
+        denied = name in self.app.ai.tool_names(self._config('deny', stage=GOVERNOR_STAGE_ON_CALL))
         allow = self._config('allow', stage=GOVERNOR_STAGE_ON_CALL)
         if not denied and allow is not None:
-            denied = name not in allow
+            denied = name not in self.app.ai.tool_names(allow)
         if denied:
             invocation.decision = Invocation.DENY
             invocation.reason = f'tool {name!r} is not permitted by policy'

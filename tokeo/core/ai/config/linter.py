@@ -212,6 +212,7 @@ class TokeoAiLinter:
             self._lint_options(path, value)
             self._lint_type('governor', path, value)
             self._lint_governor_purity(section, path, value.get('type'))
+            self._lint_tool_name_options(path, value)
         else:
             self._add(path, 'must be a declaration (map), a short form (string), or a chain (list)')
 
@@ -259,6 +260,22 @@ class TokeoAiLinter:
         if not issubclass(cls, expected):
             where = f'{cls.__module__}.{cls.__qualname__}'
             self._add(path, f'class {where} can not be used as {_ROLE_NAME[section]}')
+
+    def _lint_tool_name_options(self, path, item):
+        # a governor class that decides by tool names declares which of its
+        # options hold them (```Meta.tool_name_options```); each name there must
+        # be a tool or group of ai.tools, a typo would never match a call
+        options = item.get('options')
+        if not isinstance(options, dict):
+            return
+        try:
+            cls = self.app.ai.resolve('governor', item.get('type'))
+        except TokeoAiError:
+            return
+        meta = getattr(cls, 'Meta', None)
+        tool_names = set(self._value('tools') or {})
+        for key in getattr(meta, 'tool_name_options', ()):
+            self._lint_names(f'{path}.options.{key}', options.get(key), tool_names, 'tool or group')
 
     def _validate_item_form(self, section, name, item):
         # the uniform item form shared by agents and guards: a mapping with a

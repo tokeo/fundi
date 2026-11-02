@@ -212,6 +212,15 @@ def test_sandbox_runs_only_the_tools_it_names():
         assert app.ai._sandbox_for('sleep', app.ai._agent('plain')) is None
 
 
+def test_linter_flags_an_unknown_name_in_tool_policy():
+    """A tool_policy deny of 'no_such' is flagged, the name matches no tool."""
+    cfg = ai_config()
+    cfg['ai']['guards'] = {'readonly': dict(type='tool_policy', options=dict(deny=['echo', 'no_such']))}
+    with FundiTest(config_defaults=cfg) as app:
+        issues = TokeoAiLinter(app).lint()
+        assert [i.path for i in issues if 'no_such' in i.message] == ['ai.guards.readonly.options.deny']
+
+
 def test_linter_flags_the_all_catch_all():
     """tools: _all on a sandbox is flagged, there is no catch-all."""
     cfg = ai_config()

@@ -434,6 +434,26 @@ class TokeoAi(MetaMixin):
         # order preserved, duplicates dropped (see config.tools.resolve_tools)
         return resolve_tools(names, self._tool_groups)
 
+    def tool_names(self, names):
+        """
+        Expand tool and group names to the names of the tools.
+
+        A group under ```ai.tools``` becomes its members, recursively; a single
+        name counts as a list of one, ```None``` as none. A guard that decides
+        by tool names resolves its options here, so a group means the same as
+        everywhere else in the config.
+
+        ### Args
+
+        - **names** (list|str|None): Tool and group names
+
+        ### Returns
+
+        - **list**: The tool names, in order, without duplicates
+
+        """
+        return self._resolve_tools(as_list(names))
+
     def _tool_specs(self, config_names):
         # build openai-style function specs from the tools' Meta; the model-
         # facing function name IS the config name (that is what comes back as
