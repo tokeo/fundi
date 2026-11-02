@@ -40,5 +40,5 @@ and let the run continue.
 - truncate (```TokeoAiTruncateTransformer```): caps over-long text so a large
   payload cannot blow the context budget or flood the trace. No ready-to-use
   implementation ships in the core; a generated project carries an editable
-  example in its own ```core/ai/transformers/truncate.py```, named by its dotted
-  class path in the config.
+  example in its own ```core/ai/transformers/truncate.py```, named by its class
+  path (```module:Class```) in the config.

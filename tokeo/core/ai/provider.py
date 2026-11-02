@@ -10,7 +10,7 @@ class TokeoAiProvider:
 
     A provider receives an already-resolved profile and returns a
     ```ChatResult```. Its class is resolved from the profile ```type``` (a built-in
-    alias or a dotted path) and instantiated with the application by the
+    alias or a class path) and instantiated with the application by the
     ```app.ai``` handler. It must not keep mutable per-call state, so that it can
     be called concurrently without locking.
 
@@ -36,16 +36,16 @@ class TokeoAiProvider:
         The name this provider answers to. Never ```None``` or empty.
 
         A provider is never declared under a config key (one object serves
-        every profile of its type), so this reports the dotted class.
+        every profile of its type), so this reports the class path.
 
         ### Returns
 
-        - **str**: The dotted class
+        - **str**: The class path
 
         """
         if self._config_name:
             return self._config_name
-        return f'{type(self).__module__}.{type(self).__name__}'
+        return f'{type(self).__module__}:{type(self).__name__}'
 
     def _setup(self, app, config_name=None, config=None):
         """

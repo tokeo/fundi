@@ -18,7 +18,7 @@ The technical namespace and the command group are both ```ai``` (this module,
 the ```tokeo.core.ai``` package, and the ```ai``` config section).
 
 Every configured component is an item in the uniform form ```{type, options}```:
-```type``` names the class (a built-in alias or a dotted path), ```options```
+```type``` names the class (a built-in alias or a class path), ```options```
 carries the component's own settings. Profiles add their documented top-level
 params (purpose, tools, enabled) around that form.
 
@@ -28,8 +28,8 @@ ai:
     profile: mock          # model used when a call names none
     agent: null           # no default agent: calls run with the implicit agent null
   tools:
-    calc:  { type: myapp.core.ai.tools.calc.TokeoAiCalcTool }
-    notes: { type: myapp.core.ai.tools.notes.TokeoAiNotesTool }
+    calc:  { type: myapp.core.ai.tools.calc:TokeoAiCalcTool }
+    notes: { type: myapp.core.ai.tools.notes:TokeoAiNotesTool }
   guards:
     audit: { type: audit }
     safe:
@@ -68,7 +68,6 @@ from cement.core.foundation import SIGNALS
 from cement.core.exc import CaughtSignal
 from cement.utils.misc import is_true
 
-import importlib
 import shlex
 from copy import deepcopy
 
@@ -84,6 +83,7 @@ from prompt_toolkit.completion import Completer, Completion
 
 from tokeo.ext.argparse import Controller
 from tokeo.core.utils.validate import as_list
+from tokeo.core.utils.modules import resolve_object, TokeoModulesLoadError
 from tokeo.core.utils.json import json_dump, TokeoJsonUnknownNameEncoder
 from tokeo.core.ai.utils import parse_model_params, TokeoJsonAiTraceEncoder
 from tokeo.core.ai import (
@@ -208,7 +208,7 @@ class TokeoAi(MetaMixin):
         self._show_license_notice = True
         # the ai component registry lives on the handler: kind -> {name: cls}.
         # built-ins register here at post_setup; a project or third-party class
-        # is named by a dotted ```type``` in the config and imported on demand.
+        # is named by a class path ```type``` in the config and imported on demand.
         self._registry = {}
         # the handler instantiates resolved classes with the application on
         # first use and caches the (stateless) instances here
@@ -308,14 +308,15 @@ class TokeoAi(MetaMixin):
         """
         Resolve a config ```type``` to a class.
 
-        A dotted ```type``` (one containing a ```.```) is imported on demand, so
-        a project or third-party class needs no registration; a bare alias is
-        looked up in the kind's registry (the built-ins tokeo ships).
+        A class path ```type``` (```module:Class```, the module and the class
+        apart by a ```:```) is imported on demand, so a project or third-party
+        class needs no registration; a bare alias is looked up in the kind's
+        registry (the built-ins tokeo ships).
 
         ### Args
 
         - **kind** (str): The component kind, e.g. ```provider``` or ```tool```
-        - **type_value** (str): An alias or a dotted ```module.Class``` path
+        - **type_value** (str): An alias or a class path ```module:Class```
 
         ### Returns
 
@@ -323,20 +324,20 @@ class TokeoAi(MetaMixin):
 
         ### Raises
 
-        - **TokeoAiError**: If an alias is unknown, or a dotted path cannot
-            be imported
+        - **TokeoAiError**: If an alias is unknown, a class path cannot be
+            imported, or a path is written with dots only
 
         """
         if not isinstance(type_value, str) or not type_value:
             raise TokeoAiError(f'ai {kind} "type" is missing or not a string')
+        if ':' in type_value:
+            try:
+                return resolve_object(type_value)
+            except TokeoModulesLoadError as err:
+                raise TokeoAiError(f'cannot import ai {kind} type: {err}')
         if '.' in type_value:
             module_path, _, attr = type_value.rpartition('.')
-            if not module_path:
-                raise TokeoAiError(f'ai {kind} type {type_value!r} is not a dotted path')
-            try:
-                return getattr(importlib.import_module(module_path), attr)
-            except (ImportError, AttributeError) as err:
-                raise TokeoAiError(f'cannot import ai {kind} type {type_value!r}: {err}')
+            raise TokeoAiError(f'ai {kind} type {type_value!r} is a path, write it as module:Class, e.g. {module_path}:{attr}')
         try:
             return self._registry[kind][type_value]
         except KeyError:
@@ -399,7 +400,7 @@ class TokeoAi(MetaMixin):
     def _governor_label(self, governor):
         # the class carries the character (guard secures, transformer
         # reshapes, conductor directs); config_name is the name as written, or
-        # the dotted class for a governor never set up
+        # the class path for a governor never set up
         for cls, role in ((TokeoAiGuard, 'guard'), (TokeoAiTransformer, 'transformer'), (TokeoAiConductor, 'conductor')):
             if isinstance(governor, cls):
                 return f'{role} {governor.config_name!r}'
@@ -407,7 +408,7 @@ class TokeoAi(MetaMixin):
 
     def _tool(self, config_name):
         # instantiate the tool configured under ```ai.tools[config_name]``` once
-        # and reuse it; ```type``` (a built-in alias or a dotted path) resolves
+        # and reuse it; ```type``` (a built-in alias or a class path) resolves
         # to a class, built with the application and set up with its key and
         # its raw declaration. the same statelessness argument as for providers
         # applies
@@ -479,7 +480,7 @@ class TokeoAi(MetaMixin):
 
     def _agent(self, config_name):
         # build the agent configured under ```ai.agents[config_name]``` once and
-        # reuse it; ```type``` (a built-in alias or a dotted path) resolves to
+        # reuse it; ```type``` (a built-in alias or a class path) resolves to
         # an agent class, built with the application and set up with its key
         # and its raw declaration. the reserved name null is the implicit agent
         # with an empty config: no tools, no sandboxes, no governors
@@ -526,16 +527,16 @@ class TokeoAi(MetaMixin):
     def _governor(self, config_name):
         # build the governor for a config name (the name as written) once and
         # reuse it; governors hold no per-call state, so one cached instance is
-        # fine. two forms: a dotted class at the point of use (a '.' in the
+        # fine. two forms: a class path at the point of use (a ':' in the
         # name) runs with class defaults, not configurable; a declared name is
         # built from its ai.guards item: ```type``` (a built-in alias or a
-        # dotted path) resolves to a class, set up with its key and its raw
+        # class path) resolves to a class, set up with its key and its raw
         # declaration
         obj = self._governor_objs.get(config_name)
         if obj is None:
-            if '.' in config_name:
-                # dotted class at the point of use: class defaults, no
-                # declaration; the dotted string is its config name
+            if ':' in config_name:
+                # class path at the point of use: class defaults, no
+                # declaration; the path as written is its config name
                 obj = self.resolve('governor', config_name)(self.app)
                 obj._setup(self.app, config_name)
             else:
@@ -582,7 +583,7 @@ class TokeoAi(MetaMixin):
 
     def _sandbox(self, config_name):
         # build the sandbox configured under ```ai.sandboxes[config_name]``` once
-        # and reuse it; ```type``` (a built-in alias or a dotted path) resolves
+        # and reuse it; ```type``` (a built-in alias or a class path) resolves
         # to a sandbox class, built with the application and set up with its key
         # and its raw declaration. it carries its key so callers can record
         # WHERE a tool ran. like a provider it holds no per-call state, so one
@@ -1411,7 +1412,7 @@ def ai_extend_app(app):
     Extends the application with the ai handler, registers the built-in
     providers on it, and sets it up, once every extension has been loaded and
     the configuration is available. A project or third-party provider/tool is
-    not registered here; it is named by a dotted ```type``` in the config and
+    not registered here; it is named by a class path ```type``` in the config and
     imported on demand.
 
     ### Args
@@ -1423,7 +1424,7 @@ def ai_extend_app(app):
     # built-in provider, available by alias without any configuration:
     # mock is the neutral test double the framework needs for its own loop.
     # core ships no tools and no domain models; a project names its own
-    # tools and providers by a dotted ```type```
+    # tools and providers by a class path ```type```
     app.ai.register('provider', 'mock', TokeoAiMockProvider)
     app.ai.register('provider', 'oai_compat', TokeoAiOaiCompatProvider)
     # built-in agent: the standard composition root, the ```fundi``` type (the
@@ -1500,7 +1501,7 @@ def load(app):
         available
     - Registers a pre_run hook that lints the ai configuration before an ai
         command, so a typo fails with a clean message rather than a traceback
-    - A project or third-party provider/tool is named by a dotted ```type``` in
+    - A project or third-party provider/tool is named by a class path ```type``` in
         the config and imported on demand, so it needs no registration and no
         entry in the application extensions
 

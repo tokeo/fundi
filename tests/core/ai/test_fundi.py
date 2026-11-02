@@ -146,7 +146,7 @@ def test_an_object_without_setup_is_not_initialized():
     _setup can hand one in.
     """
     tool = GreetTool(None)
-    assert tool.config_name == 'tests.core.ai.test_fundi.GreetTool'
+    assert tool.config_name == 'tests.core.ai.test_fundi:GreetTool'
     with pytest.raises(TokeoAiError, match='GreetTool: config options were not set by setup'):
         tool._config('prefix')
     with pytest.raises(AttributeError):
@@ -157,12 +157,13 @@ def test_a_setup_without_a_config_yields_the_class_defaults():
     """
     _setup without a declaration yields the class default prefix 'hello'.
 
-    This is the dotted-governor and unit-test path. The view is a deep copy,
-    so a write into it never bleeds into the class-level config_defaults.
+    This is the path of a governor at the point of use and of a unit test.
+    The view is a deep copy, so a write into it never bleeds into the
+    class-level config_defaults.
     """
     tool = GreetTool(None)
     tool._setup(None)
-    assert tool.config_name == 'tests.core.ai.test_fundi.GreetTool'
+    assert tool.config_name == 'tests.core.ai.test_fundi:GreetTool'
     assert tool._config('prefix') == 'hello'
     tool._config_options['prefix'] = 'poked'
     assert GreetTool.Meta.config_defaults == {'prefix': 'hello'}

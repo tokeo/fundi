@@ -22,11 +22,11 @@ from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
 from tests.utils import wait_until
 
-# dotted paths to the importable test tools the worker loads in a child
-ECHO = 'tests.ext.ai.lib.ai_tests_helper.EchoTool'
-CWD = 'tests.ext.ai.lib.ai_tests_helper.CwdTool'
-GREET = 'tests.ext.ai.lib.ai_tests_helper.GreetTool'
-ENV = 'tests.ext.ai.lib.ai_tests_helper.EnvTool'
+# the class paths of the importable test tools the worker loads in a child
+ECHO = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
+CWD = 'tests.ext.ai.lib.ai_tests_helper:CwdTool'
+GREET = 'tests.ext.ai.lib.ai_tests_helper:GreetTool'
+ENV = 'tests.ext.ai.lib.ai_tests_helper:EnvTool'
 
 # the jailed options every platform can enforce; the memory cap is added on
 # linux only: macos cannot bind RLIMIT_AS/DATA below the already mapped
@@ -34,9 +34,9 @@ ENV = 'tests.ext.ai.lib.ai_tests_helper.EnvTool'
 JAILED_OPTIONS = dict(timeout=5)
 if sys.platform == 'linux':
     JAILED_OPTIONS['memory_mb'] = 256
-SLEEP = 'tests.ext.ai.lib.ai_tests_helper.SleepTool'
-SPAWN = 'tests.ext.ai.lib.ai_tests_helper.SpawnTool'
-CHATTER = 'tests.ext.ai.lib.ai_tests_helper.ChatterTool'
+SLEEP = 'tests.ext.ai.lib.ai_tests_helper:SleepTool'
+SPAWN = 'tests.ext.ai.lib.ai_tests_helper:SpawnTool'
+CHATTER = 'tests.ext.ai.lib.ai_tests_helper:ChatterTool'
 
 # every tool of the config, offered by the agents that exercise the sandboxes
 TOOLS = ['echo', 'cwd', 'env', 'sleep', 'greeter', 'plain_greeter']
@@ -58,7 +58,7 @@ class FundiTest(TokeoTest):
 
 def ai_config():
     """Return the ai config every test starts from, as config_defaults."""
-    # a self-contained ai config: tools by dotted path, a group, both core
+    # a self-contained ai config: tools by class path, a group, both core
     # sandboxes (one subprocess "jailed", the in_process catch-all "allow"),
     # and agents that exercise every selection branch
     cfg = init_defaults('ai')

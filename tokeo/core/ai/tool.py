@@ -22,7 +22,7 @@ class TokeoAiTool(MetaMixin):
     Base class for agent tools.
 
     A tool's class is resolved from its ```ai.tools``` item ```type``` (a built-in
-    alias or a dotted path) and instantiated with the application by the
+    alias or a class path) and instantiated with the application by the
     ```app.ai``` handler, which then sets it up with its config name and its raw
     declaration; setup reads the ```options``` out of it once, and
     ```_config``` serves the merged view. It can use ```app.db```, the vault,
@@ -88,17 +88,17 @@ class TokeoAiTool(MetaMixin):
         """
         The name this tool answers to. Never ```None``` or empty.
 
-        The declared config key once setup handed one in, the dotted class
-        (```module.Class```) until then.
+        The declared config key once setup handed one in, the class path
+        (```module:Class```) until then.
 
         ### Returns
 
-        - **str**: The declared key, or the dotted class
+        - **str**: The declared key, or the class path
 
         """
         if self._config_name:
             return self._config_name
-        return f'{type(self).__module__}.{type(self).__name__}'
+        return f'{type(self).__module__}:{type(self).__name__}'
 
     def _setup(self, app, config_name=None, config=None):
         """

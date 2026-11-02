@@ -9,9 +9,9 @@
 """
 Sandbox derivations and the generic per-call job runner.
 
-The sandbox classes are re-exported here, so the short path
-```tokeo.core.ai.sandboxes.TokeoAiSubprocessSandbox``` reaches each (instead of
-the full ```tokeo.core.ai.sandboxes.subprocess.TokeoAiSubprocessSandbox```). No
+The sandbox classes are re-exported here, so the short class path
+```tokeo.core.ai.sandboxes:TokeoAiSubprocessSandbox``` reaches each (instead of
+the full ```tokeo.core.ai.sandboxes.subprocess:TokeoAiSubprocessSandbox```). No
 cycle: a sandbox module imports the base from the ```tokeo.core.ai``` facade,
 which is always fully loaded before this subpackage __init__ runs. The wasm
 import is safe without the optional ```wasmtime``` extra; that import is lazy

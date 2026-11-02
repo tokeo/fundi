@@ -23,8 +23,8 @@ subclass; the declaration says which character you are writing.
 ## Shipped types
 
 None yet. The core provides the ```TokeoAiConductor``` role to derive from; a
-conductor is written by deriving from it and naming it by its dotted class path in
-the config under ```ai.conductors```.
+conductor is written by deriving from it and naming it by its class path
+(```module:Class```) in the config under ```ai.conductors```.
 
 ## Originating a tool call
 

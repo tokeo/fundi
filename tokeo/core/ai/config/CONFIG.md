@@ -6,8 +6,9 @@ resolvers that read it live next to this file (```tokeo/core/ai/config/```), one
 component kind; this document describes the shapes they accept.
 
 All examples are YAML under a top-level ```ai:``` key. Where a value reads
-```module.Class```, it is a full dotted import path to a class; where it reads an
-alias, it is a built-in registered under that name.
+```module:Class```, it is a class path, the module and the class apart by a
+```:```; where it reads an alias, it is a built-in registered under that name. A
+path with dots only (```module.Class```) is refused with a hint to the ```:```.
 
 ## 1. The shape of ```ai:```
 
@@ -58,7 +59,7 @@ notation for a single element, the item:
 ```yaml
 some_name:
   type: alias                   # a built-in, OR
-  type: module.path.SomeClass   # a full dotted class path
+  type: module.path:SomeClass   # a class path, module and class apart by ':'
   options:                      # the class's own settings (its config_defaults)
     some_setting: value
 ```
@@ -82,10 +83,10 @@ list of member names). Groups may contain groups.
 
 ```yaml
 tools:
-  calc:                                   # an item (dotted path)
-    type: myapp.core.ai.tools.calc.CalcTool
+  calc:                                   # an item (class path)
+    type: myapp.core.ai.tools.calc:CalcTool
   read_file:                              # an item with options
-    type: myapp.core.ai.tools.read_file.ReadFileTool
+    type: myapp.core.ai.tools.read_file:ReadFileTool
     options:
       base_dir: tmp
   mathematics:                            # a group (a list of members)
@@ -149,8 +150,8 @@ guards:
     type: regex_redact
     options:
       patterns: [bearer, sk-key]  # required: no built-in list
-  truncate:                       # a project guard by dotted path
-    type: myapp.core.ai.transformers.truncate.MyAppAiTruncateTransformer
+  truncate:                       # a project guard by class path
+    type: myapp.core.ai.transformers.truncate:MyAppAiTruncateTransformer
     options:
       limit: 500
 ```
@@ -163,7 +164,7 @@ A declaration may override its ```options``` for one stage, under an
 ```yaml
 guards:
   truncate:
-    type: myapp.core.ai.transformers.truncate.MyAppAiTruncateTransformer
+    type: myapp.core.ai.transformers.truncate:MyAppAiTruncateTransformer
     options:
       limit: 2000           # the default for every stage
     on_close:

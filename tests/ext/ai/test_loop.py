@@ -13,9 +13,9 @@ from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError, TokeoAiProvider, ChatResult, ToolCall
 from tokeo.core.ai.data import Invocation
 
-SCRIPT = 'tests.ext.ai.test_loop.ScriptProvider'
-ECHO = 'tests.ext.ai.lib.ai_tests_helper.EchoTool'
-CODE = 'tokeo.core.ai.tools.TokeoAiPythonTrustedExecTool'
+SCRIPT = 'tests.ext.ai.test_loop:ScriptProvider'
+ECHO = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
+CODE = 'tokeo.core.ai.tools:TokeoAiPythonTrustedExecTool'
 HINT = 'error: ran ok, printed output but set no result: put your answer in the last line'
 
 

@@ -22,11 +22,11 @@ The grammar:
 - a map entry (```alpha: [on_prompt, on_call]```): replacing, only those
 - ```[_any]``` as the stage list: all the class's stages, explicitly
 - an empty / ```null``` / ```[]``` stage list: an error (too easily a mistake)
-- a dotted class as the config name (```module.Class```): used at the
+- a class path as the config name (```module:Class```): used at the
   point of use without registration; not configurable, runs with class defaults
 
-The config name is the name as written: a declared name and a dotted
-class are different config names even for the same class, and two declared
+The config name is the name as written: a declared name and a class
+path are different config names even for the same class, and two declared
 names for one class are two config names (two instances). The same config name
 appearing more than once is deduplicated; its stages are the union across its
 appearances, with nearest-wins (chain brought in vs. agent direct) deciding a
@@ -42,15 +42,15 @@ class GovernorConfigEntry:
     One resolved governor participation: a config name and its stages.
 
     The product of resolving a composition. ```config_name``` is the name as
-    written (a declared name or a dotted class); ```stages``` is the frozen
+    written (a declared name or a class path); ```stages``` is the frozen
     set of stage names it participates at, already intersected with what the
     class can do. ```source``` records where the entry came from (an agent entry
     or a chain), used to resolve a contradiction (agent wins over chain).
 
     ### Args
 
-    - **config_name** (str): The name as written (a declared name or a dotted
-        class); a dotted class is what the config named it there, so it is its
+    - **config_name** (str): The name as written (a declared name or a class
+        path); a class path is what the config named it there, so it is its
         config name too
     - **stages** (frozenset): The stages this entry runs at
     - **source** (str): ```'agent'``` or ```'chain'```, for nearest-wins

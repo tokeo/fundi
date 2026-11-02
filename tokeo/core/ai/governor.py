@@ -78,7 +78,7 @@ class TokeoAiGovernor(MetaMixin):
     methods (cached per governor, see ```has_stage```), so there is no phase field.
 
     Its class is resolved from the role's registry item ```type``` (a built-in
-    alias or a dotted path) and instantiated with the application by the
+    alias or a class path) and instantiated with the application by the
     ```app.ai``` handler, which then sets it up with its config name and its raw
     declaration; setup builds the per-stage ```options``` views out of it
     once, and ```_config``` serves them. Like a provider, it holds no mutable
@@ -204,18 +204,18 @@ class TokeoAiGovernor(MetaMixin):
         """
         The name this governor answers to. Never ```None``` or empty.
 
-        The declared config key (or the dotted class as written at the
-        point of use) once setup handed one in, the dotted class
-        (```module.Class```) until then.
+        The declared config key (or the class path as written at the
+        point of use) once setup handed one in, the class path
+        (```module:Class```) until then.
 
         ### Returns
 
-        - **str**: The declared key, or the dotted class
+        - **str**: The declared key, or the class path
 
         """
         if self._config_name:
             return self._config_name
-        return f'{type(self).__module__}.{type(self).__name__}'
+        return f'{type(self).__module__}:{type(self).__name__}'
 
     def _setup(self, app, config_name=None, config=None):
         """
@@ -229,7 +229,7 @@ class TokeoAiGovernor(MetaMixin):
 
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the governor is declared
-            under (```shredder```), or the dotted class at the point of use
+            under (```shredder```), or the class path at the point of use
         - **config** (dict, optional): The raw registry declaration
 
         """

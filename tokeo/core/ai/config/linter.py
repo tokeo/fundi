@@ -196,7 +196,7 @@ class TokeoAiLinter:
     def _validate_governor_entry(self, section, name, value):
         # an ai.guards entry is distinguished by the form of its value:
         # a map is a declaration (type, options, the six per-stage blocks); a
-        # string is the short form name: module.X (= {type: module.X}); a list
+        # string is the short form name: module:X (= {type: module:X}); a list
         # is a chain (a composition, validated as such). guards and chains share
         # one namespace; a name is one or the other, never both
         path = f'ai.{section}.{name}'
@@ -259,7 +259,7 @@ class TokeoAiLinter:
         if expected is None or not isinstance(cls, type):
             return
         if not issubclass(cls, expected):
-            where = f'{cls.__module__}.{cls.__qualname__}'
+            where = f'{cls.__module__}:{cls.__qualname__}'
             self._add(path, f'class {where} can not be used as {_ROLE_NAME[section]}')
 
     def _lint_tool_name_options(self, path, item):
@@ -383,10 +383,10 @@ class TokeoAiLinter:
     def _guard_class_stages(self, config_name):
         # the stages a governor's class can do, by reflection over the resolved
         # class (its on_* methods vs the base). an alias resolves through its
-        # ai.guards declaration type; a dotted class resolves directly. returns
+        # ai.guards declaration type; a class path resolves directly. returns
         # None when the class cannot be resolved (a separate error is reported)
         try:
-            if '.' in config_name:
+            if ':' in config_name:
                 cls = self.app.ai.resolve('governor', config_name)
             else:
                 declaration = self._governors_merged().get(config_name)
@@ -402,7 +402,7 @@ class TokeoAiLinter:
         # validate a guards composition list: each entry is a bare name
         # or a one-key {name: [stages]}; a referenced chain (list value under
         # ai.guards) is walked too. a named stage must be one the guard's class
-        # can do; an unknown alias (not a dotted class, not declared) is an
+        # can do; an unknown alias (not a class path, not declared) is an
         # error; an empty/null/[] stage list is an error
         if guards is None:
             return
@@ -429,7 +429,7 @@ class TokeoAiLinter:
                     continue
                 self._lint_guard_composition(path, value, chain_path + [config_name])
                 continue
-            # a config name must be a declared name or a dotted class
+            # a config name must be a declared name or a class path
             if '.' not in config_name and config_name not in known:
                 self._add(path, _unknown('governor', config_name, known))
                 continue
@@ -548,13 +548,13 @@ class TokeoAiLinter:
 
     def _lint_type(self, kind, path, item):
         # every item names a class by ```type```; resolving it on ```app.ai```
-        # imports a dotted path or looks up a built-in alias
+        # imports a class path or looks up a built-in alias
         type_value = item.get('type')
         if not type_value:
             self._add(path, f'missing {kind} "type"')
             return
         if not isinstance(type_value, str):
-            self._add(f'{path}.type', 'must be an alias or a dotted path')
+            self._add(f'{path}.type', 'must be an alias or a class path module:Class')
             return
         try:
             self.app.ai.resolve(kind, type_value)

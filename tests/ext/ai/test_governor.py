@@ -206,8 +206,8 @@ def test_governor_config_reads_a_key_honouring_the_stage():
 
 
 def test_governor_label_reads_class_character_and_config_name():
-    """The label is role + config name, or the dotted class for one never set up."""
-    # the role comes from the class (isinstance); the dotted class is the
+    """The label is role + config name, or the class path for one never set up."""
+    # the role comes from the class (isinstance); the class path is the
     # same form a point-of-use declaration writes
     with AiTest() as app:
         governor = DenyingSilently(app)
@@ -216,6 +216,6 @@ def test_governor_label_reads_class_character_and_config_name():
         stray = DenyingOnReturn(app)
         # computed, not hard-coded: the module of a class defined inside a
         # test file depends on how pytest imported it; the rule under test is
-        # the FORM (module.Class), not one specific path
-        dotted = f'{type(stray).__module__}.{type(stray).__name__}'
-        assert app.ai._governor_label(stray) == f'conductor {dotted!r}'
+        # the FORM (module:Class), not one specific path
+        path = f'{type(stray).__module__}:{type(stray).__name__}'
+        assert app.ai._governor_label(stray) == f'conductor {path!r}'

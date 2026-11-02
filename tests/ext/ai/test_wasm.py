@@ -104,19 +104,19 @@ def wasm_ai_config():
     cfg['ai'] = dict(
         defaults=dict(profile='mock', agent=None),
         tools=dict(
-            run_untrusted=dict(type='tokeo.core.ai.tools.TokeoAiPythonUntrustedExecTool'),
-            run_trusted=dict(type='tokeo.core.ai.tools.TokeoAiPythonTrustedExecTool'),
+            run_untrusted=dict(type='tokeo.core.ai.tools:TokeoAiPythonUntrustedExecTool'),
+            run_trusted=dict(type='tokeo.core.ai.tools:TokeoAiPythonTrustedExecTool'),
         ),
         sandboxes=dict(
             # untrusted: total isolation, the guest sees only its stdlib
             wasm_untrusted=dict(
-                type='tokeo.core.ai.sandboxes.TokeoAiWasmSandbox',
+                type='tokeo.core.ai.sandboxes:TokeoAiWasmSandbox',
                 tools=['run_untrusted'],
                 options=dict(runtime=_RUNTIME, stdlib=_STDLIB, memory_mb=256, timeout=10),
             ),
             # trusted: the app is mounted so the tool can be rebuilt in the guest
             wasm_trusted=dict(
-                type='tokeo.core.ai.sandboxes.TokeoAiWasmSandbox',
+                type='tokeo.core.ai.sandboxes:TokeoAiWasmSandbox',
                 tools=['run_trusted'],
                 options=dict(
                     runtime=_RUNTIME,

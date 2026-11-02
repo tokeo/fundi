@@ -184,9 +184,9 @@ The wasm sandbox and the two python-exec tools are not registered by
 default; the core extension registers only the framework built-ins
 (```in_process```, ```subprocess```, the guards, ```fundi```, ```mock```).
 Optional and security-sensitive components like these are referenced by their
-full dotted class path in ```type```, which the resolver imports on demand. (A
-project that uses them often can register an alias itself in a
-```post_setup``` hook; the examples here use the dotted path so they work
+full class path in ```type``` (```module:Class```), which the resolver imports
+on demand. (A project that uses them often can register an alias itself in a
+```post_setup``` hook; the examples here use the class path so they work
 without that.)
 
 A minimal configuration that wires both tools, each behind its own wasm
@@ -196,15 +196,15 @@ sandbox, and exposes them through two agents:
 ai:
   tools:
     run_untrusted:
-      type: tokeo.core.ai.tools.python_untrusted_exec.TokeoAiPythonUntrustedExecTool
+      type: tokeo.core.ai.tools.python_untrusted_exec:TokeoAiPythonUntrustedExecTool
     run_trusted:
-      type: tokeo.core.ai.tools.python_trusted_exec.TokeoAiPythonTrustedExecTool
+      type: tokeo.core.ai.tools.python_trusted_exec:TokeoAiPythonTrustedExecTool
 
   sandboxes:
     # untrusted: strong isolation, the guest sees its stdlib and the pact
     # contract only: no framework, no app, no host paths
     wasm_untrusted:
-      type: tokeo.core.ai.sandboxes.wasm.TokeoAiWasmSandbox
+      type: tokeo.core.ai.sandboxes.wasm:TokeoAiWasmSandbox
       tools:
         - run_untrusted
       options:
@@ -216,7 +216,7 @@ ai:
     # trusted: the tool is rebuilt in the guest, so it needs the framework,
     # the app, and the dependencies mounted read-only and put on PYTHONPATH
     wasm_trusted:
-      type: tokeo.core.ai.sandboxes.wasm.TokeoAiWasmSandbox
+      type: tokeo.core.ai.sandboxes.wasm:TokeoAiWasmSandbox
       tools:
         - run_trusted
       options:
