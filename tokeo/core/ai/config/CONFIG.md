@@ -342,9 +342,11 @@ profiles:
 
 .. important::
 
-    A profile must state its ```agent```, even as ```agent: null``` to run without
-    one. A profile binding ```null``` opts out of ```ai.defaults.agent``` on
-    purpose.
+    A profile must state its ```agent```, even as ```agent: null```. A profile
+    binding ```null``` opts out of ```ai.defaults.agent``` on purpose and runs
+    with the implicit agent ```null```: no tools, no sandboxes, no governors.
+    There is always an agent; where none is named, the run gets ```null```. The
+    name ```null``` is reserved, no entry of ```ai.agents``` may take it.
 
 ### 7.1 Carving out a subset with ```deny```
 

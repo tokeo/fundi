@@ -68,7 +68,7 @@ def loop_config(script, **agent_options):
         # shout is configured and has a sandbox, but no agent offers it
         sandboxes={'local': dict(type='in_process', tools=['echo', 'shout', 'coding'])},
         agents={
-            'plain': dict(type='fundi', options=dict(tools=['echo', 'coding'], sandboxes=['local'], **agent_options)),
+            'plain': dict(type='fundi', options=dict(governors=[], tools=['echo', 'coding'], sandboxes=['local'], **agent_options)),
             'audited': dict(type='fundi', options=dict(tools=['echo'], governors=['audit'], sandboxes=['local'], **agent_options)),
             'redacting': dict(type='fundi', options=dict(tools=['echo'], governors=['redact'], sandboxes=['local'], **agent_options)),
         },
@@ -219,6 +219,14 @@ def test_chat_redact_masks_the_call_in_history_and_trace():
         # the follow-up model call got the masked assistant turn
         assert 'geheim' not in repr(app.ai._provider(SCRIPT).seen[-1])
         assert 'geheim' not in repr([s.object for s in result.trace])
+
+
+def test_chat_without_an_agent_runs_the_agent_null():
+    """Without an agent the model gets no tools and a call of echo is refused."""
+    with LoopTest(config_defaults=loop_config([call('moin'), dict(text='done')])) as app:
+        result = app.ai.chat([dict(role='user', content='hi')])
+        assert result.answer.text == 'done'
+        assert tool_contents(result) == ["error: TokeoAiError: tool 'echo' is not offered by the agent"]
 
 
 # ask

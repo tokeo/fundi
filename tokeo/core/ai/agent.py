@@ -11,6 +11,10 @@ from cement.core.meta import MetaMixin
 from tokeo.core.utils.dict import deep_merge
 from tokeo.core.ai.exc import TokeoAiError
 
+# the name of the implicit agent: no tools, no sandboxes, no governors. a run
+# that names no agent runs with it; the name is reserved, no config declares it
+AGENT_NULL = 'null'
+
 
 class TokeoAiAgent(MetaMixin):
     """

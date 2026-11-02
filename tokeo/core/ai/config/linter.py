@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from tokeo.core.utils.validate import as_list, is_int_ge, is_list
 from tokeo.core.ai import TokeoAiError
+from tokeo.core.ai.agent import AGENT_NULL
 from tokeo.core.ai.guard import TokeoAiGuard
 from tokeo.core.ai.transformer import TokeoAiTransformer
 from tokeo.core.ai.conductor import TokeoAiConductor
@@ -299,12 +300,21 @@ class TokeoAiLinter:
         # the base agent's known option keys: the tools selection points into
         # ```ai.tools```, the guards selection into ```ai.guards```, and the
         # budgets are numbers; other keys may be a custom agent's own Meta keys
+        path = f'ai.{section}.{name}'
+        # null is the implicit agent; a yaml key null reads as None
+        if name is None or name == AGENT_NULL:
+            self._add(path, f'the name {AGENT_NULL!r} is reserved for the implicit agent, choose another name')
+            return
         if not isinstance(item, dict):
             return
         options = item.get('options')
+        # every agent names its governors, an empty list is a deliberate choice
+        if not isinstance(options, dict) or 'governors' not in options:
+            self._add(f'{path}.options.governors', 'must list governors (an empty list is allowed)')
+        elif options.get('governors') == []:
+            self._add(f'{path}.options.governors', 'is empty, the agent runs without governors', level='note')
         if not isinstance(options, dict):
             return
-        path = f'ai.{section}.{name}'
         tool_names = set(self._value('tools') or {})
         self._lint_selection(path, options.get('tools'), tool_names)
         # the guards composition: each entry is a bare name or a one-key

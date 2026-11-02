@@ -26,7 +26,7 @@ params (purpose, tools, enabled) around that form.
 ai:
   defaults:
     profile: mock          # model used when a call names none
-    agent: null           # no default agent: calls run lean unless one is named
+    agent: null           # no default agent: calls run with the implicit agent null
   tools:
     calc:  { type: myapp.core.ai.tools.calc.TokeoAiCalcTool }
     notes: { type: myapp.core.ai.tools.notes.TokeoAiNotesTool }
@@ -97,6 +97,7 @@ from tokeo.core.ai import (
     TokeoAiFundiAgent,
     TokeoAiResult,
 )
+from tokeo.core.ai.agent import AGENT_NULL
 from tokeo.core.ai.governor import (
     GOVERNOR_STAGES,
     GOVERNOR_STAGE_ON_BEGIN,
@@ -480,8 +481,13 @@ class TokeoAi(MetaMixin):
         # build the agent configured under ```ai.agents[config_name]``` once and
         # reuse it; ```type``` (a built-in alias or a dotted path) resolves to
         # an agent class, built with the application and set up with its key
-        # and its raw declaration
+        # and its raw declaration. the reserved name null is the implicit agent
+        # with an empty config: no tools, no sandboxes, no governors
         obj = self._agent_objs.get(config_name)
+        if obj is None and config_name == AGENT_NULL:
+            obj = TokeoAiFundiAgent(self.app)
+            obj._setup(self.app, AGENT_NULL, {})
+            self._agent_objs[config_name] = obj
         if obj is None:
             item = self._agents.get(config_name)
             if not isinstance(item, dict) or not item.get('type'):
@@ -492,20 +498,18 @@ class TokeoAi(MetaMixin):
         return obj
 
     def _agent_or_default(self, agent, profile=None):
-        # resolve the agent to run via the shared resolver (config.providers):
-        # an explicit call argument wins, else the profile's stated ```agent```
-        # (null opts out), else ```ai.defaults.agent```. None means no agent is
-        # bound, and under the sandbox rules a tool call is then denied
+        # resolve the agent to run via the shared resolver (config.profiles):
+        # an explicit call argument wins, else the profile's stated ```agent```,
+        # else ```ai.defaults.agent```. there is always an agent: where none is
+        # named, the run gets the implicit agent null, which offers no tool
         name = resolve_agent_name(agent, profile, self._defaults.get('agent'))
-        return self._agent(name) if name is not None else None
+        return self._agent(name if name is not None else AGENT_NULL)
 
     def _deny_set(self, agent_obj, profile, call_deny=None):
         # the resolved set of denied tools, shared by the spec-trimming and the
         # exec-time defence line so both always agree: the agent's deny, the
         # profile's deny, and the call's deny, each a single name or a group
-        denied = set()
-        if agent_obj is not None:
-            denied |= set(self._resolve_tools(as_list(agent_obj._config('deny'))))
+        denied = set(self._resolve_tools(as_list(agent_obj._config('deny'))))
         denied |= set(self._resolve_tools(as_list((profile or {}).get('deny'))))
         denied |= set(self._resolve_tools(as_list(call_deny)))
         return denied
@@ -553,10 +557,7 @@ class TokeoAi(MetaMixin):
     def _resolve_governors(self, agent_obj):
         # resolve the agent's guard composition: expand chains, parse the
         # per-guard stage lists, union per config name with nearest-wins, apply
-        # omit. returns GovernorConfigEntry list in first-appearance order. with no
-        # agent (or none selected) there is no pipeline
-        if agent_obj is None:
-            return []
+        # omit. returns GovernorConfigEntry list in first-appearance order
         return resolve_governors(
             self._governors,
             agent_obj._config('governors') or [],
@@ -608,8 +609,6 @@ class TokeoAi(MetaMixin):
         # tool. None means the chain is exhausted, which the caller turns into a
         # deny (deny-by-default). where a sandbox name points is the config's
         # choice, e.g. per environment file, never a switch in the process
-        if agent_obj is None:
-            return None
         name = sandbox_for(tool_name, agent_obj._config('sandboxes'), self._sandboxes.get, self._resolve_tools)
         return self._sandbox(name) if name is not None else None
 
@@ -621,9 +620,7 @@ class TokeoAi(MetaMixin):
 
     def _offers(self, tool_name, agent_obj, profile, call_deny=None):
         # a tool runs only when the agent offers it: its tools minus every deny,
-        # the same set the model was shown. without an agent nothing is offered
-        if agent_obj is None:
-            return False
+        # the same set the model was shown
         return tool_name in self._tools_minus_deny(agent_obj, profile, call_deny)
 
     def _exec_lifecycle(self, tool, sandbox, arguments, ctx):
@@ -846,17 +843,14 @@ class TokeoAi(MetaMixin):
         # (and calls) share one agent and each carve out a subset. the agent is
         # resolved call > profile.agent > defaults.agent
         agent_obj = self._agent_or_default(agent, profile)
-        if agent_obj is not None:
-            requested = self._tools_minus_deny(agent_obj, profile, deny)
-        else:
-            requested = []
+        requested = self._tools_minus_deny(agent_obj, profile, deny)
         if max_steps is None:
             # the agent's own budgets win; without one (None) the handler's
             # base defaults (config_defaults max_steps / max_loops) apply
-            budget = agent_obj._config('max_steps') if agent_obj is not None else None
+            budget = agent_obj._config('max_steps')
             max_steps = budget if budget is not None else self._config('max_steps', fallback=0)
         if max_loops is None:
-            budget = agent_obj._config('max_loops') if agent_obj is not None else None
+            budget = agent_obj._config('max_loops')
             max_loops = budget if budget is not None else self._config('max_loops', fallback=3)
         specs = self._tool_specs(requested)
         # guards (selected on the agent) are positioned steps in the loop; each

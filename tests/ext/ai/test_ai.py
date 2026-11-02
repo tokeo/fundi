@@ -87,19 +87,19 @@ def ai_config():
         },
         agents={
             # everything in process
-            'plain': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=['allow'])),
+            'plain': dict(type='fundi', options=dict(governors=[], tools=list(TOOLS), sandboxes=['allow'])),
             # echo -> jailed (subprocess), the rest falls through to allow
-            'mixed': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=['jailed', 'allow'])),
+            'mixed': dict(type='fundi', options=dict(governors=[], tools=list(TOOLS), sandboxes=['jailed', 'allow'])),
             # no catch-all: a tool no sandbox lists is denied
-            'strict': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=['jailed'])),
+            'strict': dict(type='fundi', options=dict(governors=[], tools=list(TOOLS), sandboxes=['jailed'])),
             # hard deny wins before any sandbox lookup
-            'banning': dict(type='fundi', options=dict(tools=list(TOOLS), deny=['echo'], sandboxes=['allow'])),
+            'banning': dict(type='fundi', options=dict(governors=[], tools=list(TOOLS), deny=['echo'], sandboxes=['allow'])),
             # partial sandbox skips cwd via except, then allow catches it
-            'walking': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=['partial', 'allow'])),
+            'walking': dict(type='fundi', options=dict(governors=[], tools=list(TOOLS), sandboxes=['partial', 'allow'])),
             # empty chain -> deny by default
-            'empty': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=[])),
+            'empty': dict(type='fundi', options=dict(governors=[], tools=list(TOOLS), sandboxes=[])),
             # carries echo + cwd; the narrow profile denies cwd off this set
-            'echoer': dict(type='fundi', options=dict(tools=['echo', 'cwd'], sandboxes=['allow'])),
+            'echoer': dict(type='fundi', options=dict(governors=[], tools=['echo', 'cwd'], sandboxes=['allow'])),
         },
         profiles={
             'mock': dict(type='mock', agent='plain'),
@@ -290,6 +290,26 @@ def test_linter_flags_an_unknown_name_in_tool_policy():
         assert [i.path for i in issues if 'no_such' in i.message] == ['ai.guards.readonly.options.deny']
 
 
+@pytest.mark.parametrize('name', ['null', None], ids=['null', 'yaml_null'])
+def test_linter_flags_the_reserved_agent_name_null(name):
+    """An agent declared as null, also a yaml key null, is flagged as reserved."""
+    cfg = ai_config()
+    cfg['ai']['agents'][name] = dict(type='fundi', options=dict(governors=[]))
+    with FundiTest(config_defaults=cfg) as app:
+        issues = TokeoAiLinter(app).lint()
+        assert any(i.level == 'error' and 'reserved for the implicit agent' in i.message for i in issues)
+
+
+def test_linter_flags_an_agent_without_governors():
+    """An agent that does not list governors is an error, [] only a note."""
+    cfg = ai_config()
+    cfg['ai']['agents']['bare'] = dict(type='fundi', options=dict(tools=['echo'], sandboxes=['allow']))
+    with FundiTest(config_defaults=cfg) as app:
+        issues = {i.path: i.level for i in TokeoAiLinter(app).lint()}
+        assert issues['ai.agents.bare.options.governors'] == 'error'
+        assert issues['ai.agents.plain.options.governors'] == 'note'
+
+
 def test_linter_flags_the_all_catch_all():
     """tools: _all on a sandbox is flagged, there is no catch-all."""
     cfg = ai_config()
@@ -365,11 +385,20 @@ def test_agent_refuses_a_tool_it_does_not_offer():
             run(app, 'env', 'echoer')
 
 
-def test_no_agent_offers_no_tool():
-    """Without an agent echo is refused, even though a sandbox would take it."""
+def test_no_agent_named_runs_the_implicit_agent_null():
+    """No agent named gives the agent null: no tools, sandboxes or governors."""
+    with FundiTest(config_defaults=ai_config()) as app:
+        agent = app.ai._agent_or_default(None)
+        assert agent.config_name == 'null'
+        assert (agent._config('tools'), agent._config('sandboxes'), agent._config('governors')) == ([], [], [])
+        assert app.ai._agent('null') is agent
+
+
+def test_the_agent_null_offers_no_tool():
+    """Under the agent null echo is refused, even though a sandbox would take it."""
     with FundiTest(config_defaults=ai_config()) as app:
         with pytest.raises(TokeoAiError, match="tool 'echo' is not offered by the agent"):
-            app.ai._exec_in_sandbox('echo', dict(text='x'), None, None, None, None, None)
+            run(app, 'echo', 'null', text='x')
 
 
 # --------------------------------------------------------------------------------------

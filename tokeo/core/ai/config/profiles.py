@@ -104,11 +104,11 @@ def resolve_agent_name(agent, profile, default_agent):
     Return the agent name a run uses, in order: call argument, profile, defaults.
 
     An explicit call ```agent``` wins. Else the selected profile's ```agent```,
-    which must be *stated*: an explicit ```agent: null``` on the profile opts
-    out on purpose (overriding the default), a present name selects it. Else
-    ```ai.defaults.agent```. ```None``` means no agent is bound, and under the
-    sandbox rules a tool call is then denied; binding an agent is how a profile
-    opts into running tools at all.
+    which must be *stated*: an explicit ```agent: null``` on the profile picks
+    the implicit agent null on purpose (overriding the default), a present name
+    selects it. Else ```ai.defaults.agent```. ```None``` means no agent is
+    named, the handler then runs the implicit agent null, which offers no
+    tool; binding an agent is how a profile opts into running tools at all.
 
     ### Args
 
@@ -119,7 +119,7 @@ def resolve_agent_name(agent, profile, default_agent):
 
     ### Returns
 
-    - **str|None**: The agent name to build, or ```None``` when none is bound
+    - **str|None**: The agent name to build, or ```None``` when none is named
 
     """
     if agent is None and profile is not None and 'agent' in profile:

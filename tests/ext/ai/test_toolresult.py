@@ -50,8 +50,8 @@ def ai_config():
             'jailed': dict(type='subprocess', tools=['boom', 'data', 'void'], options=dict(timeout=5)),
         },
         agents={
-            'plain': dict(type='fundi', options=dict(tools=['boom', 'data', 'void'], sandboxes=['allow'])),
-            'jail': dict(type='fundi', options=dict(tools=['boom', 'data', 'void'], sandboxes=['jailed'])),
+            'plain': dict(type='fundi', options=dict(governors=[], tools=['boom', 'data', 'void'], sandboxes=['allow'])),
+            'jail': dict(type='fundi', options=dict(governors=[], tools=['boom', 'data', 'void'], sandboxes=['jailed'])),
         },
         profiles={'mock': dict(type='mock', agent='plain')},
     )
