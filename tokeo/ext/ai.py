@@ -1265,6 +1265,12 @@ class AiController(Controller):
                         self.app.print(f'ai chat - {err}')
                         messages.pop()
                         continue
+                    except BaseException:
+                        # ctrl-c, a signal or any other error: the turn stays
+                        # unanswered, so it leaves the conversation before the
+                        # handlers below decide about the session
+                        messages.pop()
+                        raise
                     messages.append({'role': 'assistant', 'content': result.answer.text})
                     self.app.print(result.answer.text)
                 except KeyboardInterrupt:
