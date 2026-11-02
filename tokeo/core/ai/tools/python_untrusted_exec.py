@@ -31,11 +31,11 @@ code cannot read tokeo's own modules.
     that makes it safe.
 """
 
-from tokeo.core.ai import TokeoAiTool
+from tokeo.core.ai.tools.python_exec import TokeoAiPythonExecTool
 from tokeo.pact.ai.pysnippet import run_snippet
 
 
-class TokeoAiPythonUntrustedExecTool(TokeoAiTool):
+class TokeoAiPythonUntrustedExecTool(TokeoAiPythonExecTool):
     """
     Execute untrusted model-generated Python in isolation, returning its value.
 

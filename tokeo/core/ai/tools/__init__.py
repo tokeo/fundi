@@ -20,10 +20,12 @@ per-module path. No cycle: a tool module imports the base from the
 __init__ runs.
 """
 
+from tokeo.core.ai.tools.python_exec import TokeoAiPythonExecTool
 from tokeo.core.ai.tools.python_trusted_exec import TokeoAiPythonTrustedExecTool
 from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExecTool
 
 __all__ = [
+    'TokeoAiPythonExecTool',
     'TokeoAiPythonTrustedExecTool',
     'TokeoAiPythonUntrustedExecTool',
 ]

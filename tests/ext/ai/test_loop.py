@@ -15,6 +15,8 @@ from tokeo.core.ai.data import Invocation
 
 SCRIPT = 'tests.ext.ai.test_loop.ScriptProvider'
 ECHO = 'tests.ext.ai.lib.ai_tests_helper.EchoTool'
+CODE = 'tokeo.core.ai.tools.TokeoAiPythonTrustedExecTool'
+HINT = 'error: ran ok, printed output but set no result: put your answer in the last line'
 
 
 class LoopTest(TokeoTest):
@@ -61,12 +63,12 @@ def loop_config(script, **agent_options):
     cfg = init_defaults('ai')
     cfg['ai'] = dict(
         defaults=dict(profile='script', agent=None),
-        tools={'echo': dict(type=ECHO), 'shout': dict(type=ECHO)},
+        tools={'echo': dict(type=ECHO), 'shout': dict(type=ECHO), 'coding': dict(type=CODE)},
         guards={'audit': dict(type='trace_audit')},
         # shout is configured and has a sandbox, but no agent offers it
-        sandboxes={'local': dict(type='in_process', tools=['echo', 'shout'])},
+        sandboxes={'local': dict(type='in_process', tools=['echo', 'shout', 'coding'])},
         agents={
-            'plain': dict(type='fundi', options=dict(tools=['echo'], sandboxes=['local'], **agent_options)),
+            'plain': dict(type='fundi', options=dict(tools=['echo', 'coding'], sandboxes=['local'], **agent_options)),
             'audited': dict(type='fundi', options=dict(tools=['echo'], governors=['audit'], sandboxes=['local'], **agent_options)),
         },
         profiles={'script': dict(type=SCRIPT, options=dict(script=script))},
@@ -178,6 +180,34 @@ def test_chat_refuses_arguments_that_are_no_json_object(agent):
         calls = [c for s in result.trace if getattr(s.object, 'tool_calls', None) for c in s.object.tool_calls]
         assert calls and all(c.arguments == 'hello' for c in calls)
         assert result.loopdata.failed_loops == 1
+
+
+def code(source):
+    """A script turn that runs the source by the coding tool."""
+    return dict(calls=[('coding', dict(code=source))])
+
+
+def test_chat_code_that_only_prints_gets_the_hint():
+    """print(9) delivers nothing: the model gets the hint, not the printed 9."""
+    with LoopTest(config_defaults=loop_config([code('print(9)'), dict(text='done')])) as app:
+        result = app.ai.chat([dict(role='user', content='hi')], agent='plain')
+        assert tool_contents(result) == [HINT]
+        assert result.loopdata.failed_loops == 1
+
+
+def test_chat_code_that_delivers_a_value_gets_it():
+    """x = 9 on the last line delivers 9 to the model."""
+    with LoopTest(config_defaults=loop_config([code('x = 9'), dict(text='done')])) as app:
+        result = app.ai.chat([dict(role='user', content='hi')], agent='plain')
+        assert tool_contents(result) == ['9']
+        assert result.loopdata.failed_loops == 0
+
+
+def test_chat_code_that_keeps_printing_ends_at_max_loops():
+    """A model that keeps printing stops at max_loops 3, not after 13 rounds."""
+    with LoopTest(config_defaults=loop_config([code('print(9)')])) as app:
+        with pytest.raises(TokeoAiError, match=r'max_loops \(3\) reached'):
+            app.ai.chat([dict(role='user', content='hi')], agent='plain', max_loops=3)
 
 
 # ask

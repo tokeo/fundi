@@ -25,11 +25,11 @@ project) mounted and importable; the snippet can then use framework helpers.
     guest with only the pact contract mounted.
 """
 
-from tokeo.core.ai import TokeoAiTool
+from tokeo.core.ai.tools.python_exec import TokeoAiPythonExecTool
 from tokeo.pact.ai.pysnippet import run_snippet
 
 
-class TokeoAiPythonTrustedExecTool(TokeoAiTool):
+class TokeoAiPythonTrustedExecTool(TokeoAiPythonExecTool):
     """
     Execute trusted Python with the target app importable, returning its value.
 
