@@ -30,8 +30,11 @@ be granted it explicitly, or run in a different sandbox.
 
 import os
 import json
+import time
 import shutil
+import hashlib
 import tempfile
+import threading
 import importlib.util
 
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
@@ -50,6 +53,9 @@ REPLY_LIMIT = 1024 * 1024
 
 # the exit code of a guest entry whose own machinery failed
 _EXIT_MACHINERY = 3
+
+# the seconds between two checks of the watcher
+_WATCH_INTERVAL = 0.1
 
 # the start of both guest entries: a failure before the tool code runs is the
 # machinery's, so it exits with _EXIT_MACHINERY
@@ -153,9 +159,10 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         # runtime: python.wasm, stdlib: its stdlib (read-only at /lib), mounts:
         # {guest_path: host_path} read-only, cwd: host dir read-write at /work,
-        # env: scrubbed, ${NAME} expands, timeout: seconds (epoch), memory_mb:
-        # hard cap, shim_wasi_stdlib: a multiprocessing stand-in on the trusted
-        # path, where a rebuilt framework imports it at load
+        # env: scrubbed, ${NAME} expands, timeout: seconds, memory_mb: hard
+        # cap, disk_mb and max_files: what the guest may add to /io and /work,
+        # cache: a trusted dir for the compiled runtime, shim_wasi_stdlib: a
+        # multiprocessing stand-in on the trusted path
         config_defaults = dict(
             runtime=None,
             stdlib=None,
@@ -164,6 +171,9 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             env=None,
             timeout=None,
             memory_mb=None,
+            disk_mb=64,
+            max_files=1000,
+            cache=None,
             shim_wasi_stdlib=True,
         )
 
@@ -216,7 +226,8 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         ### Raises
 
         - **TokeoAiError**: On a missing runtime, a missing guest module, a
-            timeout, a crash, a failed guest machinery, or a broken value
+            timeout, a broken disk or file limit, a crash, a failed guest
+            machinery, or a broken value
 
         """
         # wasmtime is the optional extra tokeo-fundi[wasm], imported on use
@@ -289,12 +300,11 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         return ToolResult(value=value, state=state)
 
     def _run_guest(self, wasmtime, io_dir, cap_dir, dotted, shims):
-        # assemble the wasmtime store with the cap, the timeout, the mounts and
-        # the scrubbed env, run the guest entry and return its exit code
+        # assemble the wasmtime store with the cap, the mounts and the scrubbed
+        # env, run the guest entry under the watcher, return its exit code.
+        # epoch interruption is always on: it is the only way to stop a guest
         config = wasmtime.Config()
-        timeout = self._config('timeout')
-        if timeout:
-            config.epoch_interruption = True
+        config.epoch_interruption = True
         engine = wasmtime.Engine(config)
         store = wasmtime.Store(engine)
         memory_mb = self._config('memory_mb')
@@ -338,36 +348,101 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # WasiConfig.env takes all pairs at once, per key keeps only the last
         wasi.env = [(key, value) for key, value in env.items()]
         store.set_wasi(wasi)
-        module = wasmtime.Module.from_file(engine, self._runtime)
-        if timeout:
-            # with epoch interruption the deadline starts at 0 and instantiate
-            # already runs start code, so set it before
-            store.set_epoch_deadline(1)
+        module = self._module(wasmtime, engine)
+        # the deadline is set before instantiate, which already runs start code
+        store.set_epoch_deadline(1)
         instance = linker.instantiate(store, module)
         start = instance.exports(store)['_start']
-        if timeout:
-            import threading
+        roots = [io_dir] + ([work] if work else [])
+        disk_mb, max_files, timeout = self._config('disk_mb'), self._config('max_files'), self._config('timeout')
 
-            ticker = threading.Timer(timeout, engine.increment_epoch)
-            ticker.daemon = True
-            ticker.start()
+        def usage(stop=None):
+            # bytes and entries under the roots, counting stops past stop
+            size = count = 0
+            for root in roots:
+                for folder, dirs, files in os.walk(root):
+                    count += len(dirs) + len(files)
+                    for name in files:
+                        try:
+                            size += os.lstat(os.path.join(folder, name)).st_size
+                        except OSError:
+                            pass
+                    if stop and count > stop:
+                        return size, count
+            return size, count
+
+        def exceeded():
+            # the limit the guest broke, or None
+            size, count = usage(base_count + max_files if max_files else None)
+            if disk_mb and size - base_size > disk_mb * 1024 * 1024:
+                return f'wrote more than {disk_mb} MB'
+            if max_files and count - base_count > max_files:
+                return f'created more than {max_files} files'
+            return None
+
+        base_size, base_count = usage()
+        reason = []
+        done = threading.Event()
+
+        def watch():
+            # one check of time, size and files per interval; a broken limit
+            # stops the guest at its next epoch check
+            deadline = time.monotonic() + timeout if timeout else None
+            while not done.wait(_WATCH_INTERVAL):
+                if deadline and time.monotonic() > deadline:
+                    reason.append(f'timed out after {timeout}s')
+                elif disk_mb or max_files:
+                    broken = exceeded()
+                    if broken:
+                        reason.append(broken)
+                if reason:
+                    engine.increment_epoch()
+                    return
+
+        watcher = threading.Thread(target=watch, daemon=True)
+        watcher.start()
         try:
             start(store)
-            return 0
+            code = 0
         except wasmtime.ExitTrap as exit_trap:
-            return getattr(exit_trap, 'code', 0)
+            code = getattr(exit_trap, 'code', 0)
         except wasmtime.Trap as trap:
-            # newer wasmtime marks the epoch trap by code, older ones by text
-            trap_code = getattr(wasmtime, 'TrapCode', None)
-            code_hit = trap_code is not None and getattr(trap, 'trap_code', None) == trap_code.INTERRUPT
-            text_hit = any(word in str(trap).lower() for word in ('epoch', 'interrupt'))
-            if timeout and (code_hit or text_hit):
-                raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the wasm sandbox')
+            if reason:
+                raise TokeoAiError(f'tool {dotted!r} {reason[0]} in the wasm sandbox')
             detail = ''
             if os.path.exists(stderr_path):
                 with open(stderr_path, errors='replace') as f:
                     detail = f.read().strip()[-400:]
             raise TokeoAiError(f'tool {dotted!r} crashed in the wasm sandbox: {detail or str(trap).splitlines()[0]}')
         finally:
-            if timeout:
-                ticker.cancel()
+            done.set()
+            watcher.join()
+        # a guest that broke a limit and ended before the next check still failed
+        broken = (disk_mb or max_files) and exceeded()
+        if broken:
+            raise TokeoAiError(f'tool {dotted!r} {broken} in the wasm sandbox')
+        return code
+
+    def _module(self, wasmtime, engine):
+        # the compiled runtime: from the cache dir when set and fitting, else
+        # compiled now (and stored there). a file in the cache is native code
+        # the host runs, so the dir must be writable only by the operator
+        with open(self._runtime, 'rb') as f:
+            wasm = f.read()
+        cache = self._config('cache')
+        if not cache:
+            return wasmtime.Module(engine, wasm)
+        path = os.path.join(cache, f'python-{hashlib.sha256(wasm).hexdigest()[:32]}.cwasm')
+        if os.path.isfile(path):
+            try:
+                return wasmtime.Module.deserialize_file(engine, path)
+            except wasmtime.WasmtimeError:
+                # compiled by another wasmtime or config: compile it anew
+                pass
+        module = wasmtime.Module(engine, wasm)
+        os.makedirs(cache, exist_ok=True)
+        part = f'{path}.{os.getpid()}.part'
+        with open(part, 'wb') as f:
+            f.write(module.serialize())
+        os.replace(part, path)
+        return module

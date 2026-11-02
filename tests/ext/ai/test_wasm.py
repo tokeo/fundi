@@ -284,9 +284,11 @@ needs_build = pytest.mark.skipif(
 )
 
 
-def run_untrusted(code):
-    """Run the code by the untrusted tool in its wasm sandbox, return the result."""
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
+def run_untrusted(code, **options):
+    """Run the code by the untrusted tool in wasm with extra options, return it."""
+    cfg = wasm_ai_config()
+    cfg['ai']['sandboxes']['wasm_untrusted']['options'].update(options)
+    with WasmTest(config_defaults=cfg) as app:
         agent = app.ai._agent('untrusted_coder')
         return app.ai._exec_in_sandbox('run_untrusted', dict(code=code), agent, None, None, None, None)
 
@@ -360,3 +362,56 @@ def test_guest_and_host_encode_a_value_alike(code):
     assert (out.value.as_json, out.state.incomplete) == (host.value.as_json, host.state.incomplete)
     if code != 'object()':
         assert out.value.as_str == host.value.as_str
+
+
+@needs_build
+def test_the_watcher_stops_a_guest_at_the_timeout():
+    """while True: pass with timeout 1 ends as 'timed out after 1s'."""
+    with pytest.raises(TokeoAiError, match=r'timed out after 1s'):
+        run_untrusted('while True:\n    pass', timeout=1)
+
+
+@needs_build
+def test_the_watcher_stops_a_guest_that_writes_endlessly():
+    """A guest writing to /io without end stops at disk_mb 1, before any timeout."""
+    code = 'f = open("/io/fill", "w")\nwhile True:\n    f.write("x" * 65536)\n    f.flush()'
+    with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
+        run_untrusted(code, disk_mb=1, timeout=None)
+
+
+@needs_build
+def test_a_quick_guest_over_the_disk_limit_fails_too():
+    """2 MB written at once with disk_mb 1 fails, even if the guest ended first."""
+    with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
+        run_untrusted('open("/io/big", "w").write("x" * 2 * 1024 * 1024)\n1', disk_mb=1)
+
+
+@needs_build
+def test_the_watcher_counts_the_files_a_guest_creates():
+    """50 files with max_files 10 fail as 'created more than 10 files'."""
+    with pytest.raises(TokeoAiError, match='created more than 10 files'):
+        run_untrusted('for i in range(50):\n    open(f"/io/f{i}", "w").close()\n1', max_files=10)
+
+
+@needs_build
+def test_the_watcher_counts_only_what_the_guest_adds_to_work(tmp):
+    """A 2 MB file already in cwd is not the guest's, disk_mb 1 still passes."""
+    with open(os.path.join(tmp.dir, 'kept'), 'w') as f:
+        f.write('x' * 2 * 1024 * 1024)
+    assert run_untrusted('"ok"', cwd=tmp.dir, disk_mb=1).value.as_str == 'ok'
+
+
+@needs_build
+def test_the_cache_dir_keeps_the_compiled_runtime(tmp, monkeypatch):
+    """The first run stores the compiled runtime in cache, the next loads it."""
+    import wasmtime
+
+    assert run_untrusted('1', cache=tmp.dir).value.as_str == '1'
+    assert [name for name in os.listdir(tmp.dir) if name.endswith('.cwasm')]
+
+    def no_compile(*args, **kw):
+        raise AssertionError('compiled although cached')
+
+    cached = type('Module', (), dict(__init__=no_compile, deserialize_file=wasmtime.Module.deserialize_file))
+    monkeypatch.setattr(wasmtime, 'Module', cached)
+    assert run_untrusted('2', cache=tmp.dir).value.as_str == '2'

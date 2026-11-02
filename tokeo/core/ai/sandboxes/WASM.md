@@ -268,8 +268,11 @@ python -c "import cement, os; print(os.path.dirname(os.path.dirname(cement.__fil
 | ```mounts``` | no | A ```{guest_path: host_path}``` map of read-only mounts. This is the entire attack surface: only what you mount is visible. Empty means the guest sees no host code at all. |
 | ```cwd``` | no | A host scratch directory mounted read-write at ```/work```, created on demand. |
 | ```env``` | no | The guest environment: scrubbed and empty by default, only the listed keys are set, ```${NAME}``` expands against this map, then the host env, then ```''```. |
-| ```timeout``` | no | Wall-clock seconds before the guest is interrupted (epoch). Enforced in-process; there is no child to kill. |
+| ```timeout``` | no | Wall-clock seconds before the guest is stopped. Checked by the watcher every 0.1 s; there is no child to kill. |
 | ```memory_mb``` | no | A hard memory cap in MB via Wasmtime store limits. A runaway allocation traps the guest. Platform-independent. |
+| ```disk_mb``` | no (default ```64```) | The MB the guest may add to ```/io``` and ```/work```. What is in ```/work``` before the run does not count. ```null``` removes the limit. |
+| ```max_files``` | no (default ```1000```) | The files and directories the guest may add to ```/io``` and ```/work```. ```null``` removes the limit. |
+| ```cache``` | no | A directory for the compiled runtime. The first run compiles ```python.wasm``` (about 2 s) and stores it there, later runs of any process load it in milliseconds. Off by default. |
 | ```shim_wasi_stdlib``` | no (default ```true```) | Put the bundled ```multiprocessing``` shim ahead of the stdlib so a framework that imports it at load can be rebuilt in the guest. Only on the trusted/rebuild path; the untrusted guest never gets it. |
 
 .. warning::
@@ -551,6 +554,13 @@ runs. A missing source ends the run with an error. The rules:
 The guest encodes a value with the same json module as the host, and a test runs
 values of several kinds through both to show the encodings match.
 
+.. warning::
+
+    The ```cache``` directory holds native code the host runs. Only the
+    operator may write to it, like to the virtual environment; whoever can
+    write there can run code in the app. A cache file is named by the hash of
+    ```python.wasm```; one compiled by another wasmtime is compiled anew.
+
 
 ## The WASI stdlib shim
 
@@ -574,7 +584,14 @@ The guest cannot:
 - Open a socket; the syscalls do not exist in its world.
 - Read a host file outside the explicit mounts.
 - Exceed the memory cap (a runaway allocation traps).
-- Outrun the timeout.
+- Outrun the timeout, or write more than ```disk_mb``` or ```max_files``` into
+  ```/io``` and ```/work```.
+
+A watcher thread checks the time, the bytes, and the files every 0.1 s and stops
+the guest through Wasmtime's epoch interruption, which is always on. A guest that
+broke a limit and ended before the next check fails all the same, the last check
+runs after the guest. Epoch interruption makes CPU-bound guest code about 30 %
+slower; it is the only way to stop a running guest from outside.
 
 The guest can still:
 
@@ -617,6 +634,10 @@ Leave ```shim_wasi_stdlib``` at its default (```True```).
 source root is not mounted. The trusted tool is rebuilt from
 ```tokeo.core.ai.tools...```, so the tokeo source must be on the guest's
 ```PYTHONPATH``` alongside the app.
+
+A "wrote more than N MB" or "created more than N files" error: the snippet
+exceeded ```disk_mb``` or ```max_files```. Raise the limit if the tool needs
+the space, or check the code is not writing in a loop.
 
 A "timed out after Ns" error: the snippet exceeded ```timeout```. Raise
 it, or check the code is not waiting on something that can never happen in the

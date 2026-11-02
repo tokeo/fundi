@@ -1,15 +1,12 @@
 """
 Tests for ```run_snippet```: how a model-written snippet delivers its value.
 
-These cover the wrap contract that replaced the old ```result =``` convention.
-A snippet delivers a value either by ending on an expression (the jupyter form)
-or by a ```return```, with the block wrapped into a function so the return is
-legal; a block that delivers neither yields ```None```. The wrap is rejected for
-a top-level ```await``` (an async wrap is out of scope), a parse error surfaces
-as a ```SyntaxError```, and a runtime error propagates so the caller (the
-sandbox layer) records it. Because the block becomes a function body, the
-snippet's own names stay local; the passed namespace is the run context, not
-the result channel.
+A snippet delivers a value by ending on an expression (the jupyter form), by a
+```return```, or by an assignment; a block that delivers none yields ```None```.
+The block runs at module level in the passed namespace, so ```global``` works
+and a top-level ```return``` ends the run. A top-level ```await``` is refused, a
+parse error surfaces as a ```SyntaxError```, and a runtime error propagates so
+the caller (the sandbox layer) records it.
 """
 
 from tokeo.core.ai.pysnippet import run_snippet, TokeoAiSnippetError
