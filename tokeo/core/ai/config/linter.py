@@ -300,8 +300,7 @@ class TokeoAiLinter:
         # ```options```; settings keys inside options are the component's Meta
         # keys and stay unchecked here (a custom class declares its own)
         path = f'ai.{section}.{name}'
-        if not isinstance(item, dict):
-            self._add(path, 'must be an item (mapping with a "type")')
+        if not self._lint_long_form(path, item, 'agent'):
             return
         # guards additionally accept a per-stage on_<stage> block (its own
         # ```options``` override for that station, read by the guard's _config);
@@ -465,8 +464,7 @@ class TokeoAiLinter:
         # the class's config_defaults, their values the class checks itself
         # through ```validate_options```
         path = f'ai.{section}.{name}'
-        if not isinstance(item, dict):
-            self._add(path, 'must be an item (mapping with a "type")')
+        if not self._lint_long_form(path, item, 'sandbox'):
             return
         self._lint_keys(path, item, _SANDBOX_KEYS)
         self._lint_type('sandbox', path, item)
@@ -560,6 +558,17 @@ class TokeoAiLinter:
                 self._lint_keys(path, options, set(meta.config_defaults or {}), 'option')
                 return
 
+    def _lint_long_form(self, path, item, what):
+        # sandboxes, agents and profiles always need more than the type, so they
+        # have no short form; a string there gets the long form as a hint
+        if isinstance(item, dict):
+            return True
+        if isinstance(item, str):
+            self._add(path, f'a {what} has no short form, write it as a mapping: {{type: {item}, ...}}')
+        else:
+            self._add(path, f'a {what} must be a mapping with a "type"')
+        return False
+
     def _lint_options(self, path, item):
         # ```options``` is optional, but when present it carries the component's
         # own settings and must be a mapping
@@ -587,15 +596,18 @@ class TokeoAiLinter:
             if tools:
                 self._add('ai.tools', 'must be a mapping of name to item or group')
             return
-        # a dict value is an item, a list value is a group; else it is wrong
+        # a dict value is an item, a string its short form, a list value is a
+        # group; else it is wrong
         items, groups = {}, {}
         for name, value in tools.items():
             if isinstance(value, list):
                 groups[name] = value
+            elif isinstance(value, str):
+                items[name] = dict(type=value)
             elif isinstance(value, dict):
                 items[name] = value
             else:
-                self._add(f'ai.tools.{name}', 'must be an item (mapping) or a group (list)')
+                self._add(f'ai.tools.{name}', 'must be an item (mapping), a short form (string), or a group (list)')
         for name, item in items.items():
             path = f'ai.tools.{name}'
             self._lint_keys(path, item, _ITEM_KEYS)
@@ -630,8 +642,7 @@ class TokeoAiLinter:
         tool_names = set(tools) if isinstance(tools, dict) else set()
         for name, profile in profiles.items():
             path = f'ai.profiles.{name}'
-            if not isinstance(profile, dict):
-                self._add(path, 'a profile must be a mapping')
+            if not self._lint_long_form(path, profile, 'profile'):
                 continue
             self._lint_keys(path, profile, _PROFILE_KEYS)
             self._lint_options(path, profile)

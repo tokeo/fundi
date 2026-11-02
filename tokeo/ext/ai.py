@@ -245,13 +245,14 @@ class TokeoAi(MetaMixin):
         self._agents = self._config('agents', fallback={}) or {}
         # the three governor sections merge into one registry, keyed by name;
         # a name must be unique across guards/transformers/conductors, so a
-        # collision is a hard config error (the linter also flags it early)
+        # collision is a hard config error (the linter also flags it early).
+        # a string is the short form of an item without options
         self._governors = {}
         for section in ('guards', 'transformers', 'conductors'):
             for name, item in (self._config(section, fallback={}) or {}).items():
                 if name in self._governors:
                     raise TokeoAiError(f'ai governor {name!r} is declared more than once across guards, transformers and conductors')
-                self._governors[name] = item
+                self._governors[name] = dict(type=item) if isinstance(item, str) else item
         # whether runs record their trace; read once, passed to each context
         self._trace_enabled = bool(self._config('trace', fallback=True))
         # the ```ai.sandboxes``` map uses the uniform item form: a dict value is
@@ -259,12 +260,15 @@ class TokeoAi(MetaMixin):
         # here (a sandbox lists tool/group names under its own ```tools```)
         self._sandboxes = self._config('sandboxes', fallback={}) or {}
         # the ```ai.tools``` map uses the uniform form: a dict value is an item
-        # ({type, options}), a list value is a named group of member names.
-        # split it once into the two maps the loop works with
+        # ({type, options}), a string its short form without options, a list
+        # value a named group of member names. split it once into the two maps
+        # the loop works with
         self._tool_items, self._tool_groups = {}, {}
         for name, value in (self._config('tools', fallback={}) or {}).items():
             if isinstance(value, list):
                 self._tool_groups[name] = list(value)
+            elif isinstance(value, str):
+                self._tool_items[name] = dict(type=value)
             elif isinstance(value, dict):
                 self._tool_items[name] = value
 

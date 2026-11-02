@@ -426,6 +426,26 @@ def test_linter_checks_the_keys_at_ai_level(key, value):
     assert f'ai.{key}' in lint_errors(cfg)
 
 
+def test_a_short_form_tool_and_guard_run_like_the_long_form():
+    """echo: <class path> runs, audit: trace_audit builds as a guard."""
+    cfg = ai_config()
+    cfg['ai']['tools']['echo'] = ECHO
+    cfg['ai']['guards'] = {'audit': 'trace_audit'}
+    with FundiTest(config_defaults=cfg) as app:
+        assert run(app, 'echo', 'plain', text='moin') == 'moin'
+        assert app.ai._governor('audit').config_name == 'audit'
+        assert lint_errors(cfg) == {}
+
+
+@pytest.mark.parametrize('section, name', [('sandboxes', 'allow'), ('agents', 'plain'), ('profiles', 'mock')])
+def test_linter_flags_a_short_form_where_the_long_form_is_required(section, name):
+    """A sandbox, agent or profile as a string is an error naming the long form."""
+    cfg = ai_config()
+    cfg['ai'][section][name] = 'some_type'
+    message = lint_errors(cfg)[f'ai.{section}.{name}']
+    assert message.endswith('has no short form, write it as a mapping: {type: some_type, ...}')
+
+
 def test_the_agent_null_offers_no_tool():
     """Under the agent null echo is refused, even though a sandbox would take it."""
     with FundiTest(config_defaults=ai_config()) as app:

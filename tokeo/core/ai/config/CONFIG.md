@@ -57,8 +57,9 @@ flowchart TD
 
 ## 2. The uniform item form
 
-Three of the four sections (```tools```, ```guards```, ```sandboxes```) share one
-notation for a single element, the item:
+The sections ```tools```, ```guards```, ```transformers```, ```conductors```,
+```sandboxes``` and ```agents``` share one notation for a single element, the
+item:
 
 ```yaml
 some_name:
@@ -68,22 +69,28 @@ some_name:
     some_setting: value
 ```
 
-A bare string is the short form of an item with no options:
+In ```tools```, ```guards```, ```transformers``` and ```conductors``` a bare
+string is the short form of an item with no options:
 
 ```yaml
 some_name: alias                # == { type: alias }
 ```
 
+A sandbox, an agent and a profile always need more than the type (the tools a
+sandbox runs, the governors of an agent, the model of a profile), so they have
+no short form; ```ai lint``` reports a string there as an error with the long
+form as a hint.
+
 .. tip::
 
-    ```type``` resolves a class; ```options``` are handed to that class and
-    validated by the class itself, not by the linter. The linter checks the *shape*
-    (is there a resolvable ```type```?), the class checks its *settings*.
+    ```type``` resolves a class; the keys under ```options``` are the class's
+    ```Meta.config_defaults```, any other key is an error. The linter checks the
+    *shape* and the keys, the class checks the *values* of its settings.
 
 ## 3. The toolset in ```tools```
 
-A ```tools:``` entry is either an item (a dict with a ```type```) or a group (a
-list of member names). Groups may contain groups.
+A ```tools:``` entry is an item (a dict with a ```type```), its short form (a
+string), or a group (a list of member names). Groups may contain groups.
 
 ```yaml
 tools:
