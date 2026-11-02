@@ -11,7 +11,8 @@ exercised by the Spiral tests.
 """
 
 from tokeo.main import TokeoTest
-from tokeo.core.ai import Invocation
+from tokeo.core.ai import Invocation, ToolResult, ToolStates
+from tokeo.core.ai.guards.redact import TokeoAiRegexRedactGuard
 from tokeo.core.ai.guards.policy import (
     TokeoAiToolPolicyGuard,
     TokeoAiDenyPolicyGuard,
@@ -157,3 +158,34 @@ def test_abort_policy_raises_at_every_stage():
                 assert False, 'expected TokeoAiPolicyGuardError'
             except TokeoAiPolicyGuardError:
                 pass
+
+
+def _redact(app):
+    """A regex_redact guard set up with one pattern for password=… spans."""
+    guard = TokeoAiRegexRedactGuard(app)
+    guard._setup(app, 'redact', {'options': {'patterns': [r'password=\S+']}})
+    return guard
+
+
+def test_redact_masks_nested_arguments():
+    """password=hunter2 inside a list inside a dict reaches the tool masked."""
+    with AiTest() as app:
+        invocation = Invocation(id='t1', name='append_file', arguments={'content': {'lines': ['password=hunter2']}})
+        _redact(app).on_call(ctx=None, invocation=invocation)
+        assert invocation.arguments == {'content': {'lines': ['[redacted]']}}
+
+
+def test_redact_masks_error_and_streams_of_a_failed_call():
+    """A secret in error, exception, stdout and stderr is masked without a value."""
+    with AiTest() as app:
+        invocation = Invocation(id='t1', name='connect', arguments={})
+        invocation.error = 'cannot connect: password=geheim'
+        invocation.result = ToolResult(
+            value=None,
+            state=ToolStates(stdout='password=a', stderr='password=b', exception='Error: password=c'),
+        )
+        _redact(app).on_return(ctx=None, invocation=invocation)
+        assert invocation.error == 'cannot connect: [redacted]'
+        state = invocation.result.state
+        assert (state.stdout, state.stderr, state.exception) == ('[redacted]', '[redacted]', 'Error: [redacted]')
+        assert invocation.result.value is None

@@ -1,12 +1,15 @@
 r"""
 A ready-to-use redact guard that masks secret-looking spans by regex.
 
-```TokeoAiRegexRedactGuard``` masks at both tool stages: the outgoing call
-arguments (```on_call```) and the returned result value (```on_return```: the
-model-facing ```as_str``` always, the structured ```as_data``` too unless
-```sanitize_data``` is off), so a
-secret does not flow on into the tool, the message history, the trace, or a log
-line, whether it sits in what is sent or in what comes back.
+```TokeoAiRegexRedactGuard``` masks at the tool boundary, at both tool stages:
+at ```on_call``` the call arguments, nested ones too, and the call as the model
+sent it in the history and on the trace; at ```on_return``` the returned value
+(the model-facing ```as_str``` always, the structured ```as_data``` too unless
+```sanitize_data``` is off), the run states ```stdout```, ```stderr``` and
+```exception``` and the error of the call. So a secret does not flow into a tool
+or from a tool back to the model, the history, the trace or a log line. The
+user prompt (```on_prompt```) and the model answer (```on_answer```) are not
+masked by this guard.
 
 Redaction is best-effort masking by pattern, not a guarantee. There is no
 built-in pattern list: the project supplies the full list through the
@@ -42,6 +45,7 @@ import re
 
 from tokeo.core.ai.governor import GOVERNOR_STAGE_ON_CALL, GOVERNOR_STAGE_ON_RETURN
 from tokeo.core.ai.tool import create_tool_result
+from tokeo.core.ai.data import ToolResult, ToolStates
 from tokeo.core.ai.guards.redact.base import TokeoAiRedactGuard
 from tokeo.core.ai.guards.redact.exc import TokeoAiRedactGuardError
 
@@ -207,74 +211,110 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
 
     def on_call(self, ctx, invocation):
         """
-        Mask secret-looking spans in the call's string arguments; never blocks.
+        Mask secret-looking spans in the call's arguments; never blocks.
 
-        Runs at the tool-call stage, before exec. Each string value in
-        ```invocation.arguments``` is masked in place (non-string values are
-        left as they are). ```ctx``` is the running state (unused here).
+        Runs at the tool-call stage, before exec. Every string in
+        ```invocation.arguments``` is masked, also inside nested dicts and
+        lists, so the tool gets no secret. The call as the model sent it is
+        masked too: the assistant turn in ```ctx.messages``` and the answer in
+        ```ctx.results``` that carry it, so no secret stays in the history or
+        the trace.
 
         ### Args
 
-        - **ctx** (TokeoAiContext): The running state
-        - **invocation** (Invocation): The tool call whose string arguments are
-            masked in place when a pattern matches
+        - **ctx** (TokeoAiContext): The running state with the model's turn
+        - **invocation** (Invocation): The tool call whose arguments are masked
+            when a pattern matches
 
         """
-        if not invocation.arguments:
-            return
         hits = 0
-        for key, value in invocation.arguments.items():
-            if isinstance(value, str):
-                masked, count = self._mask(value, GOVERNOR_STAGE_ON_CALL)
-                if count:
-                    invocation.arguments[key] = masked
-                    hits += count
+        if invocation.arguments:
+            masked, hits = self._mask_data(invocation.arguments, GOVERNOR_STAGE_ON_CALL)
+            if hits:
+                invocation.arguments = masked
+        if ctx is not None:
+            self._mask_request(ctx, invocation.id)
         if hits:
             self._note(invocation, hits)
 
+    def _mask_request(self, ctx, call_id):
+        # the model's own request of the call: the tool call in the assistant
+        # turn of the history, and the tool call and the raw response of the
+        # answer it came with. masked in place, so every view of the trace that
+        # holds these objects shows the masked form
+        for message in ctx.messages:
+            for call in message.get('tool_calls') or []:
+                if call.get('id') == call_id:
+                    masked, count = self._mask_data(call, GOVERNOR_STAGE_ON_CALL)
+                    if count:
+                        call.clear()
+                        call.update(masked)
+        for result in ctx.results:
+            for call in result.tool_calls:
+                if call.id == call_id:
+                    masked, count = self._mask_data(call.arguments, GOVERNOR_STAGE_ON_CALL)
+                    if count:
+                        call.arguments = masked
+                    if result.raw is not None:
+                        result.raw, _ = self._mask_data(result.raw, GOVERNOR_STAGE_ON_CALL)
+
     def on_return(self, ctx, invocation):
         """
-        Mask secret-looking spans in the result; never blocks.
+        Mask secret-looking spans in the result and its errors; never blocks.
 
         Runs at the tool-return stage, after the tool ran. ```ctx``` is the
         running state (unused here). The model-facing ```value.as_str``` is
-        always masked. When ```sanitize_data``` is on (the default), the
-        structured ```value.as_data``` is masked too (recursively, the string
-        values only), and the value is rebuilt so ```as_json``` carries no
-        secret either. With ```sanitize_data``` off, only ```as_str``` is masked
-        and the structure is left as the tool returned it.
+        always masked, as are the run states ```stdout```, ```stderr``` and
+        ```exception``` and the ```error``` of the invocation, which reach the
+        model and the trace as error text. When ```sanitize_data``` is on (the
+        default), the structured ```value.as_data``` is masked too
+        (recursively, the string values only), and the value is rebuilt so
+        ```as_json``` carries no secret either. With ```sanitize_data``` off,
+        the structure is left as the tool returned it.
 
         ### Args
 
         - **ctx** (TokeoAiContext): The running state
-        - **invocation** (Invocation): The completed tool call whose
-            ```result.value``` is masked in place when a pattern matches
+        - **invocation** (Invocation): The completed tool call whose result and
+            error are masked in place when a pattern matches
 
         """
-        if invocation.result is None or invocation.result.value is None:
+        stage = GOVERNOR_STAGE_ON_RETURN
+        hits = 0
+        if invocation.error:
+            invocation.error, hits = self._mask(invocation.error, stage)
+        result = invocation.result
+        if result is None:
+            if hits:
+                self._note(invocation, hits)
             return
-        value = invocation.result.value
+        state = {}
+        for name in ('stdout', 'stderr', 'exception'):
+            text = getattr(result.state, name)
+            if isinstance(text, str):
+                text, count = self._mask(text, stage)
+                hits += count
+            state[name] = text
+        state['incomplete'] = result.state.incomplete
+        value = result.value
+        if value is None:
+            if hits:
+                invocation.result = ToolResult(value=None, state=ToolStates(**state))
+                self._note(invocation, hits)
+            return
         # the text view is always masked, even when it is the tool's own wording
         # rather than a copy of the data, so both are cleaned on their own terms
-        masked_str, hits = self._mask(value.as_str or '', GOVERNOR_STAGE_ON_RETURN)
+        masked_str, count = self._mask(value.as_str or '', stage)
+        hits += count
         masked_data = value.as_data
-        if self._config('sanitize_data', stage=GOVERNOR_STAGE_ON_RETURN) and value.as_data is not None:
-            masked_data, data_hits = self._mask_data(value.as_data, GOVERNOR_STAGE_ON_RETURN)
-            hits += data_hits
+        if self._config('sanitize_data', stage=stage) and value.as_data is not None:
+            masked_data, count = self._mask_data(value.as_data, stage)
+            hits += count
         if not hits:
             return
         # rebuild the value so all three views are coherent: as_data masked,
         # as_json re-encoded from it, as_str set explicitly to the masked text
-        # (the explicit string wins, keeping a reshaped wording). the run state
-        # carries over unchanged
-        invocation.result = create_tool_result(
-            masked_data,
-            as_str=masked_str,
-            state=dict(
-                incomplete=invocation.result.state.incomplete,
-                stdout=invocation.result.state.stdout,
-                stderr=invocation.result.state.stderr,
-                exception=invocation.result.state.exception,
-            ),
-        )
+        # (the explicit string wins, keeping a reshaped wording); the run state
+        # carries the masked streams and exception
+        invocation.result = create_tool_result(masked_data, as_str=masked_str, state=state)
         self._note(invocation, hits)

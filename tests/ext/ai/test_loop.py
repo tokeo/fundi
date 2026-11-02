@@ -64,12 +64,13 @@ def loop_config(script, **agent_options):
     cfg['ai'] = dict(
         defaults=dict(profile='script', agent=None),
         tools={'echo': dict(type=ECHO), 'shout': dict(type=ECHO), 'coding': dict(type=CODE)},
-        guards={'audit': dict(type='trace_audit')},
+        guards={'audit': dict(type='trace_audit'), 'redact': dict(type='regex_redact', options=dict(patterns=[r'password=\S+']))},
         # shout is configured and has a sandbox, but no agent offers it
         sandboxes={'local': dict(type='in_process', tools=['echo', 'shout', 'coding'])},
         agents={
             'plain': dict(type='fundi', options=dict(tools=['echo', 'coding'], sandboxes=['local'], **agent_options)),
             'audited': dict(type='fundi', options=dict(tools=['echo'], governors=['audit'], sandboxes=['local'], **agent_options)),
+            'redacting': dict(type='fundi', options=dict(tools=['echo'], governors=['redact'], sandboxes=['local'], **agent_options)),
         },
         profiles={'script': dict(type=SCRIPT, options=dict(script=script))},
     )
@@ -208,6 +209,16 @@ def test_chat_code_that_keeps_printing_ends_at_max_loops():
     with LoopTest(config_defaults=loop_config([code('print(9)')])) as app:
         with pytest.raises(TokeoAiError, match=r'max_loops \(3\) reached'):
             app.ai.chat([dict(role='user', content='hi')], agent='plain', max_loops=3)
+
+
+def test_chat_redact_masks_the_call_in_history_and_trace():
+    """password=geheim reaches echo masked and stays nowhere in history or trace."""
+    with LoopTest(config_defaults=loop_config([call('password=geheim'), dict(text='done')])) as app:
+        result = app.ai.chat([dict(role='user', content='hi')], agent='redacting')
+        assert tool_contents(result) == ['[redacted]']
+        # the follow-up model call got the masked assistant turn
+        assert 'geheim' not in repr(app.ai._provider(SCRIPT).seen[-1])
+        assert 'geheim' not in repr([s.object for s in result.trace])
 
 
 # ask
