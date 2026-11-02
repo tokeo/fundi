@@ -15,16 +15,16 @@ from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError, TokeoAiFundiAgent, TokeoAiAgent
 from tokeo.core.ai import TokeoAiProvider, TokeoAiSandbox, TokeoAiTool, TokeoAiGovernor
-from tests.ext.ai.ai_tests_helper import GreetTool
+from tests.ext.ai.lib.ai_tests_helper import GreetTool
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
 
 # dotted paths to the importable test tools the worker loads in a child
-ECHO = 'tests.ext.ai.ai_tests_helper.EchoTool'
-CWD = 'tests.ext.ai.ai_tests_helper.CwdTool'
-GREET = 'tests.ext.ai.ai_tests_helper.GreetTool'
-ENV = 'tests.ext.ai.ai_tests_helper.EnvTool'
+ECHO = 'tests.ext.ai.lib.ai_tests_helper.EchoTool'
+CWD = 'tests.ext.ai.lib.ai_tests_helper.CwdTool'
+GREET = 'tests.ext.ai.lib.ai_tests_helper.GreetTool'
+ENV = 'tests.ext.ai.lib.ai_tests_helper.EnvTool'
 
 # the jailed options every platform can enforce; the memory cap is added on
 # linux only: macos cannot bind RLIMIT_AS/DATA below the already mapped
@@ -32,7 +32,7 @@ ENV = 'tests.ext.ai.ai_tests_helper.EnvTool'
 JAILED_OPTIONS = dict(timeout=5)
 if sys.platform == 'linux':
     JAILED_OPTIONS['memory_mb'] = 256
-SLEEP = 'tests.ext.ai.ai_tests_helper.SleepTool'
+SLEEP = 'tests.ext.ai.lib.ai_tests_helper.SleepTool'
 
 
 class FundiTest(TokeoTest):
@@ -366,7 +366,7 @@ def test_linter_flags_max_steps_that_is_no_whole_number_of_0_or_more(value):
 
 def test_subprocess_resolves_registry_alias_tools():
     """A registry alias runs in the child: the LOADED class's path crosses over."""
-    from tests.ext.ai.ai_tests_helper import EchoTool
+    from tests.ext.ai.lib.ai_tests_helper import EchoTool
 
     cfg = ai_config()
     cfg['ai']['tools']['shorty'] = dict(type='echo_short')
@@ -380,7 +380,7 @@ def test_subprocess_refuses_classes_a_child_cannot_import():
     """A nested Outer.GhostTool is refused early, not importable by module path."""
     # a script's __main__ case fails the same guard; ```python -m``` resolves
     # via the module spec
-    from tests.ext.ai.ai_tests_helper import EchoTool
+    from tests.ext.ai.lib.ai_tests_helper import EchoTool
 
     Ghost = type('GhostTool', (EchoTool,), {'__qualname__': 'Outer.GhostTool'})
     with FundiTest(config_defaults=ai_config()) as app:

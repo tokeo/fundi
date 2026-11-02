@@ -67,11 +67,13 @@ tests/
     test_context.py
     test_wasm.py
     ...
-  ext/ai/                             # a subject with more files has a folder
+  ext/ai/                             # more than 6 files: helpers and probes in lib/
     __init__.py
-    ai_tests_helper.py
+    lib/__init__.py
+    lib/ai_tests_helper.py
     test_ai.py
     test_governor.py
+    test_loop.py
     test_wasm.py
     ...
 ```
@@ -165,10 +167,10 @@ within the own subject:
 ```python
 from tests.utils import wait_until                             # shared base
 from tests.utils.tui import Terminal                           # shared base
-from tests.ext.ai.ai_tests_helper import EchoTool               # own subject
+from tests.ext.ai.lib.ai_tests_helper import EchoTool           # own subject
 
 # never from another subject, a conftest.py or a test file, never by a bare name
-from tests.ext.ai.ai_tests_helper import EchoTool               # wrong in tests/core/ai
+from tests.ext.ai.lib.ai_tests_helper import EchoTool           # wrong in tests/core/ai
 from tests.ext.ai.test_ai import ai_config                      # wrong
 from ai_tests_helper import EchoTool                            # wrong
 ```

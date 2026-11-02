@@ -13,9 +13,9 @@ from tokeo.main import TokeoTest
 from tokeo.core.ai import ToolResult, TokeoAiError
 
 # dotted paths to the importable test tools the subprocess worker loads
-RAISE = 'tests.ext.ai.ai_tests_helper.RaiseTool'
-DATA = 'tests.ext.ai.ai_tests_helper.DataTool'
-NOTHING = 'tests.ext.ai.ai_tests_helper.NothingTool'
+RAISE = 'tests.ext.ai.lib.ai_tests_helper.RaiseTool'
+DATA = 'tests.ext.ai.lib.ai_tests_helper.DataTool'
+NOTHING = 'tests.ext.ai.lib.ai_tests_helper.NothingTool'
 
 
 class ToolResultTest(TokeoTest):
@@ -101,7 +101,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
         assert out.state.exception is not None
     # B: a subprocess timeout is a machinery failure: raised, not in state
     cfg['ai']['sandboxes']['jailed']['options']['timeout'] = 1
-    cfg['ai']['tools']['slow'] = dict(type='tests.ext.ai.ai_tests_helper.SleepTool')
+    cfg['ai']['tools']['slow'] = dict(type='tests.ext.ai.lib.ai_tests_helper.SleepTool')
     cfg['ai']['sandboxes']['jailed']['tools'].append('slow')
     with ToolResultTest(config_defaults=cfg) as app:
         agent = app.ai._agent('jail')
