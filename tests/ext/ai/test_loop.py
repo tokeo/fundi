@@ -61,9 +61,10 @@ def loop_config(script, **agent_options):
     cfg = init_defaults('ai')
     cfg['ai'] = dict(
         defaults=dict(profile='script', agent=None),
-        tools={'echo': dict(type=ECHO)},
+        tools={'echo': dict(type=ECHO), 'shout': dict(type=ECHO)},
         guards={'audit': dict(type='trace_audit')},
-        sandboxes={'local': dict(type='in_process', tools=['echo'])},
+        # shout is configured and has a sandbox, but no agent offers it
+        sandboxes={'local': dict(type='in_process', tools=['echo', 'shout'])},
         agents={
             'plain': dict(type='fundi', options=dict(tools=['echo'], sandboxes=['local'], **agent_options)),
             'audited': dict(type='fundi', options=dict(tools=['echo'], governors=['audit'], sandboxes=['local'], **agent_options)),
@@ -154,6 +155,15 @@ def test_chat_with_tool_stage_governors_runs_governed():
         assert tool_contents(result) == ['moin']
         invocations = [s.object for s in result.trace if isinstance(s.object, Invocation)]
         assert invocations and all(i.name == 'echo' and i.decision != Invocation.DENY for i in invocations)
+
+
+def test_chat_refuses_a_tool_the_agent_does_not_offer():
+    """A call of shout, not offered by plain, returns an error, the run goes on."""
+    script = [dict(calls=[('shout', dict(text='loud'))]), dict(text='done')]
+    with LoopTest(config_defaults=loop_config(script)) as app:
+        result = app.ai.chat([dict(role='user', content='hi')], agent='plain')
+        assert result.answer.text == 'done'
+        assert tool_contents(result) == ["error: TokeoAiError: tool 'shout' is not offered by the agent"]
 
 
 # ask

@@ -140,8 +140,8 @@ def wasm_ai_config():
             ),
         ),
         agents=dict(
-            untrusted_coder=dict(type='fundi', options=dict(sandboxes=['wasm_untrusted'])),
-            trusted_coder=dict(type='fundi', options=dict(sandboxes=['wasm_trusted'])),
+            untrusted_coder=dict(type='fundi', options=dict(tools=['run_untrusted'], sandboxes=['wasm_untrusted'])),
+            trusted_coder=dict(type='fundi', options=dict(tools=['run_trusted'], sandboxes=['wasm_trusted'])),
         ),
         profiles=dict(
             mock=dict(type='mock', agent='untrusted_coder'),

@@ -34,6 +34,9 @@ if sys.platform == 'linux':
     JAILED_OPTIONS['memory_mb'] = 256
 SLEEP = 'tests.ext.ai.lib.ai_tests_helper.SleepTool'
 
+# every tool of the config, offered by the agents that exercise the sandboxes
+TOOLS = ['echo', 'cwd', 'env', 'sleep', 'greeter', 'plain_greeter']
+
 
 class FundiTest(TokeoTest):
     """Test app with the ai extension and the extensions it builds on."""
@@ -80,17 +83,17 @@ def ai_config():
         },
         agents={
             # everything in process
-            'plain': dict(type='fundi', options=dict(sandboxes=['allow'])),
+            'plain': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=['allow'])),
             # echo -> jailed (subprocess), the rest falls through to allow
-            'mixed': dict(type='fundi', options=dict(sandboxes=['jailed', 'allow'])),
+            'mixed': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=['jailed', 'allow'])),
             # no catch-all: a tool no sandbox lists is denied
-            'strict': dict(type='fundi', options=dict(sandboxes=['jailed'])),
+            'strict': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=['jailed'])),
             # hard deny wins before any sandbox lookup
-            'banning': dict(type='fundi', options=dict(deny=['echo'], sandboxes=['allow'])),
+            'banning': dict(type='fundi', options=dict(tools=list(TOOLS), deny=['echo'], sandboxes=['allow'])),
             # partial sandbox skips cwd via except, then allow catches it
-            'walking': dict(type='fundi', options=dict(sandboxes=['partial', 'allow'])),
+            'walking': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=['partial', 'allow'])),
             # empty chain -> deny by default
-            'empty': dict(type='fundi', options=dict(sandboxes=[])),
+            'empty': dict(type='fundi', options=dict(tools=list(TOOLS), sandboxes=[])),
             # carries echo + cwd; the narrow profile denies cwd off this set
             'echoer': dict(type='fundi', options=dict(tools=['echo', 'cwd'], sandboxes=['allow'])),
         },
@@ -258,14 +261,28 @@ def test_call_deny_is_enforced_at_exec():
 
 
 def test_strict_agent_denies_unlisted_tool():
-    """strict runs jailed's echo; an unconfigured tool raises TokeoAiError."""
+    """strict runs jailed's echo; greeter, which jailed does not list, is denied."""
     with FundiTest(config_defaults=ai_config()) as app:
         # the strict agent has only jailed; jailed lists echo, so echo is ok
         assert run(app, 'echo', 'strict', text='ok') == 'ok'
-        # but a tool jailed does not list has no catch-all -> denied. add a
-        # tool not in jailed's list by denying via a fresh resolve: 'unknown'
-        with pytest.raises(TokeoAiError):
-            run(app, 'not_a_tool', 'strict')
+        # greeter is configured and offered, but no sandbox of the chain lists it
+        with pytest.raises(TokeoAiError, match='no sandbox in the agent chain'):
+            run(app, 'greeter', 'strict', name='x')
+
+
+def test_agent_refuses_a_tool_it_does_not_offer():
+    """echoer offers echo and cwd only; env, though in a sandbox, is refused."""
+    with FundiTest(config_defaults=ai_config()) as app:
+        # the allow sandbox would take env, the agent does not offer it
+        with pytest.raises(TokeoAiError, match="tool 'env' is not offered by the agent"):
+            run(app, 'env', 'echoer')
+
+
+def test_no_agent_offers_no_tool():
+    """Without an agent echo is refused, even though a sandbox would take it."""
+    with FundiTest(config_defaults=ai_config()) as app:
+        with pytest.raises(TokeoAiError, match="tool 'echo' is not offered by the agent"):
+            app.ai._exec_in_sandbox('echo', dict(text='x'), None, None, None, None, None)
 
 
 # --------------------------------------------------------------------------------------
@@ -371,6 +388,7 @@ def test_subprocess_resolves_registry_alias_tools():
     cfg = ai_config()
     cfg['ai']['tools']['shorty'] = dict(type='echo_short')
     cfg['ai']['sandboxes']['jailed']['tools'].append('shorty')
+    cfg['ai']['agents']['mixed']['options']['tools'].append('shorty')
     with FundiTest(config_defaults=cfg) as app:
         app.ai.register('tool', 'echo_short', EchoTool)
         assert run(app, 'shorty', 'mixed', text='hi') == 'hi'

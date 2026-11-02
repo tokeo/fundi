@@ -50,8 +50,8 @@ def ai_config():
             'jailed': dict(type='subprocess', tools=['boom', 'data', 'void'], options=dict(timeout=5)),
         },
         agents={
-            'plain': dict(type='fundi', options=dict(sandboxes=['allow'])),
-            'jail': dict(type='fundi', options=dict(sandboxes=['jailed'])),
+            'plain': dict(type='fundi', options=dict(tools=['boom', 'data', 'void'], sandboxes=['allow'])),
+            'jail': dict(type='fundi', options=dict(tools=['boom', 'data', 'void'], sandboxes=['jailed'])),
         },
         profiles={'mock': dict(type='mock', agent='plain')},
     )
@@ -103,6 +103,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
     cfg['ai']['sandboxes']['jailed']['options']['timeout'] = 1
     cfg['ai']['tools']['slow'] = dict(type='tests.ext.ai.lib.ai_tests_helper.SleepTool')
     cfg['ai']['sandboxes']['jailed']['tools'].append('slow')
+    cfg['ai']['agents']['jail']['options']['tools'].append('slow')
     with ToolResultTest(config_defaults=cfg) as app:
         agent = app.ai._agent('jail')
         with pytest.raises(TokeoAiError, match='timed out'):

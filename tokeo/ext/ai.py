@@ -623,6 +623,13 @@ class TokeoAi(MetaMixin):
         # so a model calling a carved-out tool is refused here too
         return tool_name in self._deny_set(agent_obj, profile, call_deny)
 
+    def _offers(self, tool_name, agent_obj, profile, call_deny=None):
+        # a tool runs only when the agent offers it: its tools minus every deny,
+        # the same set the model was shown. without an agent nothing is offered
+        if agent_obj is None:
+            return False
+        return tool_name in self._tools_minus_deny(agent_obj, profile, call_deny)
+
     def _exec_lifecycle(self, tool, sandbox, arguments, ctx):
         # run the tool's own frame around the sandboxed call: prepare/teardown
         # open and close it, before/after reshape what goes in and comes out.
@@ -671,12 +678,15 @@ class TokeoAi(MetaMixin):
 
     def _exec_in_sandbox(self, tool_name, arguments, agent_obj, profile, call_deny, invocation, ctx):
         # the seam: resolve the tool, choose its sandbox, and run the call
-        # through it. a hard ```deny``` or an exhausted chain raises, so the
-        # caller records a denial; otherwise the chosen sandbox contains the
-        # ```tool.exec```. when an invocation is passed, record WHERE it ran
-        # (the configured sandbox name) so the trace and audit can show it
+        # through it. a hard ```deny```, a tool the agent does not offer or an
+        # exhausted chain raises, so the caller records a denial; otherwise the
+        # chosen sandbox contains the ```tool.exec```. when an invocation is
+        # passed, record WHERE it ran (the configured sandbox name) so the
+        # trace and audit can show it
         if self._denies(tool_name, agent_obj, profile, call_deny):
             raise TokeoAiError(f'tool {tool_name!r} is denied')
+        if not self._offers(tool_name, agent_obj, profile, call_deny):
+            raise TokeoAiError(f'tool {tool_name!r} is not offered by the agent')
         tool = self._tool(tool_name)
         sandbox = self._sandbox_for(tool_name, agent_obj)
         if sandbox is None:
