@@ -19,3 +19,22 @@ class TokeoAiConfirmGuardError(TokeoAiGuardError):
     or no input channel is available to ask on) has a typed error to raise,
     distinct from other guards' aborts.
     """
+
+
+class TokeoAiConfirmChanged(Exception):
+    """
+    Raised by a confirm guard after a person changed the content.
+
+    Not an error: the loop catches it and runs the stage again, so the changed
+    content passes every guard of the stage.
+
+    ### Args
+
+    - **subject**: The changed work object of the stage, or ```None``` for
+        the messages
+
+    """
+
+    def __init__(self, subject=None):
+        super().__init__('content changed in a confirm')
+        self.subject = subject

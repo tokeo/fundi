@@ -122,7 +122,13 @@ from tokeo.core.ai.guards.audit import TokeoAiTraceAuditGuard
 from tokeo.core.ai.guards.policy import TokeoAiToolPolicyGuard, TokeoAiDenyPolicyGuard, TokeoAiAbortPolicyGuard
 from tokeo.core.ai.guards.validate import TokeoAiToolSchemaValidator
 from tokeo.core.ai.guards.redact import TokeoAiRegexRedactGuard
-from tokeo.core.ai.guards.confirm import CONFIRM_HOOK, TokeoAiConfirmGuard, TokeoAiChannelConfirmGuard
+from tokeo.core.ai.guards.confirm import (
+    CONFIRM_HOOK,
+    CONFIRM_CHANGES,
+    TokeoAiConfirmGuard,
+    TokeoAiConfirmChanged,
+    TokeoAiChannelConfirmGuard,
+)
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
@@ -705,6 +711,19 @@ class TokeoAi(MetaMixin):
             invocation.sandbox = sandbox.config_name
         return self._exec_lifecycle(tool, sandbox, arguments or {}, ctx)
 
+    def _govern(self, stage, governors, step, subject):
+        # run the governors of a stage over the subject, step(governor,
+        # subject) -> subject. a person who changes the content in a confirm
+        # starts the stage again, so the change passes every guard of it
+        for _ in range(CONFIRM_CHANGES + 1):
+            try:
+                for governor in governors:
+                    subject = step(governor, subject)
+                return subject
+            except TokeoAiConfirmChanged as changed:
+                subject = changed.subject if changed.subject is not None else subject
+        raise TokeoAiRunDeclined(stage, f'changed more than {CONFIRM_CHANGES} times in a confirm', by='human')
+
     def _exec_governed(self, call, call_governors, return_governors, ctx, agent_obj, profile, call_deny=None):
         # run one tool call through the guard pipeline: the on_call guards may
         # deny it, the tool runs (inside its sandbox) unless denied, and the
@@ -726,13 +745,23 @@ class TokeoAi(MetaMixin):
         # that returns a fresh copy supersedes the working invocation (changed
         # step), one that mutates in place or returns nothing leaves it (an
         # unchanged step; the guard is still on the trace, attributable)
-        for governor in call_governors:
+
+        def on_call(governor, invocation):
             # after a no only a confirm guard runs: a person may lift it
             if invocation.decision == Invocation.DENY and not isinstance(governor, TokeoAiConfirmGuard):
-                continue
+                return invocation
             invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
             if invocation.decision == Invocation.DENY and not invocation.reason:
                 invocation.reason = f'blocked by {self._governor_label(governor)}'
+            return invocation
+
+        def on_return(governor, invocation):
+            invocation = ctx.supersede(governor, governor.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
+            if invocation.decision == Invocation.DENY and not invocation.reason:
+                invocation.reason = f'blocked by {self._governor_label(governor)}'
+            return invocation
+
+        invocation = self._govern(GOVERNOR_STAGE_ON_CALL, call_governors, on_call, invocation)
         if invocation.decision != Invocation.DENY:
             try:
                 # the seam: the agent's sandbox chain contains the exec (a hard
@@ -752,11 +781,7 @@ class TokeoAi(MetaMixin):
                 # the pipeline is resilient: a failing tool is recorded and the
                 # loop continues, instead of crashing the whole call
                 invocation.error = f'{type(err).__name__}: {err}'
-        for governor in return_governors:
-            invocation = ctx.supersede(governor, governor.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
-            if invocation.decision == Invocation.DENY:
-                if not invocation.reason:
-                    invocation.reason = f'blocked by {self._governor_label(governor)}'
+        invocation = self._govern(GOVERNOR_STAGE_ON_RETURN, return_governors, on_return, invocation)
         # the text fed back to the model for this call; the invocation is
         # returned too, so the loop reads the outcome off the object it has
         if invocation.decision == Invocation.DENY:
@@ -880,6 +905,22 @@ class TokeoAi(MetaMixin):
         # conversation history. the current result is a local, handed to the
         # stages and tracked, not a context field
         ctx = TokeoAiContext(messages=messages, turndata_preset=turndata_preset, userdata=userdata, trace=self._trace_enabled)
+
+        def on_messages(stage):
+            # begin and prompt refine the conversation, no work object
+            def step(governor, subject):
+                ctx.refine_messages(governor, getattr(governor, stage)(ctx), stage=stage)
+                return subject
+
+            return step
+
+        def on_result(stage):
+            # answer and close work on the model answer
+            def step(governor, result):
+                return ctx.supersede(governor, getattr(governor, stage)(ctx, result), result, stage=stage)
+
+            return step
+
         # a governor may decline the run at a stage without a tool call: the
         # run ends in order with that status, the answer so far is kept
         result = ChatResult()
@@ -889,16 +930,13 @@ class TokeoAi(MetaMixin):
             # work object), so they refine the messages: a guard may mutate
             # ctx.messages in place (returning None) or hand back a fresh
             # conversation, and refine_messages records the step either way
-            for governor in at_begin:
-                ctx.refine_messages(governor, governor.on_begin(ctx), stage=GOVERNOR_STAGE_ON_BEGIN)
+            self._govern(GOVERNOR_STAGE_ON_BEGIN, at_begin, on_messages(GOVERNOR_STAGE_ON_BEGIN), None)
             # on_prompt: before each model call, on the outgoing messages
-            for governor in at_prompt:
-                ctx.refine_messages(governor, governor.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
+            self._govern(GOVERNOR_STAGE_ON_PROMPT, at_prompt, on_messages(GOVERNOR_STAGE_ON_PROMPT), None)
             result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
             # on_answer: after each model call, on the model answer; the result is
             # the handed-in work object, so the step is recorded through supersede
-            for governor in at_answer:
-                result = ctx.supersede(governor, governor.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
+            result = self._govern(GOVERNOR_STAGE_ON_ANSWER, at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
             while result.tool_calls:
                 # max_steps caps the tool rounds of one request; 0 is unlimited.
                 # reaching it aborts loudly: a silent empty answer hides the cause
@@ -960,15 +998,12 @@ class TokeoAi(MetaMixin):
                 if max_loops and ctx.loopdata.failed_loops >= max_loops:
                     raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
                 # on_prompt again before the follow-up model call
-                for governor in at_prompt:
-                    ctx.refine_messages(governor, governor.on_prompt(ctx), stage=GOVERNOR_STAGE_ON_PROMPT)
+                self._govern(GOVERNOR_STAGE_ON_PROMPT, at_prompt, on_messages(GOVERNOR_STAGE_ON_PROMPT), None)
                 result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
                 # on_answer again after the follow-up model call
-                for governor in at_answer:
-                    result = ctx.supersede(governor, governor.on_answer(ctx, result), result, stage=GOVERNOR_STAGE_ON_ANSWER)
+                result = self._govern(GOVERNOR_STAGE_ON_ANSWER, at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
             # on_close: once, on the final result, after the loop
-            for governor in at_close:
-                result = ctx.supersede(governor, governor.on_close(ctx, result), result, stage=GOVERNOR_STAGE_ON_CLOSE)
+            result = self._govern(GOVERNOR_STAGE_ON_CLOSE, at_close, on_result(GOVERNOR_STAGE_ON_CLOSE), result)
             # the run result: the final answer (a ChatResult), plus the run's
             # history and counters lifted off the context (which ends here). the
             # answer is just the model answer; the trace and status ride alongside

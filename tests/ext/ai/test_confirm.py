@@ -9,9 +9,9 @@ the config no answer lifts, and the stages without a tool call.
 """
 
 import pytest
-from tokeo.core.ai import TokeoAiError, TokeoAiResult
+from tokeo.core.ai import TokeoAiError, TokeoAiResult, TokeoAiGuard, Invocation
 from tokeo.core.ai.guards.confirm import CONFIRM_HOOK, TokeoAiConfirmAnswer
-from tests.ext.ai.test_loop import LoopTest, loop_config, call
+from tests.ext.ai.test_loop import LoopTest, loop_config, call, SCRIPT
 
 HUMAN_ONCE = TokeoAiConfirmAnswer('once', who='tom')
 HUMAN_RUN = TokeoAiConfirmAnswer('run', who='tom')
@@ -19,12 +19,21 @@ HUMAN_NO = TokeoAiConfirmAnswer('no', who='tom', reason='not now')
 AUTO_ONCE = TokeoAiConfirmAnswer('once', by='auto', who='a model')
 
 
-def confirm_config(script, stages=('on_call',), options=None, policy=False):
+class ForbidWordGuard(TokeoAiGuard):
+    """Denies a call whose arguments contain the word bad."""
+
+    def on_call(self, ctx, invocation):
+        if 'bad' in repr(invocation.arguments):
+            invocation.decision, invocation.reason = Invocation.DENY, 'says bad'
+
+
+def confirm_config(script, stages=('on_call',), options=None, policy=False, forbid=False):
     """loop_config with an agent asked by confirm at the stages, maybe policed."""
     cfg = loop_config(script)
     cfg['ai']['guards']['ask'] = dict(type='confirm', options=dict(options or {}))
     cfg['ai']['guards']['policy'] = dict(type='tool_policy', options=dict(deny=['echo']))
-    governors = (['policy'] if policy else []) + [{'ask': list(stages)}]
+    cfg['ai']['guards']['forbid'] = dict(type='tests.ext.ai.test_confirm:ForbidWordGuard')
+    governors = (['policy'] if policy else []) + (['forbid'] if forbid else []) + [{'ask': list(stages)}]
     cfg['ai']['agents']['careful'] = dict(type='fundi', options=dict(tools=['echo'], governors=governors, sandboxes=['local']))
     return cfg
 
@@ -62,7 +71,7 @@ def test_a_human_once_lets_the_call_run():
     record = result.loopdata.confirmations[0]
     assert (record['answer'], record['by'], record['who']) == ('once', 'human', 'tom')
     assert record['subject'] == dict(tool='echo', arguments=dict(text='moin'))
-    assert asked[0].stage == 'on_call' and asked[0].answers == ('no', 'once', 'run')
+    assert asked[0].stage == 'on_call' and asked[0].answers == ('no', 'once', 'run', 'change')
 
 
 def test_a_human_no_skips_the_call_with_its_reason():
@@ -149,3 +158,63 @@ def test_the_linter_takes_the_confirm_options_and_flags_a_typo():
     cfg['ai']['guards']['ask']['options'] = dict(tool=['echo'])
     with LoopTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         assert [i.path for i in TokeoAiLinter(app).lint() if i.level == 'error'] == ['ai.guards.ask.options.tool']
+
+
+# change
+
+
+def change(content):
+    """A human answer that changes the content to the given one."""
+    return TokeoAiConfirmAnswer('change', who='tom', content=content)
+
+
+def test_a_change_of_the_arguments_runs_the_call_with_them():
+    """echo('moin') changed to 'neu': echo runs with 'neu', asked once."""
+    result, asked = run(confirm_config([call('moin'), dict(text='done')]), change(dict(text='neu')))
+    assert tool_contents(result) == ['neu']
+    assert len(asked) == 1
+    assert result.loopdata.confirmations[0]['content'] == dict(text='neu')
+
+
+def test_a_change_passes_the_guards_of_the_stage_again():
+    """'bad' is denied, changed to 'bad too' denied again, then 'good' runs."""
+    script = [call('bad'), dict(text='done')]
+    result, asked = run(confirm_config(script, forbid=True), change(dict(text='bad too')), change(dict(text='good')))
+    assert tool_contents(result) == ['good']
+    assert asked[1].answers == ('no', 'change') and asked[1].verdict['reason'] == 'says bad'
+
+
+def test_after_a_change_a_no_of_a_guard_cannot_be_lifted():
+    """A change still denied, then a human once: not allowed, an error."""
+    script = [call('bad'), dict(text='done')]
+    with pytest.raises(TokeoAiError, match="answer 'once' is not one of"):
+        run(confirm_config(script, forbid=True), change(dict(text='bad too')), TokeoAiConfirmAnswer('once'))
+
+
+def test_too_many_changes_decline_the_run():
+    """A content changed over and over, always denied: the run is declined."""
+    result, asked = run(confirm_config([call('bad'), dict(text='done')], forbid=True), change(dict(text='bad again')))
+    assert result.status == TokeoAiResult.DECLINED and 'changed more than 5 times' in result.declined['reason']
+
+
+def test_a_change_at_on_return_replaces_the_result():
+    """Asked at on_return, changed to 'edited': the model gets 'edited'."""
+    result, _ = run(confirm_config([call('moin'), dict(text='done')], stages=('on_return',)), change('edited'))
+    assert tool_contents(result) == ['edited']
+
+
+def test_a_change_at_on_answer_replaces_the_answer():
+    """Asked at on_answer, changed to 'edited': the answer is 'edited'."""
+    result, _ = run(confirm_config([dict(text='done')], stages=('on_answer',)), change('edited'))
+    assert result.answer.text == 'edited'
+
+
+def test_a_change_at_on_prompt_reaches_the_model():
+    """Asked at on_prompt, the user text changed to 'hello': the model sees it."""
+
+    def channel(app, request):
+        return change('hello')
+
+    with LoopTest(config_defaults=confirm_config([dict(text='done')], stages=('on_prompt',)), hooks=[(CONFIRM_HOOK, channel)]) as app:
+        app.ai.chat([dict(role='user', content='hi')], agent='careful')
+        assert app.ai._provider(SCRIPT).seen[0][-1]['content'] == 'hello'

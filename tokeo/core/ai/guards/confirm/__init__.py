@@ -11,10 +11,11 @@ The ready-to-use implementation is the ```confirm``` guard
 ```tokeo_ai_confirm``` and records every decision.
 """
 
-from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmGuardError
+from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmGuardError, TokeoAiConfirmChanged
 from tokeo.core.ai.guards.confirm.base import TokeoAiConfirmGuard
 from tokeo.core.ai.guards.confirm.channel import (
     CONFIRM_HOOK,
+    CONFIRM_CHANGES,
     TokeoAiConfirmRequest,
     TokeoAiConfirmAnswer,
     TokeoAiChannelConfirmGuard,
@@ -22,8 +23,10 @@ from tokeo.core.ai.guards.confirm.channel import (
 
 __all__ = [
     'TokeoAiConfirmGuardError',
+    'TokeoAiConfirmChanged',
     'TokeoAiConfirmGuard',
     'CONFIRM_HOOK',
+    'CONFIRM_CHANGES',
     'TokeoAiConfirmRequest',
     'TokeoAiConfirmAnswer',
     'TokeoAiChannelConfirmGuard',

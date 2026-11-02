@@ -55,10 +55,15 @@ from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_RETURN,
     GOVERNOR_STAGE_ON_CLOSE,
 )
+from tokeo.core.ai.tool import create_tool_result
 from tokeo.core.ai.guards.confirm.base import TokeoAiConfirmGuard
+from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmChanged
 
 #: The cement hook a confirm channel registers on.
 CONFIRM_HOOK = 'tokeo_ai_confirm'
+
+#: How often a person may change one content before the run is declined.
+CONFIRM_CHANGES = 5
 
 
 @dataclass
@@ -95,17 +100,22 @@ class TokeoAiConfirmAnswer:
 
     ### Args
 
-    - **answer** (str): ```NO```, ```ONCE``` or ```RUN``` (the same again in
-        this run is allowed without asking)
+    - **answer** (str): ```NO```, ```ONCE```, ```RUN``` (the same again in
+        this run is allowed without asking), or ```CHANGE```
     - **by** (str): ```HUMAN``` or ```AUTO```, who decided
     - **who** (str|None): The person or rule that decided, for the record
     - **reason** (str|None): Why, for the record and a declined run
+    - **content**: With ```CHANGE``` the new content: the arguments (dict) at
+        ```on_call```, the result value at ```on_return```, the text of the last
+        message at ```on_begin```/```on_prompt```, the answer text at
+        ```on_answer```/```on_close```
 
     """
 
     NO = 'no'
     ONCE = 'once'
     RUN = 'run'
+    CHANGE = 'change'
     HUMAN = 'human'
     AUTO = 'auto'
     DEFAULT = 'default'
@@ -114,6 +124,7 @@ class TokeoAiConfirmAnswer:
     by: str = HUMAN
     who: str | None = None
     reason: str | None = None
+    content: object = None
 
 
 class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
@@ -122,7 +133,9 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
 
     A no skips the call at ```on_call```, replaces the result at
     ```on_return```, and ends the run with the status ```declined``` at the
-    other stages.
+    other stages. A change sets the new content and runs the stage again, so it
+    passes every guard of the stage; after a change a person can change again
+    or say no, but no longer lift a no.
     """
 
     class Meta:
@@ -167,7 +180,15 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
 
     def _decline_on_no(self, ctx, stage, subject):
         # the stages without a tool call: a no ends the run in order
-        answer = self._ask(ctx, stage, subject, None, stage)
+        answer = self._ask(ctx, stage, subject, None, stage, f'{stage}:{ctx.loopdata.steps}')
+        if answer is None:
+            return
+        if answer.answer == TokeoAiConfirmAnswer.CHANGE:
+            if isinstance(subject, list):
+                subject[-1]['content'] = str(answer.content)
+                raise TokeoAiConfirmChanged()
+            subject.text = str(answer.content)
+            raise TokeoAiConfirmChanged(subject)
         if answer.answer == TokeoAiConfirmAnswer.NO:
             raise TokeoAiRunDeclined(stage, answer.reason or 'declined by confirmation', by=answer.by)
 
@@ -179,7 +200,19 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         verdict = None
         if invocation.decision == Invocation.DENY:
             verdict = dict(decision=invocation.decision, reason=invocation.reason)
-        answer = self._ask(ctx, stage, invocation, verdict, f'{stage}:{invocation.name}')
+        answer = self._ask(ctx, stage, invocation, verdict, f'{stage}:{invocation.name}', f'{stage}:{invocation.id}')
+        if answer is None:
+            return
+        if answer.answer == TokeoAiConfirmAnswer.CHANGE:
+            # the change is checked anew by the guards, it lifts nothing itself
+            if stage == GOVERNOR_STAGE_ON_CALL:
+                if not isinstance(answer.content, dict):
+                    raise TokeoAiError(f'confirm guard {self.config_name!r}: changed arguments must be a dict')
+                invocation.arguments = dict(answer.content)
+            else:
+                invocation.result, invocation.error = create_tool_result(answer.content), None
+            invocation.decision, invocation.reason = Invocation.ALLOW, None
+            raise TokeoAiConfirmChanged(invocation)
         if answer.answer == TokeoAiConfirmAnswer.NO:
             invocation.decision = Invocation.DENY
             invocation.reason = answer.reason or no_reason
@@ -188,11 +221,18 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             invocation.decision = Invocation.ALLOW
             invocation.reason = f'allowed by confirmation over: {verdict["reason"]}'
 
-    def _ask(self, ctx, stage, subject, verdict, key):
+    def _ask(self, ctx, stage, subject, verdict, key, change_key):
         # the answer for this request: remembered for the run, by rule, by a
-        # channel, or the default; recorded on the result and the trace
-        answers = (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.ONCE, TokeoAiConfirmAnswer.RUN)
-        remembered = ctx.turndata.setdefault(f'{self.config_name}:confirm', {})
+        # channel, or the default; recorded on the result and the trace. None
+        # when content a person changed passed the guards of the stage
+        state = ctx.turndata.setdefault(f'{self.config_name}:confirm', dict(run={}, changed=set()))
+        if change_key in state['changed']:
+            if verdict is None:
+                return None
+            answers = (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.CHANGE)
+        else:
+            answers = (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.ONCE, TokeoAiConfirmAnswer.RUN, TokeoAiConfirmAnswer.CHANGE)
+        remembered = state['run']
         answer = remembered.get(key) if verdict is None else None
         recalled = answer is not None
         if answer is None:
@@ -211,6 +251,10 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             answer = TokeoAiConfirmAnswer(TokeoAiConfirmAnswer.ONCE if allow else TokeoAiConfirmAnswer.NO, by=TokeoAiConfirmAnswer.DEFAULT)
         if answer.answer not in answers:
             raise TokeoAiError(f'confirm guard {self.config_name!r}: answer {answer.answer!r} is not one of {answers}')
+        if answer.answer == TokeoAiConfirmAnswer.CHANGE:
+            if answer.content is None:
+                raise TokeoAiError(f'confirm guard {self.config_name!r}: a change needs the new content')
+            state['changed'].add(change_key)
         if answer.answer == TokeoAiConfirmAnswer.RUN and verdict is None:
             remembered[key] = answer
         if isinstance(subject, Invocation):
@@ -228,6 +272,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             by=answer.by,
             who=answer.who,
             reason=answer.reason,
+            content=answer.content,
             recalled=recalled,
             at=datetime.now(timezone.utc).isoformat(),
         )
