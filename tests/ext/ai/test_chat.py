@@ -39,7 +39,7 @@ class _Lines:
 
 
 def test_chat_drops_a_turn_that_ctrl_c_ended(monkeypatch):
-    """After Ctrl-C during 'first', the next call gets only 'second' as user turn."""
+    """After Ctrl-C during 'first', the next call gets only the turn 'second'."""
     calls = []
 
     def chat(self, messages, **kw):
