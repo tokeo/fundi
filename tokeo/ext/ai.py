@@ -655,8 +655,13 @@ class TokeoAi(MetaMixin):
                 result = _failed(err)
             else:
                 # the sandbox already turns a tool throw into a result, so what
-                # comes out here is machinery (a timeout, a denial) and rises
-                result = sandbox.exec(tool, arguments)
+                # comes out here is machinery (a timeout, a denial) and rises;
+                # teardown still gets a ToolResult that carries the error
+                try:
+                    result = sandbox.exec(tool, arguments)
+                except Exception as err:
+                    result = _failed(err)
+                    raise
                 # a failed call has no result to reshape, so after is skipped
                 if getattr(result.state, 'exception', None) is None:
                     try:

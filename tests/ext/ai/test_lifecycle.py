@@ -8,8 +8,9 @@ because it drives the handler in ```tokeo.ext.ai```.
 """
 
 import inspect
+import pytest
 
-from tokeo.core.ai import TokeoAiTool, TokeoAiContext
+from tokeo.core.ai import TokeoAiTool, TokeoAiContext, TokeoAiError
 from tokeo.core.ai.data import ToolResult, ToolStates
 from tokeo.ext.ai import TokeoAi
 
@@ -211,3 +212,33 @@ def test_track_binds_origin_and_stage():
     step = next(s for s in ctx.trace if getattr(s.object, 'content', None) == 'prepared')
     assert step.origin is tool
     assert step.stage == 'prepare'
+
+
+class _BrokenSandbox:
+    """A sandbox whose machinery fails, like a timeout of the subprocess sandbox."""
+
+    def exec(self, tool, arguments):
+        raise TokeoAiError('timed out after 1s')
+
+
+class _SeeingTool(TokeoAiTool):
+    """Records the result its teardown gets."""
+
+    seen = None
+
+    def exec(self, path):
+        return ToolResult(value='never')
+
+    def teardown(self, turndata, arguments, result, track):
+        self.seen = result
+
+
+def test_teardown_gets_a_tool_result_when_the_sandbox_fails():
+    """A failing sandbox rises, teardown still gets a ToolResult with the error."""
+    tool = _SeeingTool.__new__(_SeeingTool)
+    handler = TokeoAi.__new__(TokeoAi)
+    with pytest.raises(TokeoAiError, match='timed out'):
+        handler._exec_lifecycle(tool, _BrokenSandbox(), {'path': 'x'}, TokeoAiContext(messages=[]))
+    assert isinstance(tool.seen, ToolResult)
+    assert tool.seen.value is None
+    assert tool.seen.state.exception == 'TokeoAiError: timed out after 1s'
