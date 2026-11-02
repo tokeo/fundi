@@ -32,6 +32,7 @@ class AiTest(TokeoTest):
             'tokeo.ext.appshare',
             'tokeo.ext.ai',
         ]
+        config_defaults = {'ai': {'license_acknowledged': False}}
 
 
 def test_tool_policy_denies_a_tool_on_the_denylist():
@@ -71,7 +72,8 @@ def test_tool_policy_allowlist_restricts_to_its_members():
 def _files_config():
     """An ai config with the group filesystem of read_file and append_file."""
     echo = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
-    return {'ai': {'tools': {'read_file': echo, 'append_file': echo, 'filesystem': ['read_file', 'append_file']}}}
+    tools = {'read_file': echo, 'append_file': echo, 'filesystem': ['read_file', 'append_file']}
+    return {'ai': {'license_acknowledged': False, 'tools': tools}}
 
 
 def test_tool_policy_deny_resolves_a_group_to_its_members():

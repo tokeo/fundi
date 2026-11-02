@@ -51,6 +51,7 @@ def test_chat_drops_a_turn_that_ctrl_c_ended(monkeypatch):
     monkeypatch.setattr(AiController, '_chat_session', lambda self, history, completer: _Lines(['first', 'second']))
     monkeypatch.setattr(TokeoAi, 'chat', chat)
     cfg = init_defaults('ai')
+    cfg['ai']['license_acknowledged'] = False
     with ChatTest(argv=['ai', 'chat'], config_defaults=cfg) as app:
         app.run()
     assert calls[1] == [{'role': 'user', 'content': 'second'}]

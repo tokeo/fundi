@@ -65,6 +65,7 @@ def loop_config(script, **agent_options):
     """An ai config: echo in process, agents plain and audited, the script."""
     cfg = init_defaults('ai')
     cfg['ai'] = dict(
+        license_acknowledged=False,
         defaults=dict(profile='script', agent=None),
         tools={'echo': dict(type=ECHO), 'shout': dict(type=ECHO), 'coding': dict(type=CODE)},
         guards={'audit': dict(type='trace_audit'), 'redact': dict(type='regex_redact', options=dict(patterns=[r'password=\S+']))},

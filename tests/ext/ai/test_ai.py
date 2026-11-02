@@ -66,6 +66,7 @@ def ai_config():
     # and agents that exercise every selection branch
     cfg = init_defaults('ai')
     cfg['ai'] = dict(
+        license_acknowledged=False,
         defaults=dict(profile='mock', agent=None),
         tools={
             'echo': dict(type=ECHO),
@@ -506,14 +507,24 @@ def test_setup_aborts_on_a_lint_error():
 
 
 def test_setup_logs_a_lint_warning():
-    """Without license_acknowledged the setup logs the warning and goes on."""
+    """defaults null is only a warning: the setup logs it and goes on."""
     logged = []
 
     def record(app):
         app.log.warning = logged.append
 
-    with FundiTest(config_defaults=ai_config(), hooks=[('post_setup', record, 50)]):
-        assert any('ai.license_acknowledged' in message for message in logged)
+    cfg = ai_config()
+    cfg['ai']['defaults'] = None
+    with FundiTest(config_defaults=cfg, hooks=[('post_setup', record, 50)]):
+        assert any('ai.defaults' in message for message in logged)
+
+
+@pytest.mark.parametrize('cfg', [dict(ai=dict(defaults=dict(profile='mock'))), {}], ids=['missing', 'no_ai_config'])
+def test_setup_aborts_without_license_acknowledged(cfg):
+    """Without license_acknowledged, also without any ai config, the start ends."""
+    with pytest.raises(TokeoAiError, match=r'ai\.license_acknowledged: is required'):
+        with FundiTest(config_defaults=cfg):
+            pass
 
 
 def notices(**kw):
@@ -660,16 +671,19 @@ def test_linter_flags_an_unknown_key_as_error(section, path):
     assert lint_errors(cfg)[path].startswith("unknown key 'toolss'")
 
 
-def test_linter_warns_when_license_acknowledged_is_missing():
-    """Without license_acknowledged the linter warns; set, even to false, none."""
+@pytest.mark.parametrize('value', [False, True, 'yes', 1])
+def test_linter_takes_any_value_of_license_acknowledged(value):
+    """license_acknowledged false, true, yes or 1 is set, so it lints clean."""
     cfg = ai_config()
-    with FundiTest(argv=LINT, config_defaults=cfg) as app:
-        issues = TokeoAiLinter(app).lint()
-        assert [(i.path, i.level) for i in issues if 'license_acknowledged' in i.path] == [('ai.license_acknowledged', 'warning')]
-    cfg['ai']['license_acknowledged'] = False
-    with FundiTest(argv=LINT, config_defaults=cfg) as app:
-        issues = TokeoAiLinter(app).lint()
-        assert [i for i in issues if 'license_acknowledged' in i.path] == []
+    cfg['ai']['license_acknowledged'] = value
+    assert 'ai.license_acknowledged' not in lint_errors(cfg)
+
+
+def test_linter_requires_license_acknowledged():
+    """Without license_acknowledged the linter reports an error."""
+    cfg = ai_config()
+    del cfg['ai']['license_acknowledged']
+    assert lint_errors(cfg)['ai.license_acknowledged'].startswith('is required')
 
 
 @pytest.mark.parametrize('value', [True, -1, 1.5, '3'])

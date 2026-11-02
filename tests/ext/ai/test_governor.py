@@ -32,6 +32,7 @@ class AiTest(TokeoTest):
             'tokeo.ext.appshare',
             'tokeo.ext.ai',
         ]
+        config_defaults = {'ai': {'license_acknowledged': False}}
 
 
 # small governors that participate in chosen stages by overriding their methods;

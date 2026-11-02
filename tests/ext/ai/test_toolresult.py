@@ -39,6 +39,7 @@ def ai_config():
     # the same tool can be driven behind either wall
     cfg = init_defaults('ai')
     cfg['ai'] = dict(
+        license_acknowledged=False,
         defaults=dict(profile='mock', agent=None),
         tools={
             'boom': dict(type=RAISE),

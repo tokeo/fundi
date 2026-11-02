@@ -102,6 +102,7 @@ def wasm_ai_config():
     # source read-only at /app and adds it to PYTHONPATH
     cfg = init_defaults('ai')
     cfg['ai'] = dict(
+        license_acknowledged=False,
         defaults=dict(profile='mock', agent=None),
         tools=dict(
             run_untrusted=dict(type='tokeo.core.ai.tools:TokeoAiPythonUntrustedExecTool'),

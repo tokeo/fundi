@@ -163,9 +163,9 @@ class TokeoAiLinter:
         trace = self._value('trace')
         if trace is not None and not isinstance(trace, bool):
             self._add('ai.trace', 'must be true or false')
-        # the notice at every start stays until the license is acknowledged
+        # required: someone must have set it, any value counts
         if 'license_acknowledged' not in self._section_keys():
-            self._add('ai.license_acknowledged', 'is missing, set it to true once you have read LICENSE.md of tokeo-fundi', 'warning')
+            self._add('ai.license_acknowledged', 'is required, set it to true once you have read LICENSE.md of tokeo-fundi')
         self._lint_tools(tools)
         self._lint_profiles(profiles, tools)
         self._lint_defaults(defaults, profiles, agents)

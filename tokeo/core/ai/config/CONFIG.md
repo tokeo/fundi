@@ -18,8 +18,9 @@ does not declare in its ```config_defaults```, is an error.
 
 ```yaml
 ai:
-  license_acknowledged: true  # read LICENSE.md first; until true, every ai command
-                              # and the first ai call from code log a notice
+  license_acknowledged: true  # required, any value; read LICENSE.md first; until
+                              # true, every ai command and the first ai call from
+                              # code log a notice
   max_steps: 8          # base loop budget (tool rounds), 0 = unlimited
   max_loops: 3          # consecutive empty rounds before abort, 0 = unlimited
   trace: true           # record the step history (the trace)
@@ -566,7 +567,7 @@ myapp ai lint --strict     # treat warnings as failures too
 | Level | Meaning | Blocks a run? |
 |-------|---------|---------------|
 | ```error``` | the config cannot resolve as written, or holds a key nobody reads | yes |
-| ```warning``` | a gap worth closing (no defaults, no license acknowledgement) | only with ```--strict``` |
+| ```warning``` | a gap worth closing (no defaults) | only with ```--strict``` |
 | ```note``` | a resolved-but-worth-pointing-out fact (e.g. agent over chain) | no |
 
 .. tip::
