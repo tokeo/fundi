@@ -56,8 +56,9 @@ class TokeoAiSandbox(MetaMixin):
 
         The base declares an empty ```config_defaults```: which options exist (a
         timeout, a memory cap, a container name, a scratch mount ...) is the
-        concrete mechanism's business, declared in its own ```config_defaults```
-        and checked by its ```validate_options```. ```in_process``` has none.
+        concrete mechanism's business, declared in its own ```config_defaults```;
+        the linter reports any other key as an error, values are checked by
+        ```validate_options```. ```in_process``` has none.
         """
 
         # the configurable defaults, as one dict; the item's options overlay
@@ -164,9 +165,10 @@ class TokeoAiSandbox(MetaMixin):
         """
         Validate the item's ```options``` for the linter.
 
-        The linter does not know a sandbox's allowed keys; it asks the class.
-        The base accepts anything (a permissive default); a derivation that
-        wants strict checking overrides this and returns error strings.
+        The linter checks the keys against ```Meta.config_defaults``` itself;
+        the values are the class's business. The base accepts any value; a
+        derivation that checks its values overrides this and returns error
+        strings.
 
         ### Args
 

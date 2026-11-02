@@ -26,7 +26,7 @@ from tokeo.core.ai.config.tools import find_cycles
 
 
 # allowed keys per section, so an unknown key (a typo such as ```toolss```) is
-# reported instead of being silently ignored. tools, agents, and guards share
+# an error instead of being silently ignored. tools, agents, and guards share
 # the uniform item form ({type, options}); the ```defaults``` block is checked
 # here, agent option contents by the built-in element validators below.
 # max_steps/max_loops are the handler's base loop budgets (config_defaults),
@@ -52,6 +52,7 @@ _PROFILE_KEYS = {
     'agent',
     'deny',
     'enabled',
+    'model',
     'native_tools_call',
     'tools_parser',
     'model_params',
@@ -79,9 +80,10 @@ class AiLintIssue:
 
     - **path** (str): The ```ai.<section>.<name>``` location of the problem
     - **message** (str): What is wrong, with a hint where one applies
-    - **level** (str): ```error``` (breaks resolution), ```warning``` (an
-        ignored value, usually a typo), or ```note``` (a resolved-but-worth-
-        pointing-out fact, e.g. an agent overriding a chain)
+    - **level** (str): ```error``` (breaks resolution, or a key nobody
+        reads), ```warning``` (a gap worth closing, e.g. no defaults), or
+        ```note``` (a resolved-but-worth-pointing-out fact, e.g. an agent
+        overriding a chain)
 
     """
 
@@ -212,6 +214,16 @@ class TokeoAiLinter:
             self._lint_keys(path, value, _GUARD_ITEM_KEYS)
             self._lint_options(path, value)
             self._lint_type('governor', path, value)
+            self._lint_option_keys('governor', f'{path}.options', value.get('type'), value.get('options'))
+            # an on_<stage> block holds only its own options for that stage
+            for stage in GOVERNOR_STAGES:
+                block = value.get(stage)
+                if isinstance(block, dict):
+                    self._lint_keys(f'{path}.{stage}', block, {'options'})
+                    self._lint_options(f'{path}.{stage}', block)
+                    self._lint_option_keys('governor', f'{path}.{stage}.options', value.get('type'), block.get('options'))
+                elif block is not None:
+                    self._add(f'{path}.{stage}', 'must be a mapping with "options"')
             self._lint_governor_purity(section, path, value.get('type'))
             self._lint_tool_name_options(path, value)
         else:
@@ -295,6 +307,7 @@ class TokeoAiLinter:
         self._lint_options(path, item)
         # the registry kind is the singular section name (agents -> agent)
         self._lint_type(section.rstrip('s'), path, item)
+        self._lint_option_keys(section.rstrip('s'), f'{path}.options', item.get('type'), item.get('options'))
 
     def _validate_agent_options(self, section, name, item):
         # the base agent's known option keys: the tools selection points into
@@ -459,16 +472,17 @@ class TokeoAiLinter:
 
     def _validate_sandbox(self, section, name, item):
         # a sandbox item: a resolvable ```type```, the required ```tools```
-        # selection (tool/group names), an
-        # optional ```except``` skip set (single or list), and the class's own
-        # ```options```. the option keys are validated by the class itself
-        # through ```validate_options```; the linter does not know them
+        # selection (tool/group names), an optional ```except``` skip set
+        # (single or list), and the class's own ```options```: their keys are
+        # the class's config_defaults, their values the class checks itself
+        # through ```validate_options```
         path = f'ai.{section}.{name}'
         if not isinstance(item, dict):
             self._add(path, 'must be an item (mapping with a "type")')
             return
         self._lint_keys(path, item, _SANDBOX_KEYS)
         self._lint_type('sandbox', path, item)
+        self._lint_option_keys('sandbox', f'{path}.options', item.get('type'), item.get('options'))
         tool_names = set(self._value('tools') or {})
         # tools is required: the tool/group names from ai.tools; there is no
         # catch-all, a new tool runs nowhere until a sandbox names it
@@ -533,11 +547,30 @@ class TokeoAiLinter:
         except Exception:
             return []
 
-    def _lint_keys(self, path, keys, allowed, level='warning'):
-        # report any key outside the allowed set, with a closest-match hint
+    def _lint_keys(self, path, keys, allowed, what='key'):
+        # an error for any key outside the allowed set, with a closest-match
+        # hint: a key nobody reads is a typo, never silently ignored
         for key in keys:
             if key not in allowed:
-                self._add(f'{path}.{key}', _unknown('key', key, allowed), level)
+                self._add(f'{path}.{key}', _unknown(what, key, allowed))
+
+    def _lint_option_keys(self, kind, path, type_value, options):
+        # the options a class reads are the keys of its Meta.config_defaults;
+        # any other key is never read (```guards``` for ```governors``` would
+        # run an agent without governors), so it is an error. the class whose
+        # own Meta declares config_defaults nearest in the MRO is the one cement
+        # merges last; a class declaring none is not checked here
+        if not isinstance(options, dict) or not isinstance(type_value, str):
+            return
+        try:
+            cls = self.app.ai.resolve(kind, type_value)
+        except TokeoAiError:
+            return
+        for klass in getattr(cls, '__mro__', ()):
+            meta = vars(klass).get('Meta')
+            if meta is not None and 'config_defaults' in vars(meta):
+                self._lint_keys(path, options, set(meta.config_defaults or {}), 'option')
+                return
 
     def _lint_options(self, path, item):
         # ```options``` is optional, but when present it carries the component's
@@ -580,6 +613,7 @@ class TokeoAiLinter:
             self._lint_keys(path, item, _ITEM_KEYS)
             self._lint_options(path, item)
             self._lint_type('tool', path, item)
+            self._lint_option_keys('tool', f'{path}.options', item.get('type'), item.get('options'))
         known = set(items) | set(groups)
         for name, members in groups.items():
             path = f'ai.tools.{name}'

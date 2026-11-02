@@ -104,13 +104,6 @@ def test_wasm_needs_a_runtime():
         sandbox.exec(tool, dict(code='1'))
 
 
-def test_wasm_validate_options_rejects_unknown():
-    """validate_options reports the unknown option 'net' as an issue."""
-    sandbox = TokeoAiWasmSandbox(None)
-    issues = sandbox.validate_options(dict(runtime='x', net=True))
-    assert issues and any('net' in m for m in issues)
-
-
 def test_untrusted_exec_runs_in_process():
     """
     The untrusted exec runs sum(range(10)) in process and returns raw 45.

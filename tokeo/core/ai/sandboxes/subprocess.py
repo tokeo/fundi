@@ -199,26 +199,3 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
             exception=state_doc.get('exception'),
         )
         return ToolResult(value=value, state=state)
-
-    def validate_options(self, options):
-        """
-        Validate the subprocess options for the linter.
-
-        Accepts only the keys this sandbox can act on, so a typo or an
-        unenforceable cap (e.g. ```net```) surfaces as a lint error instead of a
-        silently ignored setting.
-
-        ### Args
-
-        - **options** (dict): The item's ```options``` block
-
-        ### Returns
-
-        - **list[str]|None**: Error messages, or ```None``` when valid
-
-        """
-        allowed = {'timeout', 'memory_mb', 'cwd', 'env'}
-        unknown = sorted(set(options or {}) - allowed)
-        if unknown:
-            return [f'subprocess sandbox does not support option {key!r} ' f'(allowed: {", ".join(sorted(allowed))})' for key in unknown]
-        return None

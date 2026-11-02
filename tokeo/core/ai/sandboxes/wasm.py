@@ -497,26 +497,3 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         finally:
             if timeout:
                 ticker.cancel()
-
-    def validate_options(self, options):
-        """
-        Validate the wasm options for the linter.
-
-        Accepts only the keys this sandbox can act on, so a typo or an option
-        that belongs to another backend surfaces as a lint error instead of a
-        silently ignored setting.
-
-        ### Args
-
-        - **options** (dict): The item's ```options``` block
-
-        ### Returns
-
-        - **list[str]|None**: Error messages, or ```None``` when valid
-
-        """
-        allowed = {'runtime', 'stdlib', 'mounts', 'cwd', 'env', 'timeout', 'memory_mb', 'shim_wasi_stdlib'}
-        unknown = sorted(set(options or {}) - allowed)
-        if unknown:
-            return [f'wasm sandbox does not support option {key!r} (allowed: {", ".join(sorted(allowed))})' for key in unknown]
-        return None

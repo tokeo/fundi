@@ -20,37 +20,37 @@ the ```tokeo.core.ai``` package, and the ```ai``` config section).
 Every configured component is an item in the uniform form ```{type, options}```:
 ```type``` names the class (a built-in alias or a class path), ```options```
 carries the component's own settings. Profiles add their documented top-level
-params (purpose, tools, enabled) around that form.
+params (purpose, agent, deny, enabled, model) around that form.
 
 ```yaml
 ai:
   defaults:
     profile: mock          # model used when a call names none
-    agent: null           # no default agent: calls run with the implicit agent null
+    agent: audited         # agent used when a call names none
   tools:
     calc:  { type: myapp.core.ai.tools.calc:TokeoAiCalcTool }
     notes: { type: myapp.core.ai.tools.notes:TokeoAiNotesTool }
   guards:
-    audit: { type: audit }
-    safe:
-      type: policy
+    audit: { type: trace_audit }
+    readonly:
+      type: tool_policy
       options:
-        deny: [shell]
+        deny: [notes]
+  sandboxes:
+    local:
+      type: in_process
+      tools: [calc, notes]
   agents:
     audited:
-      type: default
+      type: fundi
       options:
-        tools:
-          - notes          # combined with the profile's own tools (calc)
-        guards:
-          - safe           # the tool-call pipeline of this agent
-          - audit
+        tools: [calc, notes]       # what the agent offers to the model
+        governors: [readonly, audit]
+        sandboxes: [local]         # where its tools run
   profiles:
     mock:
       type: mock
       purpose: mocking
-      tools:
-        - calc
 ```
 
 ### Notes

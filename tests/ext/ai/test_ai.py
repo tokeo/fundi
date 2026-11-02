@@ -441,13 +441,67 @@ def test_linter_flags_missing_sandbox_tools():
         assert any('required' in i.message for i in issues)
 
 
-def test_linter_flags_unknown_subprocess_option():
-    """The unknown subprocess option 'net' is flagged by the linter."""
-    cfg = ai_config()
-    cfg['ai']['sandboxes']['jailed']['options']['net'] = False
+def lint_errors(cfg):
+    """The error issues of the linter for a config, as {path: message}."""
     with FundiTest(config_defaults=cfg) as app:
-        issues = TokeoAiLinter(app).lint()
-        assert any('net' in i.message for i in issues)
+        return {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
+
+
+@pytest.mark.parametrize('sandbox_type', ['subprocess', 'in_process', 'tokeo.core.ai.sandboxes:TokeoAiWasmSandbox'])
+def test_linter_flags_an_unknown_sandbox_option(sandbox_type):
+    """The option 'net', which no sandbox reads, is an error on each sandbox."""
+    cfg = ai_config()
+    cfg['ai']['sandboxes']['jailed'] = dict(type=sandbox_type, tools=['echo'], options=dict(net=False))
+    assert lint_errors(cfg)['ai.sandboxes.jailed.options.net'].startswith("unknown option 'net'")
+
+
+def test_linter_flags_guards_on_an_agent_as_unknown_option():
+    """guards instead of governors on an agent is an error, not ignored."""
+    cfg = ai_config()
+    cfg['ai']['agents']['plain']['options']['guards'] = ['audit']
+    assert lint_errors(cfg)['ai.agents.plain.options.guards'] == "unknown option 'guards'"
+
+
+def test_linter_flags_an_unknown_tool_option():
+    """prefixx on the greeter is an error, prefix is its one option."""
+    cfg = ai_config()
+    cfg['ai']['tools']['greeter']['options'] = dict(prefixx='moin')
+    assert lint_errors(cfg)['ai.tools.greeter.options.prefixx'] == "unknown option 'prefixx'; did you mean 'prefix'?"
+
+
+def test_linter_flags_an_unknown_governor_option_also_per_stage():
+    """denny in the options and in on_call of a tool_policy are both errors."""
+    cfg = ai_config()
+    cfg['ai']['guards'] = {'policy': dict(type='tool_policy', options=dict(denny=['echo']), on_call=dict(options=dict(denny=['cwd'])))}
+    errors = lint_errors(cfg)
+    assert errors['ai.guards.policy.options.denny'].startswith("unknown option 'denny'")
+    assert errors['ai.guards.policy.on_call.options.denny'].startswith("unknown option 'denny'")
+
+
+def test_linter_flags_a_stage_block_with_other_keys():
+    """An on_call block holds only options: a type in it is an error."""
+    cfg = ai_config()
+    cfg['ai']['guards'] = {'policy': dict(type='tool_policy', on_call=dict(type='trace_audit'))}
+    assert "unknown key 'type'" in lint_errors(cfg)['ai.guards.policy.on_call.type']
+
+
+@pytest.mark.parametrize(
+    'section, path',
+    [
+        (None, 'ai.toolss'),
+        ('defaults', 'ai.defaults.toolss'),
+        ('sandboxes.allow', 'ai.sandboxes.allow.toolss'),
+        ('agents.plain', 'ai.agents.plain.toolss'),
+    ],
+)
+def test_linter_flags_an_unknown_key_as_error(section, path):
+    """A key toolss is an error at ai level, in defaults, a sandbox, an agent."""
+    cfg = ai_config()
+    target = cfg['ai']
+    for key in section.split('.') if section else []:
+        target = target[key]
+    target['toolss'] = ['echo']
+    assert lint_errors(cfg)[path].startswith("unknown key 'toolss'")
 
 
 def test_linter_warns_when_license_acknowledged_is_missing():

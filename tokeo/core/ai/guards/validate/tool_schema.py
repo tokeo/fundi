@@ -37,7 +37,7 @@ ai:
     audited:
       type: fundi
       options:
-        guards: [tool_schema_validate, audit]
+        governors: [tool_schema_validate, audit]
 ```
 """
 

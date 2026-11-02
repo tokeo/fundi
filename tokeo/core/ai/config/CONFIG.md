@@ -515,8 +515,10 @@ class MyGuard(TokeoAiAuditGuard):
 
 ## 10. Validating the configuration
 
-```ai lint``` checks the whole ```ai:``` section: unknown references, malformed
-items, unknown stages, empty stage lists, group cycles, and the guard conflicts. It
+```ai lint``` checks the whole ```ai:``` section: unknown keys, unknown options
+(every key under ```options``` is one of the class's ```Meta.config_defaults```),
+unknown references, malformed items, unknown stages, empty stage lists, group
+cycles, and the guard conflicts. A key nobody reads is never silently ignored. It
 is also run automatically before ```ask```/```chat```, aborting the run on an error.
 
 ```bash
@@ -526,8 +528,8 @@ myapp ai lint --strict     # treat warnings as failures too
 
 | Level | Meaning | Blocks a run? |
 |-------|---------|---------------|
-| ```error``` | the config cannot resolve as written | yes |
-| ```warning``` | an ignored value, usually a typo | only with ```--strict``` |
+| ```error``` | the config cannot resolve as written, or holds a key nobody reads | yes |
+| ```warning``` | a gap worth closing (no defaults, no license acknowledgement) | only with ```--strict``` |
 | ```note``` | a resolved-but-worth-pointing-out fact (e.g. agent over chain) | no |
 
 .. tip::
