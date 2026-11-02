@@ -8,6 +8,7 @@ project are imported. Each one is a minimal ```TokeoAiTool```.
 
 import os
 import time
+import subprocess
 
 from tokeo.core.ai import TokeoAiTool
 from tokeo.core.ai.tool import create_tool_result
@@ -89,6 +90,25 @@ class SleepTool(TokeoAiTool):
     def exec(self, **arguments):
         time.sleep(float(arguments.get('seconds', 0)))
         return create_tool_result('slept')
+
+
+class SpawnTool(TokeoAiTool):
+    """Start a sleep of 30 s, write its pid to pid.txt, then wait the seconds."""
+
+    class Meta:
+        description = 'start a background process, then wait'
+        parameters = {
+            'type': 'object',
+            'properties': {'seconds': {'type': 'number'}},
+            'required': ['seconds'],
+        }
+
+    def exec(self, **arguments):
+        child = subprocess.Popen(['sleep', '30'])
+        with open('pid.txt', 'w') as f:
+            f.write(str(child.pid))
+        time.sleep(float(arguments.get('seconds', 0)))
+        return create_tool_result('spawned')
 
 
 class RaiseTool(TokeoAiTool):

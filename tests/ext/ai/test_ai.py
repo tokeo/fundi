@@ -19,6 +19,7 @@ from tests.ext.ai.lib.ai_tests_helper import GreetTool
 from tokeo.core.ai.sandboxes.in_process import TokeoAiInProcessSandbox
 from tokeo.core.ai.sandboxes.subprocess import TokeoAiSubprocessSandbox
 from tokeo.core.ai.linter import TokeoAiLinter
+from tests.utils import wait_until
 
 # dotted paths to the importable test tools the worker loads in a child
 ECHO = 'tests.ext.ai.lib.ai_tests_helper.EchoTool'
@@ -33,6 +34,7 @@ JAILED_OPTIONS = dict(timeout=5)
 if sys.platform == 'linux':
     JAILED_OPTIONS['memory_mb'] = 256
 SLEEP = 'tests.ext.ai.lib.ai_tests_helper.SleepTool'
+SPAWN = 'tests.ext.ai.lib.ai_tests_helper.SpawnTool'
 
 # every tool of the config, offered by the agents that exercise the sandboxes
 TOOLS = ['echo', 'cwd', 'env', 'sleep', 'greeter', 'plain_greeter']
@@ -177,6 +179,43 @@ def test_subprocess_timeout_is_enforced():
     with FundiTest(config_defaults=cfg) as app:
         with pytest.raises(TokeoAiError, match='timed out'):
             run(app, 'sleep', 'mixed', seconds=3)
+
+
+def _spawn_config(tmp_path):
+    """The config with spawn in jailed, running in tmp_path, with a 1 s timeout."""
+    cfg = ai_config()
+    cfg['ai']['tools']['spawn'] = dict(type=SPAWN)
+    cfg['ai']['sandboxes']['jailed']['tools'].append('spawn')
+    cfg['ai']['sandboxes']['jailed']['options'].update(timeout=1, cwd=str(tmp_path))
+    cfg['ai']['agents']['mixed']['options']['tools'].append('spawn')
+    return cfg
+
+
+def _alive(pid):
+    """Whether the pid still runs; a zombie left unreaped counts as ended."""
+    try:
+        with open(f'/proc/{pid}/stat') as f:
+            # the state follows the name in parentheses, Z marks a zombie
+            return f.read().rsplit(')', 1)[1].split()[0] != 'Z'
+    except FileNotFoundError:
+        return False
+
+
+def test_subprocess_timeout_ends_the_processes_the_tool_started(tmp_path):
+    """On the timeout the sleep the tool started ends too, not only the tool."""
+    with FundiTest(config_defaults=_spawn_config(tmp_path)) as app:
+        with pytest.raises(TokeoAiError, match='timed out'):
+            run(app, 'spawn', 'mixed', seconds=3)
+    pid = int((tmp_path / 'pid.txt').read_text())
+    assert wait_until(lambda: not _alive(pid))
+
+
+def test_subprocess_end_ends_the_processes_the_tool_started(tmp_path):
+    """A tool that returns at once leaves no sleep it started behind."""
+    with FundiTest(config_defaults=_spawn_config(tmp_path)) as app:
+        assert run(app, 'spawn', 'mixed', seconds=0) == 'spawned'
+    pid = int((tmp_path / 'pid.txt').read_text())
+    assert wait_until(lambda: not _alive(pid))
 
 
 # --------------------------------------------------------------------------------------

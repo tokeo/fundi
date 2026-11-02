@@ -4,7 +4,9 @@ The subprocess sandbox: fault and resource isolation, not a jail.
 It runs a tool call in a fresh interpreter through the generic runner
 (```python -m tokeo.core.ai.sandboxes.runner```), feeding the job as JSON on
 stdin and reading the ```ToolResult``` as JSON on stdout. The child gets its
-own interpreter, a wall-clock timeout (then SIGKILL), an enforced memory cap
+own interpreter in a process group of its own, a wall-clock timeout (then
+SIGKILL), the end of every process it started when the call ends, an enforced
+memory cap
 (RLIMIT_AS, with RLIMIT_DATA as fallback; current macos rejects caps below
 the already-mapped virtual size (gigabytes at interpreter start), so a
 realistic cap errors the call there instead of silently running uncapped),
@@ -26,6 +28,8 @@ or network isolation needs a container, VM, or WASM backend the user supplies.
 import os
 import sys
 import json
+import signal
+import tempfile
 import subprocess
 
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
@@ -120,20 +124,33 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
             # WHY: cwd is the sandbox scratch dir; create it on demand so a
             # not-yet-existing path is a usable working dir, not a crash
             os.makedirs(cwd, exist_ok=True)
-        try:
-            proc = subprocess.run(
+        # WHY a group of its own: a tool may start processes itself; the call
+        # ends with all of them, on a timeout and after a normal end alike, so
+        # nothing it started outlives it. stdout and stderr go to files, not
+        # pipes: a process the tool started may hold them open, the call ends
+        # when the runner ends, not when every holder closed them
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            proc = subprocess.Popen(
                 cmd,
-                input=job,
-                capture_output=True,
-                text=True,
+                stdin=subprocess.PIPE,
+                stdout=out,
+                stderr=err,
                 cwd=cwd,
                 env=env,
-                # WHY timeout here: wall-clock is the parent's to enforce; on
-                # expiry run() kills the child, so a hung tool cannot wedge us
-                timeout=timeout,
+                start_new_session=True,
             )
-        except subprocess.TimeoutExpired:
-            raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the ' 'subprocess sandbox')
+            try:
+                # wall-clock is the parent's to enforce, a hung tool cannot wedge us
+                proc.communicate(job.encode(), timeout=timeout)
+            except subprocess.TimeoutExpired:
+                self._end_group(proc)
+                proc.wait()
+                raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the subprocess sandbox')
+            finally:
+                self._end_group(proc)
+            out.seek(0)
+            err.seek(0)
+            proc = subprocess.CompletedProcess(cmd, proc.returncode, out.read().decode(), err.read().decode())
         reply = self._decode(proc, dotted)
         # WHY raise on error: an "error" reply is a sandbox-machinery failure
         # (a bad job, an unenforceable cap, an unimportable tool); the tool's
@@ -141,6 +158,13 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         if 'error' in reply:
             raise TokeoAiError(f'tool {dotted!r} failed in the subprocess sandbox: {reply["error"]}')
         return self._rebuild(reply)
+
+    def _end_group(self, proc):
+        # kill every process of the call's group; the group may be gone already
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
     def _decode(self, proc, dotted):
         # the runner writes exactly one json document to stdout; anything else
