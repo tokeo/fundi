@@ -12,8 +12,7 @@ from tokeo.core.ai.tool import create_tool_result
 
 
 def test_create_tool_result_wraps_a_plain_string():
-    # the trivial path: a string becomes the model-facing as_str, and the other
-    # views follow (as_json a JSON string, as_data the raw value)
+    """'hello' is as_str and raw as_data (as_json a JSON string), no exception."""
     result = create_tool_result('hello')
     assert isinstance(result, ToolResult)
     assert result.value.as_str == 'hello'
@@ -22,8 +21,7 @@ def test_create_tool_result_wraps_a_plain_string():
 
 
 def test_create_tool_result_fills_three_coherent_views_for_a_dict():
-    # a structured value fills all three views from one input: as_data keeps the
-    # object, as_json is its JSON encoding, as_str the model-facing rendering
+    """A dict fills all views: as_data the dict, as_json its JSON, as_str text."""
     result = create_tool_result(dict(answer=42, label='ok'))
     assert result.value.as_data == dict(answer=42, label='ok')
     assert '42' in result.value.as_json and 'answer' in result.value.as_json
@@ -31,9 +29,12 @@ def test_create_tool_result_fills_three_coherent_views_for_a_dict():
 
 
 def test_create_tool_result_none_yields_an_empty_string_view():
-    # create_tool_result(None) always builds a value: a None value has no text,
-    # so as_str is the empty string (not the literal 'None'). the "no result"
-    # state (value is None) is produced by the sandbox/loop, not by this helper
+    """
+    None still builds a value: as_str is '' (not 'None'), as_data None.
+
+    The "no result" state (value is None) comes from the sandbox or the
+    loop, not from this helper.
+    """
     result = create_tool_result(None)
     assert result.value is not None
     assert result.value.as_str == ''
@@ -41,16 +42,14 @@ def test_create_tool_result_none_yields_an_empty_string_view():
 
 
 def test_create_tool_result_explicit_as_str_wins_over_the_value():
-    # an explicit as_str is the model-facing string even when a value is given,
-    # so a tool can render its own wording while keeping the structured value
+    """as_str 'the answer is 42' wins; as_data keeps the dict(answer=42)."""
     result = create_tool_result(dict(answer=42), as_str='the answer is 42')
     assert result.value.as_str == 'the answer is 42'
     assert result.value.as_data == dict(answer=42)
 
 
 def test_create_tool_result_carries_state_fields():
-    # a state dict sets only its named fields onto the derived states, so a tool
-    # can record stdout/incomplete alongside its value in one call
+    """state sets only its fields stdout 'logged' and incomplete True."""
     result = create_tool_result('out', state=dict(stdout='logged', incomplete=True))
     assert result.state.stdout == 'logged'
     assert result.state.incomplete is True

@@ -20,48 +20,47 @@ import pytest
 
 
 def test_jupyter_last_expression_is_the_value():
-    # a bare last expression is the value, the way a notebook cell behaves
+    """A bare last expression is the value, like in a cell: factorial(5) is 120."""
     assert run_snippet('import math\nmath.factorial(5)') == 120
 
 
 def test_top_level_return_delivers_the_value():
-    # a return at top level is made legal by the wrap and hands its value back
+    """A top-level return, made legal by the wrap, delivers sum(range(10)): 45."""
     assert run_snippet('return sum(range(10))') == 45
 
 
 def test_own_def_with_a_call_delivers():
-    # the snippet may define and call its own function; the call is the last
-    # expression, so its value is delivered
+    """The snippet's own f() returning 7, called last, delivers 7."""
     assert run_snippet('def f():\n    return 7\nf()') == 7
 
 
 def test_multiple_expressions_take_the_last():
-    # only the last expression is the value; earlier ones run for effect
+    """Of 1, 2, 3 only the last, 3, is the value; earlier ones run for effect."""
     assert run_snippet('1\n2\n3') == 3
 
 
 def test_walrus_last_expression_delivers():
-    # a walrus expression is still an expression, so its value is delivered
+    """A walrus is still an expression: '(n := 21) * 2' delivers 42."""
     assert run_snippet('(n := 21) * 2') == 42
 
 
 def test_single_name_assignment_delivers_its_value():
-    # a name bound on the last line delivers that value
+    """A name bound on the last line delivers its value: 'y = x * 2' is 10."""
     assert run_snippet('x = 5\ny = x * 2') == 10
 
 
 def test_chained_assignment_delivers_the_shared_value():
-    # every target of a chain gets the same value, so that value is delivered
+    """A chain 'a = b = 21 * 2' delivers the value all its targets share: 42."""
     assert run_snippet('a = b = 21 * 2') == 42
 
 
 def test_subscript_assignment_delivers_the_container():
-    # writing into a dict on the last line delivers the mutated root container
+    """A dict write on the last line delivers the mutated root {'a': 1, 'b': 2}."""
     assert run_snippet("d = {}\nd['a'] = 1\nd['b'] = 2") == {'a': 1, 'b': 2}
 
 
 def test_tuple_target_delivers_a_tuple_of_names():
-    # a tuple of names delivers a tuple of the bound values
+    """A tuple of names 'a, b = 1, 2' delivers the tuple of bound values (1, 2)."""
     assert run_snippet('a, b = 1, 2') == (1, 2)
 
 
@@ -69,39 +68,38 @@ def test_tuple_target_delivers_a_tuple_of_names():
 
 
 def test_attribute_assignment_delivers_none():
-    # an attribute write delivers no value: the object itself is not carried
-    # back, as it is generally not serializable across the sandbox boundary
+    """'o.x = 5' delivers None: the object may not cross the sandbox boundary."""
     assert run_snippet('import types\no = types.SimpleNamespace()\no.x = 5') is None
 
 
 def test_ambiguous_assignment_target_delivers_none():
-    # a mixed tuple or a starred target has no single unambiguous value
+    """A mixed tuple or a starred target has no single value and delivers None."""
     assert run_snippet("d = {}\na, d['k'] = 1, 2") is None
     assert run_snippet('a, *b = [1, 2, 3]') is None
 
 
 def test_ending_on_a_loop_delivers_none():
-    # a loop as the last statement leaves no value to hand back
+    """A for loop as the last statement leaves no value to hand back: None."""
     assert run_snippet('t = 0\nfor i in range(5):\n    t += i') is None
 
 
 def test_def_without_a_call_delivers_none():
-    # defining a function is not calling it: no value is produced
+    """Defining helper() without calling it produces no value: None."""
     assert run_snippet('def helper():\n    return 1') is None
 
 
 def test_print_only_delivers_none():
-    # a print evaluates to None, so the snippet delivers no value (the sandbox
-    # captures the printed text separately)
+    """print('hi') delivers None; the sandbox captures the printed text apart."""
     assert run_snippet("print('hi')") is None
 
 
 def test_empty_snippet_delivers_none():
+    """An empty snippet '' delivers None."""
     assert run_snippet('') is None
 
 
 def test_comment_only_delivers_none():
-    # comments are not statements, so the body is empty: no value
+    """Comments are no statements: a comment-only snippet delivers None."""
     assert run_snippet('# nothing here') is None
 
 
@@ -109,32 +107,30 @@ def test_comment_only_delivers_none():
 
 
 def test_top_level_await_is_rejected():
-    # a plain function wrap cannot run a top-level await; it is refused clearly
+    """A top-level await cannot run in the plain wrap: TokeoPactSnippetError."""
     with pytest.raises(TokeoPactSnippetError):
         run_snippet('import asyncio\nawait asyncio.sleep(0)')
 
 
 def test_top_level_async_for_is_rejected():
-    # async-for has the same problem as await and is refused the same way
+    """A top-level async for is refused like await: TokeoPactSnippetError."""
     with pytest.raises(TokeoPactSnippetError):
         run_snippet('async for i in gen():\n    pass')
 
 
 def test_await_inside_an_async_def_is_allowed():
-    # an await INSIDE the snippet's own async def is legal and not flagged; the
-    # def is only defined here, so the snippet delivers None
+    """An await inside the snippet's own async def is allowed; the def is None."""
     assert run_snippet('async def f():\n    return await g()') is None
 
 
 def test_syntax_error_propagates():
-    # a snippet that does not parse raises, surfaced to the caller unchanged
+    """'def (' does not parse: SyntaxError reaches the caller unchanged."""
     with pytest.raises(SyntaxError):
         run_snippet('def (')
 
 
 def test_runtime_error_propagates():
-    # an error while the snippet runs propagates so the sandbox layer can record
-    # it on the result state, rather than being swallowed here
+    """'1 / 0' raises ZeroDivisionError unswallowed, for the sandbox to record."""
     with pytest.raises(ZeroDivisionError):
         run_snippet('1 / 0')
 
@@ -143,8 +139,8 @@ def test_runtime_error_propagates():
 
 
 def test_snippet_names_do_not_leak_into_the_namespace():
-    # the block becomes a function body, so its assignments stay local: the
-    # passed namespace is not polluted, and runs do not bleed into each other
+    """'secret = 42' stays local: no snippet name leaks into the namespace."""
+    # the block becomes a function body, so runs do not bleed into each other
     namespace = {}
     run_snippet('secret = 42\nsecret * 2', namespace)
     leaked = [k for k in namespace if not k.startswith('__') and k != '__tokeo_snippet__']
@@ -152,6 +148,6 @@ def test_snippet_names_do_not_leak_into_the_namespace():
 
 
 def test_preset_globals_are_readable_by_the_snippet():
-    # a value placed in the namespace beforehand is visible as a global to the
-    # snippet; the namespace feeds the run, it does not collect the result
+    """A preset 100 in the namespace is a global: 'preset + 5' gives 105."""
+    # the namespace feeds the run, it does not collect the result
     assert run_snippet('preset + 5', {'preset': 100}) == 105

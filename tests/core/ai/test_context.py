@@ -26,10 +26,11 @@ from tokeo.core.ai import (
 
 
 def test_invocation_decision_constants_carry_the_expected_values():
-    # the decision constants are the single source for the allow/deny values;
-    # pin them to their raw strings so a careless change to either is caught
-    # (the literal-based guard tests cross-check the same values from the other
-    # side, so constant and literal must agree)
+    """Invocation.ALLOW is 'allow', DENY is 'deny', and a fresh call allows."""
+    # the constants are the single source for the allow/deny values; pinned to
+    # their raw strings so a careless change is caught (the literal-based guard
+    # tests cross-check the same values from the other side, so constant and
+    # literal must agree)
     assert Invocation.ALLOW == 'allow'
     assert Invocation.DENY == 'deny'
     # a fresh invocation allows by default
@@ -37,8 +38,7 @@ def test_invocation_decision_constants_carry_the_expected_values():
 
 
 def test_context_seeds_incoming_messages_as_chat_messages():
-    # the incoming conversation is recorded at construction: a step on the trace
-    # (originated by the context) and the bare message in the messages cache
+    """An incoming dict is cached as ChatMessage and traced with ctx as origin."""
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     assert len(ctx.messages) == 1
     assert len(ctx.trace) == 1
@@ -57,7 +57,7 @@ def test_context_seeds_incoming_messages_as_chat_messages():
 
 
 def test_context_empty_when_unseeded():
-    # no messages means empty caches and trace, and fresh zero counters
+    """Without messages the trace and caches are empty and the counters zero."""
     ctx = TokeoAiContext()
     assert ctx.trace == []
     assert ctx.messages == []
@@ -72,7 +72,7 @@ def test_context_empty_when_unseeded():
 
 
 def test_turndata_preset_seeds_values_one_to_one():
-    # a preset seeds the run's turndata; the type stays TokeoAiTurndata
+    """A turndata_preset seeds a TokeoAiTurndata 1:1, not deep-copied."""
     src = {'chain': ['toolA'], 'depth': 1}
     ctx = TokeoAiContext(messages=[], turndata_preset=src)
     assert isinstance(ctx.turndata, TokeoAiTurndata)
@@ -82,14 +82,14 @@ def test_turndata_preset_seeds_values_one_to_one():
 
 
 def test_turndata_preset_absent_starts_empty():
-    # without a preset the run still starts with an empty turndata
+    """Without a turndata_preset the run starts with an empty turndata."""
     ctx = TokeoAiContext(messages=[])
     assert ctx.turndata == {}
 
 
 def test_track_records_a_step_and_caches_the_bare_object():
-    # track appends a step to the trace and the bare object to its cache; it
-    # returns the same object so a caller can keep the reference
+    """track traces a step by its origin, caches the Invocation and returns it."""
+    # returning the same object lets a caller keep the reference
     ctx = TokeoAiContext()
     origin = object()
     invocation = Invocation(id='t1', name='calc', arguments={})
@@ -107,8 +107,7 @@ def test_track_records_a_step_and_caches_the_bare_object():
 
 
 def test_caches_hold_objects_trace_holds_steps():
-    # the two are different kinds of list: the cache is bare objects, the trace
-    # is steps wrapping them
+    """The invocations cache holds the bare Invocation, the trace a TraceStep."""
     ctx = TokeoAiContext()
     invocation = Invocation(id='t1', name='calc')
     ctx.track(object(), invocation)
@@ -118,8 +117,7 @@ def test_caches_hold_objects_trace_holds_steps():
 
 
 def test_trace_keeps_chronological_order_across_kinds():
-    # the trace is the full ordered history of steps; each cache collects only
-    # its kind, as bare objects
+    """The trace keeps the tracked order across kinds, each cache only its kind."""
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'go'}])
     origin = object()
     result = ctx.track(origin, ChatResult(text='', tool_calls=[]))
@@ -134,7 +132,7 @@ def test_trace_keeps_chronological_order_across_kinds():
 
 
 def test_tracked_returns_the_bare_object_cache_by_type():
-    # tracked(Type) returns the same live cache list the property exposes
+    """tracked(ChatResult) is the same live list as ctx.results."""
     ctx = TokeoAiContext()
     result = ctx.track(object(), ChatResult(text='hi', tool_calls=[]))
     assert ctx.tracked(ChatResult) == [result]
@@ -142,16 +140,15 @@ def test_tracked_returns_the_bare_object_cache_by_type():
 
 
 def test_tracked_unknown_kind_is_empty_not_error():
-    # an uncached kind yields an empty list, so a caller can iterate without
-    # guarding for absence (ToolResult is not a cached kind)
+    """tracked(ToolResult), not a cached kind, returns [] instead of raising."""
+    # so a caller can iterate without guarding for absence
     ctx = TokeoAiContext()
     assert ctx.tracked(ToolResult) == []
 
 
 def test_supersede_with_none_records_an_unchanged_step_and_keeps_the_cache():
-    # a guard that returns None added no new object: a step is still recorded
-    # (the guard ran, attributable), but the cache is untouched and the working
-    # reference is unchanged
+    """A guard returning None gets an unchanged step; cache and reference stay."""
+    # the step is still recorded: the guard ran and is attributable
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     guard = object()
@@ -167,8 +164,7 @@ def test_supersede_with_none_records_an_unchanged_step_and_keeps_the_cache():
 
 
 def test_supersede_with_same_object_is_also_unchanged():
-    # returning the same object (not a fresh one) is the same as returning None:
-    # no new state, an unchanged step
+    """A guard returning the same object gets an unchanged step, as for None."""
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     returned = ctx.supersede(object(), invocation, invocation)
@@ -178,8 +174,8 @@ def test_supersede_with_same_object_is_also_unchanged():
 
 
 def test_supersede_with_a_new_object_swaps_the_cache_and_records_a_changed_step():
-    # a guard that returns a fresh copy supersedes the last cache entry of its
-    # kind; the step is marked changed and the copy becomes the working reference
+    """A guard's fresh copy replaces the cached Invocation, the step is changed."""
+    # the copy becomes the working reference
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     guard = object()
@@ -198,7 +194,8 @@ def test_supersede_with_a_new_object_swaps_the_cache_and_records_a_changed_step(
 
 
 def test_supersede_with_wrong_type_raises():
-    # an on_return guard must return an Invocation; returning another kind is a
+    """A str returned for an Invocation makes supersede raise TokeoAiError."""
+    # an on_return guard must return an Invocation; another kind is a guard
     # bug, so supersede fails loud rather than mis-filing it
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
@@ -210,7 +207,7 @@ def test_supersede_with_wrong_type_raises():
 
 
 def test_cur_invocation_is_the_latest_tool_call():
-    # cur_invocation is a convenience over the invocations cache's last entry
+    """cur_invocation is the last cached Invocation: None, then t1, then t2."""
     ctx = TokeoAiContext()
     assert ctx.cur_invocation is None
     first = ctx.track(object(), Invocation(id='t1', name='calc'))
@@ -220,8 +217,7 @@ def test_cur_invocation_is_the_latest_tool_call():
 
 
 def test_status_counters_are_mutable_in_place():
-    # the loop advances the counters on the status struct; they live there, not
-    # on the context directly
+    """The loop counters live on ctx.loopdata and are advanced there in place."""
     ctx = TokeoAiContext()
     ctx.loopdata.steps += 1
     ctx.loopdata.failed_loops += 2
@@ -230,15 +226,14 @@ def test_status_counters_are_mutable_in_place():
 
 
 def test_userdata_defaults_to_none():
-    # no userdata given means the field is present and None, so a guard can
-    # read it unconditionally
+    """Without userdata the field is there and None, so a guard can read it."""
     ctx = TokeoAiContext()
     assert ctx.userdata is None
 
 
 def test_userdata_is_carried_unchanged_as_the_same_reference():
-    # the framework never copies or interprets userdata: whatever the caller
-    # set is the exact same object on the context (a string, a dict, anything)
+    """userdata is the caller's very object, a dict or 'client-42', never copied."""
+    # the framework never copies or interprets userdata
     marker = {'session': 'abc', 'nested': [1, 2]}
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}], userdata=marker)
     assert ctx.userdata is marker
@@ -248,8 +243,9 @@ def test_userdata_is_carried_unchanged_as_the_same_reference():
 
 
 def test_track_and_supersede_record_the_stage_on_the_step():
-    # the stage that produced a step is recorded on it, so the trace is readable
-    # without inferring the station from order; a loop track has no stage (None)
+    """A loop track records stage None, a supersede at on_call records 'on_call'."""
+    # the stage on the step makes the trace readable without inferring the
+    # station from order
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     assert ctx.trace[-1].stage is None
@@ -259,9 +255,9 @@ def test_track_and_supersede_record_the_stage_on_the_step():
 
 
 def test_refine_messages_in_place_records_an_unchanged_step():
-    # a begin/prompt guard that mutates ctx.messages in place returns None; the
-    # step is recorded (the guard is on the trace) but changed is False and the
-    # cache is left as the same live list
+    """A guard refining in place gets an unchanged on_begin step, list kept."""
+    # a begin/prompt guard that mutates ctx.messages in place returns None; it
+    # is on the trace and the cache stays the same live list
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     before = ctx.messages
     returned = ctx.refine_messages(object(), None, stage='on_begin')
@@ -271,7 +267,7 @@ def test_refine_messages_in_place_records_an_unchanged_step():
 
 
 def test_refine_messages_same_list_is_also_unchanged():
-    # returning the live messages list itself counts as in place, not a replace
+    """Returning the live messages list counts as in place: an unchanged step."""
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     returned = ctx.refine_messages(object(), ctx.messages, stage='on_prompt')
     assert returned is ctx.messages
@@ -279,9 +275,9 @@ def test_refine_messages_same_list_is_also_unchanged():
 
 
 def test_refine_messages_with_a_new_list_replaces_the_whole_conversation():
-    # a guard that hands back a fresh conversation (a system turn injected)
-    # replaces the WHOLE messages cache in place, records a changed step, and
-    # wraps plain dicts as ChatMessage so the cache stays typed
+    """A new list with a system turn replaces the whole live conversation."""
+    # the step is marked changed; plain dicts are wrapped as ChatMessage so the
+    # cache stays typed
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     live = ctx.messages
     new_convo = [{'role': 'system', 'content': 'be brief'}, {'role': 'user', 'content': 'hi'}]
@@ -295,8 +291,9 @@ def test_refine_messages_with_a_new_list_replaces_the_whole_conversation():
 
 
 def test_refine_messages_with_an_invalid_list_raises():
-    # a returned conversation must be a list of mappings; anything else is a
-    # guard bug, so refine_messages fails loud rather than corrupting the cache
+    """A returned ['not a message'] makes refine_messages raise TokeoAiError."""
+    # a conversation must be a list of mappings; anything else is a guard bug,
+    # so refine_messages fails loud rather than corrupting the cache
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     try:
         ctx.refine_messages(object(), ['not a message'], stage='on_prompt')
@@ -306,8 +303,9 @@ def test_refine_messages_with_an_invalid_list_raises():
 
 
 def test_refine_messages_step_is_a_snapshot_not_the_live_list():
-    # a pre-model step must show the conversation as it stood at that stage; the
-    # live cache keeps growing, so the step holds a shallow copy, not the cache
+    """An on_begin step keeps its one message while the live list grows to two."""
+    # the step holds a shallow copy, so it shows the conversation as it stood
+    # at that stage
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     ctx.refine_messages(object(), None, stage='on_begin')
     begin_step = ctx.trace[-1]
@@ -320,8 +318,8 @@ def test_refine_messages_step_is_a_snapshot_not_the_live_list():
 
 
 def test_trace_false_skips_the_trace_but_fills_the_caches():
-    # with trace recording off, no steps are appended, but the typed caches
-    # still fill so guards keep working off messages/invocations/results
+    """With trace=False no steps are recorded, but the typed caches still fill."""
+    # so guards keep working off messages/invocations/results
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}], trace=False)
     ctx.track(object(), Invocation(id='t1', name='calc'))
     ctx.supersede(object(), None, ctx.cur_invocation, stage='on_call')
@@ -336,6 +334,7 @@ def test_trace_false_skips_the_trace_but_fills_the_caches():
 
 
 def test_track_wraps_plain_values_in_a_note():
+    """A str, a dict and an int are each traced as a TokeoAiTraceNote."""
     ctx = TokeoAiContext(messages=[])
     origin = object()
     ctx.track(origin, 'policy checked')
@@ -353,6 +352,7 @@ class _TrackMyKind:
 
 
 def test_track_passes_mykind_classes_through():
+    """An object of an own class is tracked as is, not wrapped in a note."""
     ctx = TokeoAiContext(messages=[])
     mykind = _TrackMyKind('mine')
     assert ctx.track(object(), mykind) is mykind
@@ -360,12 +360,14 @@ def test_track_passes_mykind_classes_through():
 
 
 def test_track_skips_none():
+    """track(None) returns None and records nothing on the trace."""
     ctx = TokeoAiContext(messages=[])
     assert ctx.track(object(), None) is None
     assert ctx.trace == []
 
 
 def test_note_keeps_origin_and_stage():
+    """A note's step keeps its origin and the stage 'on_call'."""
     ctx = TokeoAiContext(messages=[])
     origin = object()
     ctx.track(origin, 'checked', stage='on_call')
@@ -375,7 +377,7 @@ def test_note_keeps_origin_and_stage():
 
 
 def test_notes_do_not_reach_the_caches():
-    # a note is history, not state; the typed caches stay empty
+    """A note is history, not state: messages and invocations stay empty."""
     ctx = TokeoAiContext(messages=[])
     ctx.track(object(), 'just a note')
     assert ctx.messages == []

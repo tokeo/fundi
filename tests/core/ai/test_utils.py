@@ -17,7 +17,7 @@ from tokeo.core.ai.data import ChatResult
 
 
 def test_coerce_types_like_a_yaml_scalar():
-    # numbers, booleans and strings get their proper types
+    """'0.2', '42', 'true', 'null' get float, int, bool, None; 'qwen2.5' a str."""
     assert coerce_model_param_value('0.2') == 0.2
     assert coerce_model_param_value('42') == 42
     assert coerce_model_param_value('true') is True
@@ -27,43 +27,49 @@ def test_coerce_types_like_a_yaml_scalar():
 
 
 def test_parse_sets_typed_values():
+    """temperature=0.2, max_tokens=1024, model=qwen parse to typed values."""
     params = parse_model_params(['temperature=0.2', 'max_tokens=1024', 'model=qwen'])
     assert params == {'temperature': 0.2, 'max_tokens': 1024, 'model': 'qwen'}
 
 
 def test_parse_null_removes_a_key():
-    # null and empty both drop the key, so a later pair can undo an earlier one
+    """A later temperature=null undoes temperature=0.2: the key is gone."""
     params = parse_model_params(['temperature=0.2', 'temperature=null'])
     assert 'temperature' not in params
 
 
 def test_parse_empty_value_removes_a_key():
+    """A later empty top_p= undoes top_p=0.9: the key is gone."""
     params = parse_model_params(['top_p=0.9', 'top_p='])
     assert 'top_p' not in params
 
 
 def test_parse_later_value_overrides_earlier():
+    """temperature=0.9 after temperature=0.2 wins."""
     params = parse_model_params(['temperature=0.2', 'temperature=0.9'])
     assert params['temperature'] == 0.9
 
 
 def test_parse_value_with_equals_sign_is_kept_whole():
-    # partition keeps everything after the first '=' as the value
+    """stop=a=b keeps all after the first '=' as the value 'a=b'."""
     params = parse_model_params(['stop=a=b'])
     assert params['stop'] == 'a=b'
 
 
 def test_parse_rejects_token_without_equals():
+    """A token without '=' like 'temperature' raises TokeoAiError."""
     with pytest.raises(TokeoAiError):
         parse_model_params(['temperature'])
 
 
 def test_parse_rejects_empty_key():
+    """'=0.2' with an empty key raises TokeoAiError."""
     with pytest.raises(TokeoAiError):
         parse_model_params(['=0.2'])
 
 
 def test_parse_none_input_is_empty():
+    """None as input parses to an empty dict."""
     assert parse_model_params(None) == {}
 
 
@@ -75,6 +81,7 @@ def _blank_result():
 
 
 def test_add_tool_call_appends_with_a_counted_id():
+    """Two calls append in order with their ids inj_a, inj_b and arguments."""
     # a governor originates a call; the id is inj_<n> from loopdata, unique per turn
     result = add_tool_call(_blank_result(), 'load_report', 'inj_a', quarter='Q1')
     result = add_tool_call(result, 'load_report', 'inj_b', quarter='Q2')
@@ -83,13 +90,14 @@ def test_add_tool_call_appends_with_a_counted_id():
 
 
 def test_add_tool_call_returns_a_new_object():
-    # supersede only sees a change when the object differs
+    """add_tool_call returns a new object, the only change supersede sees."""
     before = _blank_result()
     after = add_tool_call(before, 'x', 'inj_1')
     assert after is not before
 
 
 def test_drop_tool_calls_by_name_and_all():
+    """drop_tool_calls with 'a' keeps only b; without a name it drops all."""
     result = add_tool_call(_blank_result(), 'a', 'inj_1')
     result = add_tool_call(result, 'b', 'inj_2')
     # by name: only a goes

@@ -21,6 +21,7 @@ from tokeo.core.ai.data import Invocation, ToolCall
 
 
 class AiTest(TokeoTest):
+    """Test app with the ai extension and the extensions it builds on."""
 
     class Meta:
         extensions = [
@@ -67,6 +68,7 @@ class PromptAndCallGovernor(TokeoAiGovernor):
 
 
 def _by_stage(app, governors):
+    """Return _governors_by_stage for a fixed flat list of governor objects."""
     # drive _governors_by_stage with a fixed flat governor list, so the test
     # targets the ordering logic (flat list -> per-stage lists), not agent
     # resolution. _governors_by_stage consumes resolved GovernorConfigEntry items
@@ -87,7 +89,7 @@ def _by_stage(app, governors):
 
 
 def test_each_stage_gets_its_own_ordered_list():
-    # a governor appears only in the lists of the stages it has, in flat-list order
+    """A governor is listed only at the stages it has, in flat-list order."""
     with AiTest() as app:
         a = OnCallGovernor(app)
         b = OnReturnGovernor(app)
@@ -100,7 +102,7 @@ def test_each_stage_gets_its_own_ordered_list():
 
 
 def test_order_within_a_stage_follows_the_flat_list():
-    # two governors of the same stage keep the flat list's order
+    """Two on_call governors keep the flat list's order, reversed when it is."""
     with AiTest() as app:
         first = OnCallGovernor(app)
         second = OnCallGovernor(app)
@@ -112,7 +114,7 @@ def test_order_within_a_stage_follows_the_flat_list():
 
 
 def test_a_governor_with_several_stages_appears_in_each():
-    # a governor that overrides two stages is in both stage lists
+    """A governor with on_call and on_return is in both stage lists."""
     with AiTest() as app:
         both = CallAndReturnGovernor(app)
         only_call = OnCallGovernor(app)
@@ -122,8 +124,7 @@ def test_a_governor_with_several_stages_appears_in_each():
 
 
 def test_stage_lists_are_independent_views_of_the_flat_order():
-    # the same governor can sit at different positions in different stage lists,
-    # because each stage filters the flat list on its own
+    """Each stage filters on its own: pc is 2nd at on_call, alone at on_prompt."""
     with AiTest() as app:
         pc = PromptAndCallGovernor(app)
         c = OnCallGovernor(app)
@@ -134,8 +135,7 @@ def test_stage_lists_are_independent_views_of_the_flat_order():
 
 
 def test_no_governors_gives_empty_lists_for_every_stage():
-    # an agent with no governors yields an empty list per stage (the loop then
-    # runs exactly as the ungoverned path)
+    """No governors give an empty list per stage, so the loop runs ungoverned."""
     with AiTest() as app:
         by_stage = _by_stage(app, [])
         assert all(by_stage[stage] == [] for stage in GOVERNOR_STAGES)
@@ -159,8 +159,8 @@ class DenyingOnReturn(TokeoAiConductor):
 
 
 def test_call_deny_without_reason_is_stamped_with_the_actor():
-    # the deny is honoured (roles are characters, the implementation
-    # decides) and the stamped reason names role + name, never 'a guard'
+    """A transformer's silent deny holds; reason names transformer 'shredder'."""
+    # roles are characters, the implementation decides; never 'a guard'
     with AiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'shredder')
@@ -174,7 +174,7 @@ def test_call_deny_without_reason_is_stamped_with_the_actor():
 
 
 def test_return_deny_keeps_a_named_reason_untouched():
-    # a governor-provided reason IS the text; the stamp only fills silence
+    """An on_return deny's own reason 'result rejected' is fed back unstamped."""
     with AiTest() as app:
         governor = DenyingOnReturn(app)
         governor._setup(app, 'rejector')
@@ -187,9 +187,7 @@ def test_return_deny_keeps_a_named_reason_untouched():
 
 
 def test_governor_config_reads_a_key_honouring_the_stage():
-    # the same key -> value contract as every other ai class; the stage is the
-    # governor's extra axis: an on_<stage> override wins there, the default
-    # view answers everywhere else, fallback covers an absent key
+    """An on_<stage> option wins at that stage, options elsewhere, then fallback."""
     with AiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(
@@ -208,9 +206,9 @@ def test_governor_config_reads_a_key_honouring_the_stage():
 
 
 def test_governor_label_reads_class_character_and_config_name():
-    # the role comes from the class (isinstance), the name from the config
-    # name _setup handed it; an object built without one reports as its full
-    # dotted class, the same form a point-of-use declaration writes
+    """The label is role + config name, or the dotted class for one never set up."""
+    # the role comes from the class (isinstance); the dotted class is the
+    # same form a point-of-use declaration writes
     with AiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'truncate')

@@ -32,6 +32,7 @@ class GreetTool(TokeoAiTool):
 
 
 def test_expand_env_scrubs_and_expands(monkeypatch):
+    """${NAME} takes built keys, then the host env, else ''; a bare $ stays."""
     monkeypatch.setenv('FUNDI_HOST_VAR', 'host-value')
     out = expand_env(
         {
@@ -59,6 +60,7 @@ def test_expand_env_scrubs_and_expands(monkeypatch):
 
 
 def test_runner_memory_cap_falls_back_per_platform(monkeypatch):
+    """With RLIMIT_AS refused (macos-style) a 64 MB cap goes to RLIMIT_DATA."""
     import resource as res_mod
     from tokeo.core.ai.sandboxes import runner
 
@@ -81,6 +83,7 @@ def test_runner_memory_cap_falls_back_per_platform(monkeypatch):
 
 
 def test_runner_memory_cap_soft_only_when_hard_is_refused(monkeypatch):
+    """A refused hard limit turns the pinned pair (cap, cap) into soft-only."""
     import resource as res_mod
     from tokeo.core.ai.sandboxes import runner
 
@@ -106,6 +109,7 @@ def test_runner_memory_cap_soft_only_when_hard_is_refused(monkeypatch):
 
 
 def test_runner_memory_cap_refuses_a_sham_setting(monkeypatch):
+    """A 64 MB cap that no mechanism accepts raises 'not enforceable'."""
     import resource as res_mod
     from tokeo.core.ai.sandboxes import runner
 
@@ -120,9 +124,12 @@ def test_runner_memory_cap_refuses_a_sham_setting(monkeypatch):
 
 
 def test_setup_reads_the_declaration_once_and_is_idempotent():
-    # the declaration is consumed at setup time (the extension rule: read the
-    # config once, then work off the attributes). a second setup with another
-    # declaration takes effect; nothing stale survives it
+    """
+    A second _setup replaces the first: prefix 'eins' becomes 'zwei'.
+
+    The declaration is read once at setup (the extension rule: read the
+    config once, then work off the attributes); nothing stale survives.
+    """
     tool = GreetTool(None)
     tool._setup(None, 'greeter', dict(options=dict(prefix='eins')))
     assert tool._config('prefix') == 'eins'
@@ -131,10 +138,13 @@ def test_setup_reads_the_declaration_once_and_is_idempotent():
 
 
 def test_an_object_without_setup_is_not_initialized():
-    # construction alone is not a lifecycle: setup IS the initialization. an
-    # object that never saw one fails on the first _config read with a named
-    # error instead of running on silently guessed settings; only _setup can
-    # hand in a config name (the property has no setter)
+    """
+    Without _setup the first _config read raises a named TokeoAiError.
+
+    Construction alone is not a lifecycle, setup is the initialization, so
+    nothing runs on guessed settings. config_name has no setter; only
+    _setup can hand one in.
+    """
     tool = GreetTool(None)
     assert tool.config_name == 'tests.core.ai.test_fundi.GreetTool'
     with pytest.raises(TokeoAiError, match='GreetTool: config options were not set by setup'):
@@ -144,9 +154,12 @@ def test_an_object_without_setup_is_not_initialized():
 
 
 def test_a_setup_without_a_config_yields_the_class_defaults():
-    # _setup with no declaration (the dotted-governor and unit-test path):
-    # the view is the class's config_defaults, and it is a deep copy, so a
-    # write into it can never bleed into the class-level dict
+    """
+    _setup without a declaration yields the class default prefix 'hello'.
+
+    This is the dotted-governor and unit-test path. The view is a deep copy,
+    so a write into it never bleeds into the class-level config_defaults.
+    """
     tool = GreetTool(None)
     tool._setup(None)
     assert tool.config_name == 'tests.core.ai.test_fundi.GreetTool'

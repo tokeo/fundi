@@ -34,8 +34,7 @@ class AiTest(TokeoTest):
 
 
 def test_tool_policy_denies_a_tool_on_the_denylist():
-    # the tool policy guard softly denies a call whose tool is on the denylist:
-    # decision becomes DENY with a reason, the loop would continue
+    """append_file on the denylist gets a soft DENY: 'not permitted by policy'."""
     with AiTest() as app:
         guard = TokeoAiToolPolicyGuard(app)
         guard._setup(app, 'policy', {'options': {'deny': ['append_file']}})
@@ -46,8 +45,7 @@ def test_tool_policy_denies_a_tool_on_the_denylist():
 
 
 def test_tool_policy_allows_a_tool_not_denied():
-    # a tool not on the denylist (and within the allowlist if set) is left to
-    # run: decision stays ALLOW
+    """calc, not on the denylist and with no allowlist set, stays ALLOW."""
     with AiTest() as app:
         guard = TokeoAiToolPolicyGuard(app)
         guard._setup(app, 'policy', {'options': {'deny': ['append_file']}})
@@ -57,8 +55,7 @@ def test_tool_policy_allows_a_tool_not_denied():
 
 
 def test_tool_policy_allowlist_restricts_to_its_members():
-    # with an allowlist set, a tool not in it is denied (allow wins as a
-    # restriction; deny would still win over allow)
+    """With allow ['calc'] calc stays ALLOW, time gets DENY; deny beats allow."""
     with AiTest() as app:
         guard = TokeoAiToolPolicyGuard(app)
         guard._setup(app, 'policy', {'options': {'allow': ['calc']}})
@@ -71,8 +68,7 @@ def test_tool_policy_allowlist_restricts_to_its_members():
 
 
 def test_deny_policy_softly_denies_at_the_tool_stages():
-    # the deny policy guard always denies; at the tool stages the denial is soft
-    # (decision = DENY, no exception), so the loop would continue
+    """The deny guard sets DENY at on_call and on_return, no raise, loop goes on."""
     with AiTest() as app:
         guard = TokeoAiDenyPolicyGuard(app)
         on_call = Invocation(id='t1', name='calc', arguments={})
@@ -84,8 +80,12 @@ def test_deny_policy_softly_denies_at_the_tool_stages():
 
 
 def test_deny_policy_raises_at_the_non_tool_stages_for_now():
-    # at the non-tool stages a soft denial is not defined yet, so the deny
-    # policy guard raises (a temporary hard stop, the TODO placeholder)
+    """
+    The deny guard raises at on_begin, on_prompt, on_answer and on_close.
+
+    A soft denial is not defined at the non-tool stages yet, so this is a
+    temporary hard stop (the TODO placeholder).
+    """
     with AiTest() as app:
         guard = TokeoAiDenyPolicyGuard(app)
         for call in (
@@ -102,8 +102,7 @@ def test_deny_policy_raises_at_the_non_tool_stages_for_now():
 
 
 def test_abort_policy_raises_at_every_stage():
-    # the abort policy guard is an unconditional hard stop: every stage raises,
-    # so the run ends wherever it sits
+    """The abort guard raises at all six stages, so the run ends wherever it is."""
     with AiTest() as app:
         guard = TokeoAiAbortPolicyGuard(app)
         invocation = Invocation(id='t1', name='calc', arguments={})

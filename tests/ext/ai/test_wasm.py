@@ -19,8 +19,8 @@ from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExec
 
 
 def test_wasm_missing_mount_path_names_the_path(tmp):
-    # a mount whose host path does not exist must fail with a clear message
-    # naming the path, not a bare wasmtime "failed to add preopen dir"
+    """A mount of '/no/such/host/path' raises TokeoAiError naming that path."""
+    # not a bare wasmtime "failed to add preopen dir"
     pytest.importorskip('wasmtime')
     runtime = os.path.join(tmp.dir, 'python.wasm')
     with open(runtime, 'wb') as f:
@@ -45,8 +45,8 @@ def test_wasm_missing_mount_path_names_the_path(tmp):
 
 
 def test_untrusted_exec_non_json_value_is_returned_raw():
-    # the tool no longer screens for json-ability; it returns the raw object
-    # and the sandbox's encoder decides how to represent it (and flags loss)
+    """exec returns object() raw; the tool no longer screens for JSON."""
+    # the sandbox's encoder decides how to represent it (and flags loss)
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert isinstance(tool.exec(code='object()'), object)
 
@@ -95,6 +95,7 @@ class WasmTest(TokeoTest):
 
 
 def wasm_ai_config():
+    """An ai config with the untrusted and the trusted tool, each behind wasm."""
     # a self-contained ai config with BOTH built-in tools, each behind a wasm
     # sandbox: the untrusted tool runs directly in the guest (no app mount), the
     # trusted tool is rebuilt in the guest, so its sandbox mounts the tokeo
@@ -154,8 +155,8 @@ def wasm_ai_config():
     reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_untrusted_exec_through_the_agent_chain():
-    # the untrusted tool runs the snippet directly in the guest (no app
-    # mount) and the result crosses the file bridge back
+    """Untrusted, statistics.median([5, 1, 9, 3, 7]) runs in the guest: '5'."""
+    # no app mount; the result crosses the file bridge back
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
@@ -177,8 +178,7 @@ def test_untrusted_exec_through_the_agent_chain():
     reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_trusted_exec_through_the_agent_chain():
-    # the trusted tool is rebuilt in the guest from the mounted tokeo source;
-    # proving the snippet can import tokeo confirms the app is reachable there
+    """The trusted tool, rebuilt from the mounted source, imports tokeo: 'True'."""
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('trusted_coder')
         out = app.ai._exec_in_sandbox(
@@ -200,11 +200,14 @@ def test_trusted_exec_through_the_agent_chain():
     reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_untrusted_guest_cannot_import_the_framework():
-    # the untrusted path mounts the pact contract (tokeo.pact) but no framework,
-    # so the bare tokeo namespace and tokeo.pact resolve by design, while the
-    # framework does not: importing tokeo.core fails in the guest, recorded as a
-    # tool exception on the result (A) with no value; the framework stays
-    # invisible to untrusted code even though the inert contract is visible
+    """
+    Untrusted, import tokeo.core.ai fails with ModuleNotFoundError and no value.
+
+    The untrusted path mounts the pact contract (tokeo.pact) but no framework,
+    so the bare tokeo namespace and tokeo.pact resolve by design while
+    tokeo.core does not. The failure is a tool exception on the result (A): the
+    framework stays invisible even though the inert contract is visible.
+    """
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
@@ -225,10 +228,13 @@ def test_untrusted_guest_cannot_import_the_framework():
     reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_wasm_guest_has_no_network():
-    # the guest must not reach the network; the syscalls do not exist in its
-    # world, so the resolver call fails: no value, the failure on the result's
-    # state (A). the exception type is build-specific (gaierror/OSError, or a
-    # missing socket module), so only the recorded failure is asserted
+    """
+    socket.gethostbyname('example.com') fails in the guest: no value, an exception.
+
+    The network syscalls do not exist in the guest's world, so the failure lands
+    on the result's state (A). Its type is build-specific (gaierror, OSError or
+    a missing socket module), so only the recorded failure is asserted.
+    """
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
@@ -249,9 +255,13 @@ def test_wasm_guest_has_no_network():
     reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
 def test_wasm_guest_cannot_write_a_read_only_mount():
-    # the stdlib is mounted at /lib with fs_mutable off: a write there fails in
-    # the guest, recorded as a tool exception on the result (A), and no file
-    # reaches the host; the io scratch stays the only writable surface
+    """
+    Writing /lib/tokeo_wasm_probe.txt fails with PermissionError, no host file.
+
+    The stdlib is mounted at /lib with fs_mutable off, so the write fails in the
+    guest as a tool exception on the result (A), with no value; the io scratch
+    stays the only writable surface.
+    """
     probe = os.path.join(_STDLIB, 'tokeo_wasm_probe.txt')
     with WasmTest(config_defaults=wasm_ai_config()) as app:
         agent = app.ai._agent('untrusted_coder')

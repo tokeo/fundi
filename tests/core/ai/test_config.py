@@ -35,7 +35,7 @@ def _resolve(guards_section, agent_guards, agent_omit=None):
 
 
 def test_bare_name_runs_all_class_stages():
-    # a bare name is additive: all the stages the class can do
+    """A bare 'alpha' is additive: it runs at all three stages its class can do."""
     entries = _resolve({}, ['alpha'])
     assert len(entries) == 1
     assert entries[0].config_name == 'alpha'
@@ -43,27 +43,27 @@ def test_bare_name_runs_all_class_stages():
 
 
 def test_stage_list_runs_only_named_stages():
-    # a {name: [stages]} entry is replacing: only the listed stages, intersected
-    # with what the class can do
+    """{'alpha': ['on_call']} replaces the class stages: only on_call runs."""
+    # the listed stages are intersected with what the class can do
     entries = _resolve({}, [{'alpha': ['on_call']}])
     assert entries[0].stages == frozenset({'on_call'})
 
 
 def test_any_token_means_all_class_stages():
-    # [_any] is the explicit form of the bare name: all the class's stages
+    """[_any] is the explicit form of the bare name: all three class stages run."""
     entries = _resolve({}, [{'alpha': [GOVERNOR_STAGE_ANY]}])
     assert entries[0].stages == frozenset({'on_prompt', 'on_call', 'on_return'})
 
 
 def test_named_stage_the_class_cannot_do_is_dropped():
-    # a named stage the class does not implement is intersected away (the linter
-    # flags it; the resolver does not block the run)
+    """on_begin, which the class cannot do, is dropped and only on_call is left."""
+    # the linter flags such a stage; the resolver does not block the run
     entries = _resolve({}, [{'alpha': ['on_call', 'on_begin']}])
     assert entries[0].stages == frozenset({'on_call'})
 
 
 def test_empty_stage_list_is_an_error():
-    # an empty / null / [] stage list is too easily a mistake to read as intent
+    """A [] or a null stage list raises TokeoAiError, too easily a mistake."""
     with pytest.raises(TokeoAiError):
         _resolve({}, [{'alpha': []}])
     with pytest.raises(TokeoAiError):
@@ -71,27 +71,27 @@ def test_empty_stage_list_is_an_error():
 
 
 def test_order_is_first_appearance():
-    # entries keep their first-appearance order
+    """alpha, beta, gamma come back in the order they first appear."""
     entries = _resolve({}, ['alpha', 'beta', 'gamma'])
     assert [e.config_name for e in entries] == ['alpha', 'beta', 'gamma']
 
 
 def test_same_config_name_same_stages_collapses_silently():
-    # the same config name named twice with the SAME participation collapses to one
+    """{'alpha': ['on_call']} named twice collapses silently into one entry."""
     entries = _resolve({}, [{'alpha': ['on_call']}, {'alpha': ['on_call']}])
     assert len(entries) == 1
     assert entries[0].stages == frozenset({'on_call'})
 
 
 def test_same_config_name_different_stages_same_level_is_error():
-    # the same config name twice on one level with DIFFERENT stages is not
-    # decidable; to run it at several stages, name them in one stage list
+    """alpha at on_call and at on_return on one level is not decidable: raises."""
+    # to run it at several stages, name them in one stage list
     with pytest.raises(TokeoAiError):
         _resolve({}, [{'alpha': ['on_call']}, {'alpha': ['on_return']}])
 
 
 def test_a_chain_is_expanded_in_place():
-    # a list value under ai.guards is a chain; referencing it expands its members
+    """A chain under ai.guards expands in place: alpha, beta (on_call), gamma."""
     section = {'my_chain': ['alpha', {'beta': ['on_call']}]}
     entries = _resolve(section, ['my_chain', 'gamma'])
     assert [e.config_name for e in entries] == ['alpha', 'beta', 'gamma']
@@ -99,28 +99,29 @@ def test_a_chain_is_expanded_in_place():
 
 
 def test_a_chain_may_import_another_chain():
+    """The chain outer imports the chain inner: alpha, then beta."""
     section = {'inner': ['alpha'], 'outer': ['inner', 'beta']}
     entries = _resolve(section, ['outer'])
     assert [e.config_name for e in entries] == ['alpha', 'beta']
 
 
 def test_a_chain_cycle_is_an_error():
+    """Chains a and b importing each other raise TokeoAiError (cycle)."""
     section = {'a': ['b'], 'b': ['a']}
     with pytest.raises(TokeoAiError):
         _resolve(section, ['a'])
 
 
 def test_two_chains_contradicting_is_an_error():
-    # the same config name with different stages from two equal chains is not
-    # decidable (no nearer form to rank them): an error
+    """chainA and chainB give alpha different stages: no nearer form, raises."""
     section = {'chainA': [{'alpha': ['on_call']}], 'chainB': [{'alpha': ['on_return']}]}
     with pytest.raises(TokeoAiError):
         _resolve(section, ['chainA', 'chainB'])
 
 
 def test_agent_over_chain_logs_a_note_and_agent_wins():
-    # an agent's direct stage list overrides a chain's for the same config name
-    # (nearest wins); a logger gets a note that the agent overrode the chain
+    """The agent's alpha at on_return beats the chain's, one note is logged."""
+    # nearest wins
     section = {'chainA': [{'alpha': ['on_call']}]}
     notes = []
 
@@ -136,16 +137,15 @@ def test_agent_over_chain_logs_a_note_and_agent_wins():
 
 
 def test_omit_drops_a_config_name():
-    # omit removes a named config name from the composition (e.g. one a chain
-    # brought in), by the name as written
+    """omit=['beta'] drops beta that my_chain brought in: alpha, gamma remain."""
+    # omit matches by the name as written
     section = {'my_chain': ['alpha', 'beta']}
     entries = _resolve(section, ['my_chain', 'gamma'], agent_omit=['beta'])
     assert [e.config_name for e in entries] == ['alpha', 'gamma']
 
 
 def test_agent_entry_wins_over_chain_for_same_config_name():
-    # nearest wins: an agent's direct stage list overrides a chain's for the
-    # same config name; the agent form replaces, not unions
+    """Nearest wins: the agent's on_return replaces the chain's on_call."""
     section = {'my_chain': [{'alpha': ['on_call']}]}
     entries = _resolve(section, ['my_chain', {'alpha': ['on_return']}])
     assert len(entries) == 1
@@ -153,6 +153,7 @@ def test_agent_entry_wins_over_chain_for_same_config_name():
 
 
 def test_parse_bare_and_mapping_forms():
+    """A name and a one-key mapping parse; two keys or an int raise TokeoAiError."""
     assert parse_entry('alpha') == ('alpha', None)
     assert parse_entry({'alpha': ['on_call']}) == ('alpha', ['on_call'])
     with pytest.raises(TokeoAiError):
@@ -165,30 +166,31 @@ def test_parse_bare_and_mapping_forms():
 
 
 def test_tools_bare_name_passes_through():
-    # a name that is not a group is an item, returned as-is
+    """calc, which is not a group, passes through as an item."""
     assert resolve_tools(['calc'], {}) == ['calc']
 
 
 def test_tools_group_expands_to_members():
-    # a group name expands to its members, in order
+    """The group math expands to its members in order: calc, stats."""
     groups = {'math': ['calc', 'stats']}
     assert resolve_tools(['math'], groups) == ['calc', 'stats']
 
 
 def test_tools_groups_nest_and_dedupe():
-    # a group may contain a group; order is kept and duplicates dropped
+    """A group in a group expands in order with duplicates dropped: a, b, c."""
     groups = {'inner': ['a', 'b'], 'outer': ['inner', 'b', 'c']}
     assert resolve_tools(['outer'], groups) == ['a', 'b', 'c']
 
 
 def test_tools_cycle_is_broken_not_raised():
-    # resolve_tools breaks a cyclic membership silently (find_cycles reports it)
+    """resolve_tools breaks the cycle a, b silently; find_cycles reports it."""
     groups = {'a': ['b'], 'b': ['a']}
     # no infinite loop, returns the reachable items
     resolve_tools(['a'], groups)
 
 
 def test_find_cycles_reports_a_self_containing_group():
+    """Groups a and b containing each other are reported, the group free is not."""
     groups = {'a': ['b'], 'b': ['a'], 'free': ['x']}
     cyclic = find_cycles(groups)
     assert 'a' in cyclic and 'b' in cyclic
@@ -196,6 +198,7 @@ def test_find_cycles_reports_a_self_containing_group():
 
 
 def test_find_cycles_empty_when_acyclic():
+    """An acyclic group mapping yields an empty set."""
     assert find_cycles({'g': ['a', 'b']}) == set()
 
 
@@ -208,27 +211,32 @@ def _resolve_passthrough(names):
 
 
 def test_sandbox_all_keyword_contains_every_tool():
+    """A sandbox with tools: _all contains any tool name."""
     assert sandbox_contains_tool({'tools': '_all'}, 'anything', _resolve_passthrough)
 
 
 def test_sandbox_listed_tool_is_contained():
+    """A sandbox with tools: [calc] contains calc and not other."""
     assert sandbox_contains_tool({'tools': ['calc']}, 'calc', _resolve_passthrough)
     assert not sandbox_contains_tool({'tools': ['calc']}, 'other', _resolve_passthrough)
 
 
 def test_sandbox_except_excludes_from_this_sandbox():
+    """except: [calc] takes calc out of an _all sandbox, other stays in."""
     item = {'tools': '_all', 'except': ['calc']}
     assert not sandbox_contains_tool(item, 'calc', _resolve_passthrough)
     assert sandbox_contains_tool(item, 'other', _resolve_passthrough)
 
 
 def test_sandbox_scalar_tools_and_except_are_one_name():
-    # a single name (a scalar) is one name, not iterated chars (as_list)
+    """A scalar 'calc' in tools or except is one name, not iterated chars."""
+    # as_list does that
     assert sandbox_contains_tool({'tools': 'calc'}, 'calc', _resolve_passthrough)
     assert not sandbox_contains_tool({'tools': '_all', 'except': 'calc'}, 'calc', _resolve_passthrough)
 
 
 def test_sandbox_for_takes_first_matching_in_chain():
+    """The first containing sandbox wins: calc in jailed, other in allow."""
     items = {'jailed': {'tools': ['calc']}, 'allow': {'tools': '_all'}}
     # calc is in jailed (first); other falls through to allow
     assert sandbox_for('calc', ['jailed', 'allow'], items.get, _resolve_passthrough) == 'jailed'
@@ -236,6 +244,7 @@ def test_sandbox_for_takes_first_matching_in_chain():
 
 
 def test_sandbox_for_exhausted_chain_returns_none():
+    """No sandbox in the chain contains other: sandbox_for returns None."""
     items = {'jailed': {'tools': ['calc']}}
     assert sandbox_for('other', ['jailed'], items.get, _resolve_passthrough) is None
 
@@ -250,38 +259,45 @@ _PROFILES = {
 
 
 def test_profile_default_when_no_selector():
+    """Without a selector the default profile mock is resolved."""
     assert resolve_profile(_PROFILES, 'mock')[0] == 'mock'
 
 
 def test_profile_by_purpose_and_model():
+    """purpose 'mocking' and model 'm1' (from options) each select mock."""
     assert resolve_profile(_PROFILES, None, purpose='mocking')[0] == 'mock'
     assert resolve_profile(_PROFILES, None, model='m1')[0] == 'mock'
 
 
 def test_profile_more_than_one_selector_is_an_error():
+    """Selecting by profile and model at once raises TokeoAiError."""
     with pytest.raises(TokeoAiError):
         resolve_profile(_PROFILES, None, profile='mock', model='m1')
 
 
 def test_profile_no_selector_no_default_is_an_error():
+    """No selector and no default profile raise TokeoAiError."""
     with pytest.raises(TokeoAiError):
         resolve_profile(_PROFILES, None)
 
 
 def test_profile_disabled_is_not_found():
+    """The disabled profile off is not found by its name: TokeoAiError."""
     with pytest.raises(TokeoAiError):
         find_profile(_PROFILES, 'profile', 'off')
 
 
 def test_agent_name_call_argument_wins():
+    """The call argument 'explicit' wins over the profile and the default."""
     assert resolve_agent_name('explicit', _PROFILES['mock'], 'default_x') == 'explicit'
 
 
 def test_agent_name_from_profile_then_default():
+    """Without a call argument the profile's guarded is used, else default_x."""
     assert resolve_agent_name(None, _PROFILES['mock'], 'default_x') == 'guarded'
     assert resolve_agent_name(None, {}, 'default_x') == 'default_x'
 
 
 def test_agent_name_profile_null_opts_out():
-    # an explicit agent: null on the profile opts out, overriding the default
+    """An explicit agent: null on the profile opts out: None despite default_x."""
     assert resolve_agent_name(None, {'agent': None}, 'default_x') is None

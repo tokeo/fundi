@@ -37,6 +37,8 @@ def _provider_with(handler, monkeypatch):
 
 
 def test_oai_compat_maps_text_and_usage(monkeypatch):
+    """Text 'hello there', finish 'stop' and 7 total tokens map into ChatResult."""
+
     def handler(request):
         return httpx.Response(
             200,
@@ -56,6 +58,8 @@ def test_oai_compat_maps_text_and_usage(monkeypatch):
 
 
 def test_oai_compat_maps_tool_calls_with_json_string_args(monkeypatch):
+    """Tool call call_abc to calc maps with its JSON-string arguments as dict."""
+
     def handler(request):
         return httpx.Response(
             200,
@@ -87,6 +91,8 @@ def test_oai_compat_maps_tool_calls_with_json_string_args(monkeypatch):
 
 
 def test_oai_compat_tolerates_malformed_tool_arguments(monkeypatch):
+    """Tool arguments 'not json' map to an empty dict instead of a crash."""
+
     def handler(request):
         return httpx.Response(
             200,
@@ -100,6 +106,8 @@ def test_oai_compat_tolerates_malformed_tool_arguments(monkeypatch):
 
 
 def test_oai_compat_keeps_reasoning_apart(monkeypatch):
+    """Reasoning 'because' lands in reasoning, apart from the text 'answer'."""
+
     def handler(request):
         return httpx.Response(200, json={'choices': [{'message': {'content': 'answer', 'reasoning': 'because'}}]})
 
@@ -109,6 +117,7 @@ def test_oai_compat_keeps_reasoning_apart(monkeypatch):
 
 
 def test_oai_compat_sends_tools_and_auth_only_when_present(monkeypatch):
+    """A key goes out as 'Bearer secret-token' and the tools in the body."""
     seen = {}
 
     def handler(request):
@@ -126,6 +135,7 @@ def test_oai_compat_sends_tools_and_auth_only_when_present(monkeypatch):
 
 
 def test_oai_compat_omits_auth_and_tools_when_absent(monkeypatch):
+    """Without key and tools no Authorization header and no tools are sent."""
     seen = {}
 
     def handler(request):
@@ -140,6 +150,8 @@ def test_oai_compat_omits_auth_and_tools_when_absent(monkeypatch):
 
 
 def test_oai_compat_unreachable_endpoint_raises_clear_error(monkeypatch):
+    """A refused connection raises TokeoAiError 'not reachable'."""
+
     def handler(request):
         raise httpx.ConnectError('connection refused')
 
@@ -150,6 +162,8 @@ def test_oai_compat_unreachable_endpoint_raises_clear_error(monkeypatch):
 
 
 def test_oai_compat_http_error_status_raises_with_excerpt(monkeypatch):
+    """A 401 reply raises TokeoAiError naming 'HTTP 401'."""
+
     def handler(request):
         return httpx.Response(401, text='unauthorized: bad key')
 
@@ -160,12 +174,14 @@ def test_oai_compat_http_error_status_raises_with_excerpt(monkeypatch):
 
 
 def test_oai_compat_requires_base_url_and_model():
+    """A profile without base_url raises TokeoAiError."""
     provider = TokeoAiOaiCompatProvider(None)
     with pytest.raises(TokeoAiError):
         provider.chat({'options': {'model': 'm'}}, [{'role': 'user', 'content': 'hi'}])
 
 
 def test_oai_compat_sends_profile_model_params(monkeypatch):
+    """Profile model_params temperature 0.2 and top_p 0.9 go into the body."""
     seen = {}
 
     def handler(request):
@@ -182,6 +198,7 @@ def test_oai_compat_sends_profile_model_params(monkeypatch):
 
 
 def test_oai_compat_call_params_override_profile(monkeypatch):
+    """A call temperature 0.9 overrides the profile 0.2; top_p 0.9 stays."""
     seen = {}
 
     def handler(request):
@@ -197,6 +214,7 @@ def test_oai_compat_call_params_override_profile(monkeypatch):
 
 
 def test_oai_compat_model_param_overrides_profile_model(monkeypatch):
+    """model in the call model_params sends 'override-model' instead."""
     seen = {}
 
     def handler(request):
@@ -213,6 +231,8 @@ def test_oai_compat_model_param_overrides_profile_model(monkeypatch):
 
 
 def test_oai_compat_maps_refusal(monkeypatch):
+    """Refusal 'I cannot help with that' lands in refusal; text stays ''."""
+
     def handler(request):
         return httpx.Response(200, json={'choices': [{'message': {'refusal': 'I cannot help with that'}, 'finish_reason': 'stop'}]})
 
@@ -224,6 +244,8 @@ def test_oai_compat_maps_refusal(monkeypatch):
 
 
 def test_oai_compat_maps_system_fingerprint(monkeypatch):
+    """system_fingerprint 'fp_abc123' is mapped onto the ChatResult."""
+
     def handler(request):
         return httpx.Response(200, json={'system_fingerprint': 'fp_abc123', 'choices': [{'message': {'content': 'ok'}}]})
 

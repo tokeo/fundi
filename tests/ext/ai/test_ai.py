@@ -36,6 +36,7 @@ SLEEP = 'tests.ext.ai.ai_tests_helper.SleepTool'
 
 
 class FundiTest(TokeoTest):
+    """Test app with the ai extension and the extensions it builds on."""
 
     class Meta:
         extensions = [
@@ -49,6 +50,7 @@ class FundiTest(TokeoTest):
 
 
 def ai_config():
+    """Return the ai config every test starts from, as config_defaults."""
     # a self-contained ai config: tools by dotted path, a group, both core
     # sandboxes (one subprocess "jailed", the in_process catch-all "allow"),
     # and agents that exercise every selection branch
@@ -102,6 +104,7 @@ def ai_config():
 
 
 def run(app, tool_name, agent_name, **arguments):
+    """Run one tool call through the agent's sandbox chain, return its text."""
     # drive just the seam: resolve the agent and execute one tool call through
     # its sandbox chain, returning the model-facing text. value is None when the
     # tool returned nothing, so guard the access
@@ -116,7 +119,7 @@ def run(app, tool_name, agent_name, **arguments):
 
 
 def test_fundi_agent_is_the_concrete_default():
-    # the standard agent is fundi, a concrete subclass of the declarative base
+    """'fundi' resolves to TokeoAiFundiAgent, a concrete TokeoAiAgent subclass."""
     assert issubclass(TokeoAiFundiAgent, TokeoAiAgent)
     with FundiTest(config_defaults=ai_config()) as app:
         assert app.ai.resolve('agent', 'fundi') is TokeoAiFundiAgent
@@ -131,6 +134,7 @@ def test_fundi_agent_is_the_concrete_default():
 
 
 def test_in_process_runs_directly():
+    """echo under the plain agent runs in process: 'hi' comes back as 'hi'."""
     with FundiTest(config_defaults=ai_config()) as app:
         assert run(app, 'echo', 'plain', text='hi') == 'hi'
 
@@ -141,28 +145,29 @@ def test_in_process_runs_directly():
 
 
 def test_subprocess_runs_in_a_child(tmp):
+    """echo under mixed runs in the jailed child, 'from-child' comes back."""
     with FundiTest(config_defaults=ai_config()) as app:
         # echo is in jailed.tools (subprocess) under the mixed agent
         assert run(app, 'echo', 'mixed', text='from-child') == 'from-child'
 
 
 def test_subprocess_cwd_takes_effect(tmp_path):
+    """The child runs in the sandbox's cwd <tmp_path>/sbx, made on demand."""
     cfg = ai_config()
     cfg['ai']['sandboxes']['jailed']['options']['cwd'] = str(tmp_path / 'sbx')
     with FundiTest(config_defaults=cfg) as app:
-        # the jailed sandbox runs in its cwd, made on demand; the tool reports it
         out = run(app, 'cwd', 'mixed')
         assert out == str(tmp_path / 'sbx')
 
 
 def test_subprocess_env_is_scrubbed():
+    """jailed lists no env, so host HOME is '<unset>' in the scrubbed child."""
     with FundiTest(config_defaults=ai_config()) as app:
-        # jailed lists no env, so the child sees a scrubbed environment; a
-        # common host var like HOME must come back unset
         assert run(app, 'env', 'mixed', name='HOME') == '<unset>'
 
 
 def test_subprocess_timeout_is_enforced():
+    """A 3 s sleep under a 1 s jailed timeout raises TokeoAiError 'timed out'."""
     cfg = ai_config()
     # tighten the jailed timeout and have the tool sleep past it
     cfg['ai']['sandboxes']['jailed']['options']['timeout'] = 1
@@ -177,6 +182,7 @@ def test_subprocess_timeout_is_enforced():
 
 
 def test_chain_picks_first_sandbox_whose_tools_contain():
+    """Under mixed, echo and env go to jailed, the first sandbox listing them."""
     with FundiTest(config_defaults=ai_config()) as app:
         agent = app.ai._agent('mixed')
         # echo is in jailed.tools (first in the chain) -> subprocess
@@ -186,6 +192,7 @@ def test_chain_picks_first_sandbox_whose_tools_contain():
 
 
 def test_except_skips_a_sandbox_and_chain_walks_on():
+    """partial excepts cwd: echo runs in partial, cwd walks on to allow."""
     with FundiTest(config_defaults=ai_config()) as app:
         agent = app.ai._agent('walking')
         # partial lists the bundle (echo, cwd) but excepts cwd; so echo runs
@@ -195,6 +202,7 @@ def test_except_skips_a_sandbox_and_chain_walks_on():
 
 
 def test_all_keyword_contains_every_tool():
+    """A sandbox with tools: _all takes any tool, e.g. sleep under plain."""
     with FundiTest(config_defaults=ai_config()) as app:
         agent = app.ai._agent('plain')
         # the allow sandbox has tools: _all, so any tool resolves to it
@@ -202,21 +210,22 @@ def test_all_keyword_contains_every_tool():
 
 
 def test_hard_deny_forbids_before_lookup():
+    """The agent's deny refuses echo before any sandbox lookup: 'is denied'."""
     with FundiTest(config_defaults=ai_config()) as app:
         with pytest.raises(TokeoAiError, match='is denied'):
             run(app, 'echo', 'banning', text='x')
 
 
 def test_empty_chain_denies_by_default():
+    """An agent with an empty sandbox chain refuses echo: 'no sandbox'."""
     with FundiTest(config_defaults=ai_config()) as app:
         with pytest.raises(TokeoAiError, match='no sandbox'):
             run(app, 'echo', 'empty', text='x')
 
 
 def test_profile_deny_subtracts_from_the_agent_set():
+    """Active is agent.tools minus profile.deny: echo + cwd minus cwd is echo."""
     with FundiTest(config_defaults=ai_config()) as app:
-        # the echoer agent carries echo + cwd; the narrow profile denies cwd,
-        # so the active set is just echo (agent.tools minus profile.deny)
         name, profile = app.ai._resolve(profile='narrow')
         agent = app.ai._agent('echoer')
         active = app.ai._tools_minus_deny(agent, profile)
@@ -224,9 +233,8 @@ def test_profile_deny_subtracts_from_the_agent_set():
 
 
 def test_profile_deny_is_enforced_at_exec():
+    """A profile-denied cwd is refused at exec, the defence behind trimmed specs."""
     with FundiTest(config_defaults=ai_config()) as app:
-        # even if a model calls a profile-denied tool, the seam refuses it as
-        # the defence line behind the trimmed specs
         name, profile = app.ai._resolve(profile='narrow')
         agent = app.ai._agent('echoer')
         with pytest.raises(TokeoAiError, match='is denied'):
@@ -234,22 +242,23 @@ def test_profile_deny_is_enforced_at_exec():
 
 
 def test_call_deny_narrows_further():
+    """A call-level deny of echo leaves echoer's echo + cwd as just ['cwd']."""
     with FundiTest(config_defaults=ai_config()) as app:
         agent = app.ai._agent('echoer')
-        # echoer carries echo + cwd; a call-level deny of echo leaves only cwd
         active = app.ai._tools_minus_deny(agent, None, ['echo'])
         assert active == ['cwd']
 
 
 def test_call_deny_is_enforced_at_exec():
+    """A call can only narrow: a call-denied echo is refused at the seam."""
     with FundiTest(config_defaults=ai_config()) as app:
         agent = app.ai._agent('echoer')
-        # a call can only narrow: a call-denied tool is refused at the seam
         with pytest.raises(TokeoAiError, match='is denied'):
             app.ai._exec_in_sandbox('echo', {'text': 'x'}, agent, None, ['echo'], None, None)
 
 
 def test_strict_agent_denies_unlisted_tool():
+    """strict runs jailed's echo; an unconfigured tool raises TokeoAiError."""
     with FundiTest(config_defaults=ai_config()) as app:
         # the strict agent has only jailed; jailed lists echo, so echo is ok
         assert run(app, 'echo', 'strict', text='ok') == 'ok'
@@ -265,6 +274,7 @@ def test_strict_agent_denies_unlisted_tool():
 
 
 def test_set_sandbox_overrides_the_chain():
+    """set_sandbox('jailed') beats plain's chain for echo; None restores it."""
     with FundiTest(config_defaults=ai_config()) as app:
         # force everything into jailed regardless of the agent; echo under the
         # plain agent would be in_process, but the override wins
@@ -277,6 +287,7 @@ def test_set_sandbox_overrides_the_chain():
 
 
 def test_set_sandbox_rejects_unknown():
+    """set_sandbox('does_not_exist') raises TokeoAiError right away."""
     with FundiTest(config_defaults=ai_config()) as app:
         with pytest.raises(TokeoAiError):
             app.ai.set_sandbox('does_not_exist')
@@ -288,6 +299,7 @@ def test_set_sandbox_rejects_unknown():
 
 
 def test_linter_accepts_a_sound_sandbox_config():
+    """The linter reports no error for the base ai_config()."""
     with FundiTest(config_defaults=ai_config()) as app:
         issues = TokeoAiLinter(app).lint()
         errors = [i for i in issues if i.level == 'error']
@@ -295,6 +307,7 @@ def test_linter_accepts_a_sound_sandbox_config():
 
 
 def test_linter_flags_unknown_sandbox_in_chain():
+    """A chain naming the undeclared sandbox 'ghost' is a linter error."""
     cfg = ai_config()
     cfg['ai']['agents']['plain']['options']['sandboxes'] = ['ghost']
     with FundiTest(config_defaults=cfg) as app:
@@ -303,7 +316,7 @@ def test_linter_flags_unknown_sandbox_in_chain():
 
 
 def test_linter_accepts_a_tuple_as_list():
-    # a config built in python may hand a tuple where yaml gives a list
+    """A chain built in python as tuple ('jailed',) lints clean like a yaml list."""
     cfg = ai_config()
     cfg['ai']['agents']['plain']['options']['sandboxes'] = ('jailed',)
     with FundiTest(config_defaults=cfg) as app:
@@ -312,6 +325,7 @@ def test_linter_accepts_a_tuple_as_list():
 
 
 def test_linter_flags_missing_sandbox_tools():
+    """A sandbox without tools is flagged: tools is required."""
     cfg = ai_config()
     del cfg['ai']['sandboxes']['jailed']['tools']
     with FundiTest(config_defaults=cfg) as app:
@@ -320,6 +334,7 @@ def test_linter_flags_missing_sandbox_tools():
 
 
 def test_linter_flags_unknown_subprocess_option():
+    """The unknown subprocess option 'net' is flagged by the linter."""
     cfg = ai_config()
     cfg['ai']['sandboxes']['jailed']['options']['net'] = False
     with FundiTest(config_defaults=cfg) as app:
@@ -328,8 +343,7 @@ def test_linter_flags_unknown_subprocess_option():
 
 
 def test_linter_warns_when_license_acknowledged_is_missing():
-    # the config of an app names license_acknowledged; without it the linter
-    # warns, with it (true or false) the key is known and no issue is raised
+    """Without license_acknowledged the linter warns; set, even to false, none."""
     cfg = ai_config()
     with FundiTest(config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
@@ -342,8 +356,7 @@ def test_linter_warns_when_license_acknowledged_is_missing():
 
 @pytest.mark.parametrize('value', [True, -1, 1.5, '3'])
 def test_linter_flags_max_steps_that_is_no_whole_number_of_0_or_more(value):
-    # max_steps and max_loops take a whole number, 0 for unlimited; a bool,
-    # a negative or a float is a mistake of the config
+    """A bool, negative, float or str max_steps is flagged; 0 means unlimited."""
     cfg = ai_config()
     cfg['ai']['agents']['plain']['options']['max_steps'] = value
     with FundiTest(config_defaults=cfg) as app:
@@ -352,8 +365,7 @@ def test_linter_flags_max_steps_that_is_no_whole_number_of_0_or_more(value):
 
 
 def test_subprocess_resolves_registry_alias_tools():
-    # the import path crosses the boundary as the canonical path of the
-    # LOADED class, so a registry alias in the config simply works
+    """A registry alias runs in the child: the LOADED class's path crosses over."""
     from tests.ext.ai.ai_tests_helper import EchoTool
 
     cfg = ai_config()
@@ -365,9 +377,9 @@ def test_subprocess_resolves_registry_alias_tools():
 
 
 def test_subprocess_refuses_classes_a_child_cannot_import():
-    # a nested class has no top-level module path the child could import;
-    # the sandbox refuses early with the reason (a script's __main__ case
-    # fails the same guard; ```python -m``` resolves via the module spec)
+    """A nested Outer.GhostTool is refused early, not importable by module path."""
+    # a script's __main__ case fails the same guard; ```python -m``` resolves
+    # via the module spec
     from tests.ext.ai.ai_tests_helper import EchoTool
 
     Ghost = type('GhostTool', (EchoTool,), {'__qualname__': 'Outer.GhostTool'})
@@ -379,8 +391,7 @@ def test_subprocess_refuses_classes_a_child_cannot_import():
 
 
 def test_subprocess_keeps_a_user_pythonpath_in_the_lead():
-    # env tool reports a variable; a PYTHONPATH listed in options.env must
-    # survive the parent-path injection (user first, parent appended)
+    """A PYTHONPATH in options.env stays first, the parent's path is appended."""
     cfg = ai_config()
     cfg['ai']['sandboxes']['jailed']['options']['env'] = {'PYTHONPATH': '/user/extra'}
     with FundiTest(config_defaults=cfg) as app:
@@ -394,16 +405,15 @@ def test_subprocess_keeps_a_user_pythonpath_in_the_lead():
 
 
 def test_setup_is_one_form_across_the_ai_classes():
-    # one way to hand a class what the config says about it: its key and its
-    # raw declaration. the handler writes no attributes from outside
+    """All ai classes set up via _setup(app, config_name, config), one form."""
+    # the handler writes no attributes from outside
     for cls in (TokeoAiProvider, TokeoAiSandbox, TokeoAiAgent, TokeoAiTool, TokeoAiGovernor):
         params = list(inspect.signature(cls._setup).parameters)
         assert params == ['self', 'app', 'config_name', 'config'], cls.__name__
 
 
 def test_a_tool_reads_its_declared_options_through_config():
-    # the declaration's options overlay the class's config_defaults, read
-    # lazily through the tool's own _config, the agent/sandbox pattern
+    """Option prefix='moin' overlays config_defaults, read lazily by _config."""
     with FundiTest(config_defaults=ai_config()) as app:
         assert run(app, 'greeter', 'plain', name='ada') == 'moin ada'
         tool = app.ai._tool('greeter')
@@ -412,15 +422,14 @@ def test_a_tool_reads_its_declared_options_through_config():
 
 
 def test_a_tool_without_options_runs_on_its_config_defaults():
-    # no options declared: the Meta defaults stand, no None leaks through
+    """No options declared: the Meta default 'hello' stands, no None leaks in."""
     with FundiTest(config_defaults=ai_config()) as app:
         assert run(app, 'plain_greeter', 'plain', name='ada') == 'hello ada'
         assert app.ai._tool('plain_greeter')._config('prefix') == 'hello'
 
 
 def test_two_declarations_of_one_class_stay_separate():
-    # the same class under two keys is two objects with two config names and
-    # two option sets; the class-level config_defaults is never mutated
+    """One class under two keys: two objects, names, options; defaults unmutated."""
     with FundiTest(config_defaults=ai_config()) as app:
         greeter, plain = app.ai._tool('greeter'), app.ai._tool('plain_greeter')
         assert greeter is not plain
@@ -431,9 +440,7 @@ def test_two_declarations_of_one_class_stay_separate():
 
 
 def test_options_do_not_reach_the_class_meta():
-    # options are config, description and parameters are code: an option key
-    # that happens to match a Meta key no longer rewrites the model-facing
-    # spec, because options are not spread onto the Meta any more
+    """An option named description stays an option, the spec keeps the Meta text."""
     cfg = ai_config()
     cfg['ai']['tools']['greeter']['options'] = dict(prefix='moin', description='REWRITTEN')
     with FundiTest(config_defaults=cfg) as app:
@@ -445,7 +452,6 @@ def test_options_do_not_reach_the_class_meta():
 
 
 def test_the_sandbox_carries_its_config_name_to_the_invocation():
-    # the sandbox knows the key it is declared under, so a caller can record
-    # WHERE a tool ran without threading the name alongside the object
+    """The jailed sandbox knows its key 'jailed', so a call records WHERE it ran."""
     with FundiTest(config_defaults=ai_config()) as app:
         assert app.ai._sandbox('jailed').config_name == 'jailed'

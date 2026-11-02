@@ -50,15 +50,18 @@ def _run_wat(wat, memory_mb=None, timeout=None):
 
 
 def test_wasm_memory_cap_is_hard():
-    # the store limit makes the guest trap instead of eating host memory,
-    # platform-independent, the gap the subprocess sandbox has on macos
+    """
+    An 8 MB store limit makes a growing guest trap, not eat host memory.
+
+    Platform-independent, the gap the subprocess sandbox has on macos.
+    """
     wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.Trap):
         _run_wat(_GROW_WAT, memory_mb=8)
 
 
 def test_wasm_timeout_interrupts_a_spin():
-    # an endless loop is stopped by the epoch tick, in-process, no child kill
+    """An endless loop traps on the epoch tick, in-process, no child kill."""
     wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.Trap):
         _run_wat(_SPIN_WAT, timeout=1)
@@ -76,7 +79,7 @@ def _exit_wat(code):
 
 
 def test_wasm_exit_status_zero_is_a_clean_run():
-    # the guest interpreter exits via proc_exit; status 0 carries no failure
+    """A guest proc_exit(0) gives ExitTrap code 0, a run with no failure."""
     wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.ExitTrap) as info:
         _run_wat(_exit_wat(0))
@@ -84,7 +87,7 @@ def test_wasm_exit_status_zero_is_a_clean_run():
 
 
 def test_wasm_exit_status_nonzero_is_a_failure():
-    # a nonzero status is what the sandbox turns into a TokeoAiError
+    """proc_exit(1) gives ExitTrap code 1, made a TokeoAiError by the sandbox."""
     wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.ExitTrap) as info:
         _run_wat(_exit_wat(1))
@@ -92,8 +95,7 @@ def test_wasm_exit_status_nonzero_is_a_failure():
 
 
 def test_wasm_needs_a_runtime():
-    # without a runtime/stdlib the sandbox refuses with a clear reason rather
-    # than silently doing nothing
+    """Without runtime and stdlib exec raises TokeoAiError naming the runtime."""
     pytest.importorskip('wasmtime')
     sandbox = TokeoAiWasmSandbox(None)
     sandbox._setup(None)
@@ -103,39 +105,47 @@ def test_wasm_needs_a_runtime():
 
 
 def test_wasm_validate_options_rejects_unknown():
+    """validate_options reports the unknown option 'net' as an issue."""
     sandbox = TokeoAiWasmSandbox(None)
     issues = sandbox.validate_options(dict(runtime='x', net=True))
     assert issues and any('net' in m for m in issues)
 
 
 def test_untrusted_exec_runs_in_process():
-    # the tool returns the snippet's raw value now; the sandbox layer wraps it
-    # into a ToolResult, so exec itself is sandbox-agnostic and value-only
+    """
+    The untrusted exec runs sum(range(10)) in process and returns raw 45.
+
+    The sandbox layer wraps the value into a ToolResult, so exec itself is
+    sandbox-agnostic and value-only.
+    """
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert tool.exec(code='sum(range(10))') == 45
 
 
 def test_untrusted_exec_sets_the_pysnippet_flag():
-    # the flag is what tells the wasm sandbox to run the snippet via run_snippet
-    # in the guest instead of rebuilding the tool
+    """
+    Only the untrusted exec tool sets wasm_exec_pysnippet.
+
+    The flag tells the wasm sandbox to run the snippet via run_snippet in
+    the guest instead of rebuilding the tool.
+    """
     assert TokeoAiPythonUntrustedExecTool(None).wasm_exec_pysnippet is True
     assert getattr(TokeoAiPythonTrustedExecTool(None), 'wasm_exec_pysnippet', False) is False
 
 
 def test_trusted_exec_runs_in_process():
+    """The trusted exec runs sum(range(10)) in process and returns 45."""
     tool = TokeoAiPythonTrustedExecTool(None)
     assert tool.exec(code='sum(range(10))') == 45
 
 
 def test_untrusted_exec_delivers_by_return():
-    # a return is the other delivery form: the wrap makes a top-level return
-    # legal and hands its value back
+    """A top-level return sum(range(10)) is legal and hands back 45."""
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert tool.exec(code='return sum(range(10))') == 45
 
 
 def test_untrusted_exec_without_a_value_returns_none():
-    # a snippet that ends on a statement (here a loop, not a value-bearing
-    # line) delivers nothing: the tool returns None, read as 'no value'
+    """A snippet ending on a for loop delivers None, read as 'no value'."""
     tool = TokeoAiPythonUntrustedExecTool(None)
     assert tool.exec(code='total = 0\nfor i in range(10):\n    total += i') is None
