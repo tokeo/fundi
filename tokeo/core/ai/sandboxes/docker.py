@@ -10,7 +10,8 @@
 The docker sandbox: a tool call in a hardened, throwaway container.
 
 It runs the generic runner (```python3 -m tokeo.core.ai.sandboxes.runner```) in
-a container of the configured ```image```, feeding the job as JSON on stdin
+a container of the configured ```image```, with python as the entrypoint in
+place of the image's own, feeding the job as JSON on stdin
 and reading the ```ToolResult``` as JSON on stdout, like the subprocess sandbox.
 The image must hold tokeo, fundi and the tools of the app; the image of the app
 itself is the simplest choice.
@@ -151,19 +152,22 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 caps={},
             )
         )
-        runner = [self._config('python'), '-m', 'tokeo.core.ai.sandboxes.runner']
+        # the image's own entrypoint (often the app) is replaced by python
+        python = self._config('python')
+        runner = ['-m', 'tokeo.core.ai.sandboxes.runner']
         if self._config('reuse'):
             with self._lock:
                 if self._container is None:
                     name = self._name()
-                    self._call(self._run_args(name, detach=True) + [image, 'sleep', 'infinity'], None, dotted)
+                    idle = ['--entrypoint', python, image, '-c', 'import signal; signal.pause()']
+                    self._call(self._run_args(name, detach=True) + idle, None, dotted)
                     self._container = name
                     atexit.register(self.close)
                 name = self._container
-            args = [self._config('command'), 'exec', '-i', name] + runner
+            args = [self._config('command'), 'exec', '-i', name, python] + runner
         else:
             name = self._name()
-            args = self._run_args(name, detach=False) + [image] + runner
+            args = self._run_args(name, detach=False) + ['--entrypoint', python, image] + runner
         try:
             out, err = self._call(args, job, dotted)
         except TokeoAiError:

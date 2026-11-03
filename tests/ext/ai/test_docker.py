@@ -110,7 +110,7 @@ def test_the_docker_sandbox_runs_a_tool_in_a_hardened_container(docker):
         '--network', 'none',
         '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
         '--memory', '512m', '--pids-limit', '128', '--user', '65534:65534',
-        'app:test', 'python3', '-m', 'tokeo.core.ai.sandboxes.runner',
+        '--entrypoint', 'python3', 'app:test', '-m', 'tokeo.core.ai.sandboxes.runner',
     ]  # fmt: skip
 
 
@@ -137,7 +137,7 @@ def test_the_docker_sandbox_takes_its_caps_from_the_options(docker):
     assert args[args.index('--network') + 1] == 'bridge'
     assert args[args.index('--user') + 1] == '1000:1000'
     assert '--read-only' not in args and '--memory' not in args and '--pids-limit' not in args
-    assert args[-3:] == ['python3.13', '-m', 'tokeo.core.ai.sandboxes.runner']
+    assert args[-5:] == ['--entrypoint', 'python3.13', 'app:test', '-m', 'tokeo.core.ai.sandboxes.runner']
     assert '--privileged' not in args
 
 
@@ -166,7 +166,8 @@ def test_reuse_runs_each_call_in_one_container_and_close_removes_it(docker):
         app.ai._sandbox('docked').close()
     start, first, second, kill = calls(docker)
     name = start[start.index('--name') + 1]
-    assert start[:3] == ['run', '--rm', '-d'] and start[-3:] == ['app:test', 'sleep', 'infinity']
+    assert start[:3] == ['run', '--rm', '-d']
+    assert start[-5:] == ['--entrypoint', 'python3', 'app:test', '-c', 'import signal; signal.pause()']
     assert '--cap-drop' in start and '--network' in start
     assert first == second == ['exec', '-i', name, 'python3', '-m', 'tokeo.core.ai.sandboxes.runner']
     assert kill == ['kill', name]
