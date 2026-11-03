@@ -15,6 +15,34 @@ loop runs it at the stages it overrides, and every run of it is recorded on the
 trace, so a governor is both an actor (it may reshape the state) and a matter of
 record (what it did is attributable).
 
+## The terms
+
+**Governor** is the general term. Every governor is the same kind of step; its
+**role** says what it is for:
+
+- a **guard** secures: it checks a call and may deny it;
+- a **transformer** reshapes: it masks, rewrites, enriches or shortens, and never
+  denies;
+- a **conductor** directs: it steers the course of the run, for example by adding
+  or dropping tool calls.
+
+The role shows in the section of the config a governor is declared in
+(```ai.guards```, ```ai.transformers```, ```ai.conductors```), and the linter
+checks that the class fits the section. An agent lists all of its governors, in
+order, under one key: ```governors```.
+
+## The ground rule
+
+**A no always wins.** A tool call runs only when every layer says yes: the offer
+of the agent, the guards at ```on_call```, the deny sets of agent, profile and
+call, and the sandbox chain. Each layer can only narrow; none can widen.
+
+A confirm does not change that: it confirms the state the guards reached, may
+turn a yes into a no, and never turns a no into a yes. A no becomes a yes only
+when a guard, after a ```no_retry``` with a note, judges the same stage anew and
+that new state is confirmed. The limits of the config are lifted by nobody.
+**An agent can never do more than its config allows.**
+
 ## The stages
 
 A governor participates in a stage by overriding that stage's method. The loop calls
