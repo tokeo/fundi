@@ -171,9 +171,10 @@ overrides; the loop finds it by reflection.
 | **Transformer** | reshape | mask, rewrite, enrich, shorten; stop hard | deny |
 | **Conductor** | direct | steer the run, add or drop calls; stop hard | deny softly |
 
-The binding of the role is checked: a ```type``` listed under
-```ai.transformers``` must resolve to a ```TokeoAiTransformer```, and so on. The
-declaration says which character you write.
+The binding of the role is checked twice: the linter demands that a ```type```
+listed under ```ai.transformers``` resolves to a ```TokeoAiTransformer```, and so
+on; the loop ends the run with an error when a transformer or conductor changes
+the decision of a call. Only a guard decides.
 
 Guards come as types with ready implementations: audit (```trace_audit```),
 policy (```tool_policy```, ```deny_policy```, ```abort_policy```), redact
@@ -250,7 +251,7 @@ profile, not a refactor.
 | guards: audit, policy, redact, validate, confirm | RAG with embeddings and vector navigation | compressor for long histories |
 | tool hooks, turndata, trace notes | ```redact``` at ```on_prompt```, debug mode ```reveal``` | sessions |
 | sandboxes ```in_process```, ```subprocess```, ```docker```, ```wasm``` | soft denial at the stages without a tool | loop variants such as plan-then-act |
-| CodeAct behind the wasm sandbox | roles enforced at runtime | traits for sandboxes |
+| CodeAct behind the wasm sandbox, roles enforced at runtime | | traits for sandboxes |
 | config linter at setup and as ```ai lint``` | subscribing to the trace | native providers |
 | input pipeline at ```on_begin```/```on_prompt```, with examples (date, RAG) | | |
 | providers ```mock``` and ```oai_compat```; akili in the template | | |

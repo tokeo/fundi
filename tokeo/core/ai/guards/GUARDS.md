@@ -14,8 +14,10 @@ A guard alone may refuse. It refuses in one of two ways, very different in reach
 - Soft denial: at ```on_call```, set ```invocation.decision = Invocation.DENY```
     with a ```reason```. This skips *that one* tool call; the loop continues and the
     model is told (```denied: <reason>```), so it can correct itself
-    (deny-and-continue). Denying is the guard's character; the loop honours a deny
-    from any governor and names the one that decided in the reason it feeds back.
+    (deny-and-continue). Only a guard decides; a transformer or conductor that
+    changes the decision ends the run with an error. A no stays a no: at
+    ```on_call``` the governors after it are skipped (only a confirm still runs),
+    at ```on_return``` they run for the record but cannot lift it.
 - Hard abort: ```raise``` a typed ```TokeoAiGuardError``` at any stage. The loop
     does not catch it and the run ends at once (the shared stop-the-run mechanic on
     ```tokeo.core.ai.governor.TokeoAiGovernor```). Use the typed error of the

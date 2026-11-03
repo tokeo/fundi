@@ -10,10 +10,10 @@ one, a reference to that object (the ```ChatResult``` of a model answer, the
 
 The three roles built on it share this whole mechanic and differ in their
 character: a ```guard``` secures by checking, a ```transformer``` reshapes,
-a ```conductor``` directs the run. Those are characters in thought, not
-fences; everything a governor does is determined by its implementation,
-and the loop honours it: a deny is honoured from any role, and the trace
-and the feedback name the governor that decided.
+a ```conductor``` directs the run. Only a guard decides: when a transformer
+or conductor changes the decision of a call, the loop ends the run with a
+```TokeoAiError``` that names it, a fault of the app; the trace and the
+feedback name the guard that decided.
 
 A governor participates at a stage by overriding that stage's method; the
 base versions are no-ops, so an unoverridden stage simply does not run. The
@@ -131,8 +131,8 @@ class TokeoAiGovernor(MetaMixin):
         The result is *not* filled yet. Reshape ```arguments``` here (e.g. mask a
         secret-looking value). Return ```None``` (mutate in place) or a new
         ```Invocation```. A guard may additionally deny the call here (see the
-        guard role); other roles are meant to reshape, not deny, though the
-        loop honours a deny from any governor.
+        guard role); another role that changes the decision ends the run
+        with an error.
 
     - ```on_return(ctx, invocation)```: after the tool ran, on the same
         ```Invocation```. Now ```invocation.result``` (a ```ToolResult``` whose

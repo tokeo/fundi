@@ -247,16 +247,14 @@ the base class only the mechanics.
 The config sections ```guards```, ```transformers```, and
 ```conductors``` declare governors in one shared namespace (a name may
 appear in only one of them). The section names the declared role,
-characters in thought: a guard *secures*, a transformer *reshapes*, a
-conductor *directs*. Everything is determined by the implementation;
-the author of the agent list is the composition root and orders it
-deliberately. What the linter does check is section purity: a
-```type``` declared in a section must resolve to that role class; the
-declaration and the class agree on which character you are writing, but
-neither narrows what the implementation may do. When a governor denies
-without a reason, the loop stamps
-role and name of the actor into the reason; trace and feedback
-always show who decided.
+a guard *secures*, a transformer *reshapes*, a conductor *directs*. The
+author of the agent list is the composition root and orders it
+deliberately. The linter checks section purity: a ```type``` declared in a
+section must resolve to that role class. The loop checks the behaviour: only a
+guard decides, and a transformer or conductor that changes the decision of a
+call ends the run with a ```TokeoAiError``` that names it. When a guard denies
+without a reason, the loop stamps role and name of the actor into the reason;
+trace and feedback always show who decided.
 
 ## Leaving a note on the trace
 

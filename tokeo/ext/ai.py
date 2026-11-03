@@ -755,22 +755,36 @@ class TokeoAi(MetaMixin):
         # step), one that mutates in place or returns nothing leaves it (an
         # unchanged step; the guard is still on the trace, attributable)
 
-        def on_call(governor, invocation):
-            # after a no only a confirm guard runs: a person may lift it
-            if invocation.decision == Invocation.DENY and not isinstance(governor, TokeoAiConfirmGuard):
-                return invocation
-            invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
+        def decided(governor, before, invocation, stage):
+            # only a guard decides: a transformer or conductor that changes the
+            # decision breaks its role, a fault of the app that ends the run
+            if invocation.decision != before and not isinstance(governor, TokeoAiGuard):
+                raise TokeoAiError(f'{self._governor_label(governor)} changed the decision at {stage}, only a guard decides')
             if invocation.decision == Invocation.DENY and not invocation.reason:
                 invocation.reason = f'blocked by {self._governor_label(governor)}'
             return invocation
 
+        def on_call(governor, invocation):
+            # after a no only a confirm guard runs: it confirms the no, or a
+            # no_retry lets the guards of the stage judge anew
+            if invocation.decision == Invocation.DENY and not isinstance(governor, TokeoAiConfirmGuard):
+                return invocation
+            before = invocation.decision
+            invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
+            return decided(governor, before, invocation, GOVERNOR_STAGE_ON_CALL)
+
         def on_return(governor, invocation):
+            # every governor runs, so the record is complete; a no stays a no
+            before, reason = invocation.decision, invocation.reason
             invocation = ctx.supersede(governor, governor.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
-            if invocation.decision == Invocation.DENY and not invocation.reason:
-                invocation.reason = f'blocked by {self._governor_label(governor)}'
+            invocation = decided(governor, before, invocation, GOVERNOR_STAGE_ON_RETURN)
+            if before == Invocation.DENY:
+                invocation.decision, invocation.reason = before, reason
             return invocation
 
         invocation = self._govern(call_governors, on_call, invocation)
+        # a no at on_call stays, whatever a retry at on_return does
+        called = invocation.decision, invocation.reason
         if invocation.decision != Invocation.DENY:
             try:
                 # the seam: the agent's sandbox chain contains the exec (a hard
@@ -791,6 +805,8 @@ class TokeoAi(MetaMixin):
                 # loop continues, instead of crashing the whole call
                 invocation.error = f'{type(err).__name__}: {err}'
         invocation = self._govern(return_governors, on_return, invocation)
+        if called[0] == Invocation.DENY:
+            invocation.decision, invocation.reason = called
         # the text fed back to the model for this call; the invocation is
         # returned too, so the loop reads the outcome off the object it has
         if invocation.decision == Invocation.DENY:

@@ -10,11 +10,11 @@ only what is specific to the transformer role.
 ## A transformer reshapes
 
 The three roles describe characters in thought: a transformer
-*reshapes*, a guard *secures*, a conductor *directs*. Everything is
-determined by the implementation; the loop honours what any governor
-does, and when one denies without naming a reason, the loop stamps role
-and name of the actor into the reason, so trace and feedback always
-show who decided.
+*reshapes*, a guard *secures*, a conductor *directs*. Only a guard
+decides: when a transformer or conductor changes ```invocation.decision```, the
+loop ends the run with a ```TokeoAiError``` that names it, a fault of the app.
+When a guard denies without naming a reason, the loop stamps role and name of
+the actor into the reason, so trace and feedback always show who decided.
 
 A transformer may inspect and refine what a stage hands it (mask, rewrite, enrich,
 shorten) and return either ```None``` (refined in place) or a fresh object of the
@@ -25,9 +25,8 @@ power; steering is the conductor's. A transformer only shapes what passes throug
 The section-purity check binds the section to the class at config time: a
 ```type``` listed under ```ai.transformers``` must resolve to a
 ```TokeoAiTransformer``` subclass, so a guard cannot slip into the transformer
-section. It checks the class, not the behaviour: the loop honours a deny from
-any governor and names it on the trace, so a transformer that denies breaks its
-role, not the run.
+section. The behaviour is checked at runtime: a transformer that changes the
+decision ends the run with an error.
 
 ## Stopping the run
 

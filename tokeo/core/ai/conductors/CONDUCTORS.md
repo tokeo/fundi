@@ -11,8 +11,8 @@ documentation. This page states only what is specific to the conductor role.
 
 A conductor is there to shape the *course* of the run, the flow, not a single
 call: soft denial (```invocation.decision = DENY```) is the guard's character.
-What a conductor does is determined by its implementation; the loop honours it
-either way and names the governor that decided (see "Ordering and roles" in
+Only a guard decides: a conductor that changes ```invocation.decision``` ends the
+run with a ```TokeoAiError``` that names it (see "Ordering and roles" in
 ```tokeo/core/ai/GOVERNORS.md```). Like
 every governor it may ```raise``` ```TokeoAiConductorError``` to stop the run
 hard when proceeding would be wrong.
