@@ -253,6 +253,12 @@ class TokeoAi(MetaMixin):
         self.app.config.merge({self._meta.config_section: self._meta.config_defaults}, override=False)
         # update display license notice from acknowledgement
         self._show_license_notice = not is_true(self._config('license_acknowledged', fallback=False))
+        # an item without options gets an empty block, so the linter checks it
+        for section in ('tools', 'guards', 'transformers', 'conductors', 'sandboxes', 'agents', 'profiles'):
+            items = self._config(section, fallback={})
+            for item in items.values() if isinstance(items, dict) else ():
+                if isinstance(item, dict):
+                    item.setdefault('options', {})
         # pull the ai configuration into the handler once, at setup time
         self._defaults = self._config('defaults', fallback={}) or {}
         self._profiles = self._config('profiles', fallback={}) or {}

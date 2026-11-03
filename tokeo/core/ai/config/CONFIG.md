@@ -87,6 +87,8 @@ form as a hint.
     ```type``` resolves a class; the keys under ```options``` are the class's
     ```Meta.config_defaults```, any other key is an error. The linter checks the
     *shape* and the keys, the class checks the *values* of its settings.
+    ```options``` may be omitted or written as ```{}```, both give an empty
+    block that the linter checks; ```options: null``` is an error.
 
 ## 3. The toolset in ```tools```
 

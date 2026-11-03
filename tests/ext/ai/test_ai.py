@@ -622,6 +622,26 @@ def test_linter_flags_an_unknown_sandbox_option(sandbox_type):
     assert lint_errors(cfg)['ai.sandboxes.jailed.options.net'].startswith("unknown option 'net'")
 
 
+@pytest.mark.parametrize(
+    'section, name, item',
+    [
+        ('tools', 'echo', dict(type=ECHO)),
+        ('guards', 'audit', dict(type='trace_audit')),
+        ('sandboxes', 'jailed', dict(type='subprocess', tools=['echo'])),
+        ('agents', 'plain', dict(type='fundi')),
+        ('profiles', 'mock', dict(type='mock', agent='plain')),
+    ],
+)
+def test_options_null_is_an_error_and_a_missing_block_becomes_empty(section, name, item):
+    """options: null is an error in each section; omitted, the block is {}."""
+    cfg = ai_config()
+    cfg['ai'].setdefault(section, {})[name] = dict(item, options=None)
+    assert lint_errors(cfg)[f'ai.{section}.{name}.options'] == 'must be a mapping, write {} or omit it'
+    cfg['ai'][section][name] = dict(item)
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
+        assert app.config.get('ai', section)[name]['options'] == {}
+
+
 def test_linter_flags_guards_on_an_agent_as_unknown_option():
     """guards instead of governors on an agent is an error, not ignored."""
     cfg = ai_config()

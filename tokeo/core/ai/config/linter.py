@@ -457,6 +457,7 @@ class TokeoAiLinter:
         if not self._lint_long_form(path, item, 'sandbox'):
             return
         self._lint_keys(path, item, _SANDBOX_KEYS)
+        self._lint_options(path, item)
         self._lint_type('sandbox', path, item)
         self._lint_option_keys('sandbox', f'{path}.options', item.get('type'), item.get('options'))
         tool_names = set(self._value('tools') or {})
@@ -555,11 +556,9 @@ class TokeoAiLinter:
         return False
 
     def _lint_options(self, path, item):
-        # ```options``` is optional, but when present it carries the component's
-        # own settings and must be a mapping
-        options = item.get('options')
-        if options is not None and not isinstance(options, dict):
-            self._add(f'{path}.options', 'must be a mapping')
+        # ```options``` may be omitted or {}, null is an error
+        if 'options' in item and not isinstance(item['options'], dict):
+            self._add(f'{path}.options', 'must be a mapping, write {} or omit it')
 
     def _lint_type(self, kind, path, item):
         # every item names a class by ```type```; resolving it on ```app.ai```

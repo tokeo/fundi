@@ -233,6 +233,15 @@ def test_the_linter_checks_the_docker_options(options, path, message):
         assert errors[path].startswith(message)
 
 
+def test_the_linter_reports_a_missing_image_without_an_options_block():
+    """Without options the block is {}, so the missing image is a lint error."""
+    cfg = ai_config('docker')
+    del cfg['ai']['sandboxes']['docked']['options']
+    with DockerTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+        errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
+    assert errors == {'ai.sandboxes.docked.options': 'image is required'}
+
+
 @pytest.mark.skipif(
     not (shutil.which('docker') and os.environ.get('TOKEO_TEST_DOCKER_IMAGE')),
     reason='needs docker and TOKEO_TEST_DOCKER_IMAGE (an image with tokeo, fundi and the tests)',
