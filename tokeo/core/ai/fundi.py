@@ -6,7 +6,10 @@
 # Tokeo-Fundi Source-Available License 1.0. See the LICENSE.md file in the
 # project root for the full license text. Use is subject to its conditions.
 
-# cement is a build requirement, the build and the app count the version alike
+"""
+Hands out the version of fundi, counted by cement like the build does.
+"""
+
 from cement.utils.version import get_version as cement_get_version
 
 VERSION = (2, 2, 0, 'final', 0)
