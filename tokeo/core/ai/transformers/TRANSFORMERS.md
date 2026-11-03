@@ -69,3 +69,10 @@ class TodayTransformer(TokeoAiTransformer):
         today = utc_now().date().isoformat()
         ctx.messages.insert(0, dict(role='system', content=f'Today is {today} (UTC).'))
 ```
+
+A second example is a small RAG, in ```core/ai/transformers/retrieve.py``` and the
+agent ```informed```: at ```on_prompt``` it ranks the sections of the files in
+```docs/knowledge``` for the question by BM25 and puts the best ones, numbered with
+their sources, before it. The same index serves the tool ```search_docs```, with
+which the model looks up sections itself; then the retrieval is a tool call and
+passes the guards like any other.
