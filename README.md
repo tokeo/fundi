@@ -153,7 +153,7 @@ ai:
 ```
 
 > [!WARNING]
-> Whoever may use the docker service is root on the host in effect. Give the app docker rights only where that is acceptable, prefer rootless podman (```command: podman```), and never mount the docker socket into a container of the app. See [SECURITY.md](SECURITY.md).
+> Whoever may use the docker service is root on the host in effect. Give the app docker rights only where that is acceptable, prefer rootless podman (```command: podman```), and never mount the docker socket into a container of the app.
 
 <br/>
 <br/>
