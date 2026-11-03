@@ -46,3 +46,26 @@ and says what your subclass is *for*.
     state the guards reached. ```confirm``` ships ready: it asks the channels on
     the hook ```tokeo_ai_confirm```, records every answer and its notes, and
     never turns a no into a yes (CONFIG.md, section 4.6).
+
+## Reading the notes of a confirm
+
+A ```no_retry``` of a confirm runs the stage again with the person's note in
+```ctx.notes```; the guards judge anew and may read it. A generated project
+carries an example in ```core/ai/guards/words.py``` and the agent ```careful```:
+the word filter denies a call whose arguments contain a listed word, and a note
+```deny: world``` adds a word. The second question then shows the new state.
+
+```python
+class WordFilterGuard(TokeoAiPolicyGuard):
+    def on_call(self, ctx, invocation):
+        words = []
+        for record in ctx.notes:
+            note = (record.get('note') or '').strip()
+            if note.lower().startswith('deny:'):
+                words += [word.strip() for word in note[5:].split(',') if word.strip()]
+        text = json.dumps(invocation.arguments).lower()
+        hits = [word for word in words if word.lower() in text]
+        if hits:
+            invocation.decision = Invocation.DENY
+            invocation.reason = f'contains {", ".join(map(repr, hits))}'
+```

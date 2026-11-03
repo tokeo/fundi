@@ -42,3 +42,30 @@ and let the run continue.
   implementation ships in the core; a generated project carries an editable
   example in its own ```core/ai/transformers/truncate.py```, named by its class
   path (```module:Class```) in the config.
+
+## The input pipeline
+
+```on_begin``` and ```on_prompt``` see the conversation before the model does:
+```ctx.messages```, changed in place or replaced by a returned list. That is the
+input pipeline: a transformer there enriches the prompt (a date, a retrieved
+document, the instructions of a task), shortens a long history or rewrites a
+request; a guard there may stop the run. ```on_begin``` runs once per run,
+```on_prompt``` before each model call, so an enrichment that should happen once
+keeps a mark in ```ctx.turndata``` under its own name.
+
+Requests from outside (mail through smtpd, grpc, a web page) that call
+```app.ai.ask``` or ```app.ai.chat``` run through the same stages.
+
+A generated project carries an example in ```core/ai/transformers/today.py```: at
+```on_prompt``` it puts today's date in front of the conversation, once per run.
+
+```python
+class TodayTransformer(TokeoAiTransformer):
+    def on_prompt(self, ctx):
+        mark = f'{self.config_name}:today'
+        if ctx.turndata.get(mark):
+            return
+        ctx.turndata[mark] = True
+        today = utc_now().date().isoformat()
+        ctx.messages.insert(0, dict(role='system', content=f'Today is {today} (UTC).'))
+```

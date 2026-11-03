@@ -26,6 +26,37 @@ None yet. The core provides the ```TokeoAiConductor``` role to derive from; a
 conductor is written by deriving from it and naming it by its class path
 (```module:Class```) in the config under ```ai.conductors```.
 
+## An example: the today conductor
+
+A generated project carries a conductor in ```core/ai/conductors/today.py``` and
+the agent ```dated``` that uses it: after the first model answer it adds a call
+of the tool ```current```, unless the model calls it itself, so a calendar agent
+always works with the real date.
+
+```python
+class TodayConductor(TokeoAiConductor):
+    def on_answer(self, ctx, result):
+        mark = f'{self.config_name}:today'
+        if ctx.turndata.get(mark):
+            return None
+        ctx.turndata[mark] = True
+        if any(call.name == 'current' for call in result.tool_calls or []):
+            return None
+        return add_tool_call(result, 'current', get_token_hex(4, 'inj_'))
+```
+
+The run of ```ai ask "welcher tag ist heute" --agent dated```:
+
+```
+the model answers without a tool          <- it would guess the date
+the conductor adds current()              -> fundi runs it: 2026-11-03 ...
+the model answers again, with the date
+```
+
+The added call runs only when the agent offers the tool, and like every call it
+passes the guards and the sandbox: a conductor can do nothing the model could
+not.
+
 ## Originating a tool call
 
 A conductor can add a tool call the model never asked for. ```on_answer``` runs
@@ -59,6 +90,12 @@ answer (it repeats the instruction but does not act on it). An injected tool
 call sidesteps this; it is an executed call, not text the model may ignore.
 
 ### Run once, then stop (idempotence)
+
+.. note::
+
+    The examples below call ```delegate```, a sub-run of another agent. It is
+    planned and not a tool yet, so they show the shape only; the today
+    conductor above runs as it is.
 
 ```on_answer``` runs every round, so an originating conductor needs a stop
 condition, or it injects forever. Two documented ways; pick one:
