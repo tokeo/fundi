@@ -20,14 +20,13 @@ pdoc and the tokeo theme (```make doc```).
 
 ## Module Docstrings
 
-Every module starts with a docstring: a title after the pattern
-```<Package> <Topic> Module.```, a short description, and if needed the sections
-```### Features```, ```### Example``` and ```### Notes```, in this order:
+Every module starts with a docstring. Its first sentence says what the module
+does. No title of package and file name stands before it, pdoc shows the name
+of the module anyway. A short description and if needed the sections
+```### Features```, ```### Example``` and ```### Notes``` follow, in this order:
 
 ````python
 """
-Tokeo Time Limit Module.
-
 Limits the run time of a function by the decorator ```@timelimit```.
 
 ### Example
@@ -160,7 +159,8 @@ An admonition is a line ```.. <kind>::```, a blank line, and the text indented
 by four spaces. The kinds are ```note```, ```tip```, ```important```,
 ```warning``` and ```caution```, and also ```info```, ```hint```, ```success```,
 ```danger```, ```error```, ```deprecated```, ```todo```, ```versionadded``` and
-```versionchanged```. The same form holds in the markdown files. The docs site shows them as coloured boxes:
+```versionchanged```. The same form holds in the markdown files. The docs site
+shows them as coloured boxes:
 
 ```
 ### Reminders

@@ -7,8 +7,6 @@
 # project root for the full license text. Use is subject to its conditions.
 
 """
-Tokeo ai extension.
-
 Wires the ai core into a Cement application: registers the built-in providers,
 exposes the ```app.ai``` handler, and adds the ```ai``` command group for the
 agentic and ai-facing side. An extension registers its own provider, tool,
