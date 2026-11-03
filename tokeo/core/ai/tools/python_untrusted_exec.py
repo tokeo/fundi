@@ -2,10 +2,10 @@
 The ```python_untrusted_exec``` tool: run model-generated Python in isolation.
 
 This is the CodeAct pattern for code you must not trust. The snippet runs by the
-exec-pysnippet guest path that imports nothing from tokeo; the wasm guest sees
-its standard library, copies of the few stdlib-only guest modules, and the code
-itself, never the framework. That keeps the isolation total: the model-generated
-code cannot read tokeo's own modules.
+exec-pysnippet guest path; the wasm guest sees its standard library, copies of
+the few stdlib-only guest modules in ```/io/_guest``` (the json and date helpers
+and the snippet runner, readable and writable for the run), and the code
+itself, never the framework, the app or its config.
 
 ### Notes
 

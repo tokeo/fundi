@@ -29,7 +29,7 @@ plain value the framework wraps for you.
 
 ```exec``` is the only part that runs inside the sandbox. The model's arguments
 are what it processes, and that processing is what an ```in_process```,
-```subprocess``` or ```wasm``` sandbox contains. A tool's own throw does not
+```subprocess```, ```docker``` or ```wasm``` sandbox contains. A tool's own throw does not
 escape: it comes back as a result carrying the exception, so the loop keeps
 running and the model can react.
 
@@ -71,7 +71,7 @@ def before(self, turndata, arguments, track):
     return {**arguments, 'path': f'/safe/{arguments["path"]}'}
 
 def after(self, turndata, arguments, result, track):
-    return create_tool_result(f'{result.value} (from {arguments["path"]})')
+    return create_tool_result(f'{result.value.as_str} (from {arguments["path"]})')
 ```
 
 ```before``` returns the arguments to run with, ```after``` the result to hand
@@ -89,7 +89,7 @@ model asked for belongs in ```exec```, behind the wall. The test is simple: what
 ```before``` hands back is arguments, never an effect on the machine.
 
 Two practical consequences. What ```before``` returns must stay JSON-able, like
-all sandbox arguments, or the handoff to a subprocess or wasm sandbox fails. And
+all sandbox arguments, or the handoff to a subprocess, docker or wasm sandbox fails. And
 the hooks get ```turndata``` and ```arguments```, no context, no loopdata; the
 loop's own counters are none of a tool's business.
 

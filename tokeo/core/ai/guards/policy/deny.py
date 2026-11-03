@@ -8,9 +8,9 @@ take effect at a given position.
 At the tool stages (```on_call```/```on_return```) "deny" has a defined,
 *soft* meaning: set ```invocation.decision = DENY```; the call is skipped and
 the loop continues. At the other stages (```on_begin```/```on_prompt```/
-```on_answer```/```on_close```) there is no soft-denial concept yet, so for now
-it raises ```TokeoAiPolicyGuardError``` there. That hard stop is a placeholder
-while the abort criterion is being worked out; see the TODOs.
+```on_answer```/```on_close```) it raises ```TokeoAiPolicyGuardError``` and stops
+the run hard. A soft denial at those stages is planned; until then the hard
+stop stays, so the guard shows the denial at any position.
 """
 
 from tokeo.core.ai import Invocation
@@ -24,9 +24,8 @@ class TokeoAiDenyPolicyGuard(TokeoAiPolicyGuard):
 
     No configuration, no check: it always denies. At the tool stages the denial
     is the established soft one (```decision = DENY```; the loop continues). At
-    the non-tool stages a soft denial is not defined yet, so it raises a
-    ```TokeoAiPolicyGuardError``` for now, a temporary hard stop, not the final
-    behaviour.
+    the non-tool stages it raises a ```TokeoAiPolicyGuardError```, a hard stop,
+    until a soft denial there is built.
 
     """
 

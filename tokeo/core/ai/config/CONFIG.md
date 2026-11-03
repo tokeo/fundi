@@ -20,7 +20,7 @@ does not declare in its ```config_defaults```, is an error.
 ai:
   license_acknowledged: true  # read LICENSE.md first and set true to prevent notice
   max_steps: 8          # base loop budget (tool rounds), 0 = unlimited
-  max_loops: 3          # consecutive empty rounds before abort, 0 = unlimited
+  max_loops: 3          # consecutive rounds without a successful call, 0 = unlimited
   trace: true           # record the step history (the trace)
 
   defaults:             # what a command uses when it names nothing
@@ -30,9 +30,12 @@ ai:
   tools:                # the toolset: items and named groups
   guards:               # the per-call pipeline: declarations and chains
   sandboxes:            # the execution walls a tool runs behind
-  agents:               # the compositions: tools + guards + sandboxes + budgets
+  agents:               # the compositions: tools + governors + sandboxes + budgets
   profiles:             # model + agent bundles a run selects
 ```
+
+```license_acknowledged``` is required: without the key the lint at setup stops
+the start. Its value only decides whether the license notice is shown.
 
 A run is assembled from four kinds of building block. The diagram shows how a
 call flows through them.
@@ -41,9 +44,9 @@ call flows through them.
 flowchart TD
     Call["ask() / chat()<br/>or: ai ask / ai chat"] --> Profile
     Profile["profile<br/>(picks the provider = model<br/>and binds an agent)"] --> Agent
-    Agent["agent<br/>(the composition:<br/>tools + guards + sandboxes + budgets)"] --> Loop
+    Agent["agent<br/>(the composition:<br/>tools + governors + sandboxes + budgets)"] --> Loop
     Loop["the agent loop"] -->|each tool call| Guards
-    Guards["guards<br/>(allow / deny / mask / cap / check)"] -->|allowed| Sandbox
+    Guards["governors<br/>(allow / deny / mask / cap / check)"] -->|allowed| Sandbox
     Sandbox["sandbox<br/>(the wall the tool runs behind)"] --> Result
     Guards -->|denied| Result
     Result["TokeoAiResult"]
@@ -52,7 +55,7 @@ flowchart TD
 .. important::
 
     The profile chooses the model and binds one agent. The agent is
-    the composition root: it owns the tools, the guard pipeline, the sandbox
+    the composition root: it owns the tools, the governors, the sandbox
     chain, and the budgets. A call can *narrow* what the agent offers (deny tools,
     lower budgets) but never *add* to it.
 
@@ -164,7 +167,8 @@ guards:
     type: regex_redact
     options:
       patterns: [bearer, sk-key]  # required: no built-in list
-  truncate:                       # a project guard by class path
+transformers:
+  truncate:                       # a project transformer by class path
     type: myapp.core.ai.transformers.truncate:MyAppAiTruncateTransformer
     options:
       limit: 500
@@ -176,7 +180,7 @@ A declaration may override its ```options``` for one stage, under an
 ```on_<stage>``` block. The stage block overlays the base ```options```:
 
 ```yaml
-guards:
+transformers:
   truncate:
     type: myapp.core.ai.transformers.truncate:MyAppAiTruncateTransformer
     options:
@@ -397,7 +401,7 @@ agents:
         - truncate: [on_close]
       sandboxes:                # the chain (see the sandboxes section)
         - jailed
-        - allow
+        - local
       deny:                     # a hard ban, before any sandbox lookup
         - append_file
       omit:                     # drop a guard the chain brought in (see chains)
@@ -659,7 +663,7 @@ myapp ai lint --strict     # treat warnings as failures too
 | Level | Meaning | Blocks a run? |
 |-------|---------|---------------|
 | ```error``` | the config cannot resolve as written, or holds a key nobody reads | yes |
-| ```warning``` | a gap worth closing (no defaults) | only with ```--strict``` |
+| ```warning``` | a gap worth closing (no defaults) | no; ```ai lint --strict``` fails on it |
 | ```note``` | a resolved-but-worth-pointing-out fact (e.g. agent over chain) | no |
 
 .. tip::

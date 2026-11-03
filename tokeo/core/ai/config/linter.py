@@ -6,10 +6,12 @@ Lints the ```ai``` configuration in one place, in two passes: a form pass
 ```app.ai```, and every name a profile or group points at exists). Nothing is
 raised; the caller decides what to do with the reported issues.
 
-It runs once when ```app.ai``` is set up, on every path, so a typo (a missing
-tool, an unresolved ```type```) ends the start with the report; a warning goes
-to the log. It is also exposed as the ```ai lint``` command, where
-```--strict``` turns warnings into failures.
+It runs once at setup on every path, in the ```post_setup``` hook
+```ai_lint_on_setup``` after the project's own hooks, so a typo (a missing tool,
+an unresolved ```type```) ends the start with the report; a warning goes to the
+log. ```ai lint``` and ```--help``` skip it, so the report and the help stay
+reachable. It is also exposed as the ```ai lint``` command, where ```--strict```
+makes warnings fail that command.
 """
 
 import difflib

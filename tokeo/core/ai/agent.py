@@ -48,10 +48,10 @@ class TokeoAiAgent(MetaMixin):
     ### Notes
 
     : ```Meta.config_defaults``` declares the configurable keys (```tools```,
-        ```guards```, ```sandboxes```, ```deny```, ```max_steps```,
-        ```max_loops```) with neutral defaults; the ```options``` of the
-        ```ai.agents``` entry override them, and the effective value of each is
-        read at runtime through ```_config```.
+        ```governors```, ```omit```, ```sandboxes```, ```deny```,
+        ```max_steps```, ```max_loops```) with neutral defaults; the
+        ```options``` of the ```ai.agents``` entry override them, and the
+        effective value of each is read at runtime through ```_config```.
 
     """
 
@@ -144,7 +144,7 @@ class TokeoAiAgent(MetaMixin):
 
         ### Args
 
-        - **key** (str): The composition key (e.g. ```tools```, ```guards```)
+        - **key** (str): The composition key (e.g. ```tools```, ```governors```)
         - **fallback** (any, optional): Returned when the key is absent
 
         ### Returns

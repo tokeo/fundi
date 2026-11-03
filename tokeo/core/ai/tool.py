@@ -199,8 +199,8 @@ class TokeoAiTool(MetaMixin):
 
         ### Returns
 
-        - **ToolResult|str**: The result; a plain string is treated as the
-            model-facing text
+        - **ToolResult|object**: The result; a plain value is wrapped by
+            ```create_tool_result```, which builds its three views
 
         """
         raise NotImplementedError

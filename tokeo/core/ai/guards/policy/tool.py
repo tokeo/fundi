@@ -30,10 +30,11 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
     """
     An ```on_call``` policy guard that permits or blocks tool calls by name.
 
-    The rules are read from ```_meta``` (set from the guard entry's
-    ```options```): ```deny``` is a denylist and always wins; ```allow```, when set,
-    is an allowlist that restricts calls to its members. Both take tool and group
-    names, a group stands for its members and a single name is a list of one.
+    The rules are read through ```_config``` from the guard entry's
+    ```options``` (and an ```on_call``` override): ```deny``` is a denylist and
+    always wins; ```allow```, when set, is an allowlist that restricts calls to
+    its members. Both take tool and group names, a group stands for its
+    members and a single name is a list of one.
     With neither rule the guard permits every call (it then only documents
     intent). A denial is soft: ```decision``` is set to ```deny``` and the loop
     continues.

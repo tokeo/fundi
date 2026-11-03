@@ -10,8 +10,8 @@ shorten and where.
 
 No ready-to-use truncate implementation ships in the core: a generated project
 carries one as an editable example (its own
-```core/ai/transformers/truncate.py```), named by its full dotted class path in
-the config. The core provides only this derivable type.
+```core/ai/transformers/truncate.py```), named by its class path
+(```module:Class```) in the config. The core provides only this derivable type.
 """
 
 from tokeo.core.ai import TokeoAiTransformer

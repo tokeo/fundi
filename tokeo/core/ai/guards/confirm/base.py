@@ -3,7 +3,8 @@ The ```confirm``` guard *type*.
 
 ```TokeoAiConfirmGuard``` is the type for confirm guards: a guard that pauses
 the run to ask for a human decision before something happens (a prompt about to
-be sent, a tool about to run) and lets the answer allow, deny, or change it. It
+be sent, a tool about to run) and lets the answer confirm the state the guards
+reached or turn it into a no, never a no into a yes. It
 does nothing on its own; it is the class you derive from to write a confirm
 guard, so the agent's guard list and the trace can say "this is a confirm step"
 while your subclass decides what to ask and how to apply the answer.
@@ -27,8 +28,8 @@ class TokeoAiConfirmGuard(TokeoAiGuard):
     Python, not selected as-is.
 
     Derive from it when you want a guard that stops at a stage (typically
-    ```on_prompt``` or ```on_call```) and asks a human to allow, deny, or edit
-    what is about to happen, then carries that decision back into the run.
+    ```on_prompt``` or ```on_call```) and asks a human to confirm what is about
+    to happen or refuse it, then carries that decision back into the run.
 
     Always derive from this type (```TokeoAiConfirmGuard```), not from
     ```TokeoAiGuard```: it states the guard's role (a human-in-the-loop gate)
@@ -36,13 +37,13 @@ class TokeoAiConfirmGuard(TokeoAiGuard):
     read it* (```on_begin```/```on_prompt``` see ```ctx.messages```,
     ```on_answer```/```on_close``` a ```ChatResult```, ```on_call```/
     ```on_return``` an ```Invocation```), see the stage guide in the
-    ```TokeoAiGuard``` class documentation, the single reference for building a
+    ```TokeoAiGovernor``` class documentation, the single reference for building a
     guard across its stations.
 
     A confirm guard that must abort the run rather than continue (the human
     declined and the run must not proceed) raises ```TokeoAiConfirmGuardError```;
     that raise is not caught by the loop and ends the run at once (see the
-    stop-the-run section in ```TokeoAiGuard```).
+    stop-the-run section in ```TokeoAiGovernor```).
     """
 
     class Meta:

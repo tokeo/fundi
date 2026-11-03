@@ -37,7 +37,7 @@ class TokeoAiValidateGuard(TokeoAiGuard):
     and the trace. For *what object each stage hands you and how to read it*
     (```on_begin```/```on_prompt``` see ```ctx.messages```, ```on_answer```/
     ```on_close``` a ```ChatResult```, ```on_call```/```on_return``` an
-    ```Invocation```), see the stage guide in the ```TokeoAiGuard``` class
+    ```Invocation```), see the stage guide in the ```TokeoAiGovernor``` class
     documentation, the single reference for building a guard across its
     stations.
 
@@ -46,7 +46,7 @@ class TokeoAiValidateGuard(TokeoAiGuard):
     it (a ```reason``` without a deny) and lets the loop continue. If validation
     is *required* and a failure must abort the whole run, raise
     ```TokeoAiValidateGuardError```; that raise is not caught by the loop and
-    ends the run at once (see the stop-the-run section in ```TokeoAiGuard```).
+    ends the run at once (see the stop-the-run section in ```TokeoAiGovernor```).
     """
 
     class Meta:

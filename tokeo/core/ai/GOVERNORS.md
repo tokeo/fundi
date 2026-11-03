@@ -87,8 +87,10 @@ The split to keep in mind:
 
 - ```invocation.error``` is a machinery failure: a timeout, a transport break,
     an exhausted sandbox chain. The tool may never have run.
-- ```result.state.exception``` is the tool's own raise; the sandbox caught it
-    and recorded it as ```type: message```, with ```value``` left ```None```.
+- ```result.state.exception``` is a tool error: the tool's own raise, which the
+    sandbox caught, or a raise of its ```prepare```/```before```/```after```
+    hook, recorded as ```type: message``` with ```value``` left ```None```. A
+    tool may also set it in ```after``` for a hint of its own.
 
 A governor reads ```value.as_str``` for the model-facing text, ```value.as_json```
 for the framework-encoded JSON string, and ```value.as_data``` for the structured

@@ -1,7 +1,7 @@
 """
 Generic, tool-agnostic sandbox job runner.
 
-A subprocess sandbox (and later a docker one) runs a tool call in a fresh
+The subprocess and the docker sandbox run a tool call in a fresh
 interpreter through this module: it is started as ```python -m
 tokeo.core.ai.sandboxes.runner```, reads a single JSON job from stdin, applies the
 resource caps before importing the tool, runs the tool, and writes the

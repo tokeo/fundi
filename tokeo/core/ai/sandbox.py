@@ -46,8 +46,7 @@ class TokeoAiSandbox(MetaMixin):
     : Honesty over promises. A sandbox only enforces what its mechanism truly
         can: ```in_process``` isolates nothing, ```subprocess``` is fault/resource
         isolation (a memory cap and a wall-clock timeout), not a jail. Real
-        path or network isolation needs a container/VM/WASM backend the user
-        supplies.
+        path or network isolation needs the ```docker``` or the wasm sandbox.
 
     """
 
@@ -155,8 +154,8 @@ class TokeoAiSandbox(MetaMixin):
 
         ### Returns
 
-        - **ToolResult|str**: The tool's result; a plain string is treated
-            as the model-facing text
+        - **ToolResult**: The tool's result; a sandbox wraps a plain value of
+            the tool with ```create_tool_result``` itself
 
         """
         raise NotImplementedError

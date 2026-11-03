@@ -9,8 +9,9 @@
 """
 Built-in agent tools.
 
-Each module here defines one ```TokeoAiTool``` subclass registered under a short
-name by the ```app.ai``` handler, so a config item can select it by ```type```.
+Each module here defines one ```TokeoAiTool``` subclass. None is registered
+under an alias: a config item selects it by its class path in ```type```
+(```tokeo.core.ai.tools:TokeoAiPythonUntrustedExecTool```).
 A tool defines what runs; the sandbox chain decides where.
 
 The tool classes are re-exported here, so a config ```type``` can use the short

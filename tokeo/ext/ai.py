@@ -20,10 +20,11 @@ the ```tokeo.core.ai``` package, and the ```ai``` config section).
 Every configured component is an item in the uniform form ```{type, options}```:
 ```type``` names the class (a built-in alias or a class path), ```options```
 carries the component's own settings. Profiles add their documented top-level
-params (purpose, agent, deny, enabled, model) around that form.
+params (purpose, agent, deny, enabled, model, model_params) around that form.
 
 ```yaml
 ai:
+  license_acknowledged: true   # required; read LICENSE.md first
   defaults:
     profile: mock          # model used when a call names none
     agent: audited         # agent used when a call names none
@@ -56,9 +57,10 @@ ai:
 ### Notes
 
 : With no selector given, ```app.ai``` uses ```ai.defaults.profile```, which
-    ships as the built-in ```mock``` profile, so ```ai ask``` answers out of
-    the box without any model or server; there is no hard-coded code
-    fallback.
+    ships as the built-in ```mock``` profile, so ```ai ask``` answers without
+    any model or server; there is no hard-coded code fallback. The key
+    ```ai.license_acknowledged``` must be set, the lint at setup stops the
+    start without it.
 
 """
 
@@ -846,8 +848,9 @@ class TokeoAi(MetaMixin):
             request only; passed to the provider, which spreads them into the
             request. Providers without a configurable model ignore them
         - **purpose** (str|None): Select the first enabled profile by purpose
-        - **agent** (str|None): Select an agent by name; defaults to the
-            configured ```ai.defaults.agent``` when one is set
+        - **agent** (str|None): Select an agent by name; without it the
+            profile's ```agent``` (```null``` is none), then
+            ```ai.defaults.agent```, then the implicit agent without tools
         - **max_steps** (int|None): Maximum tool rounds, 0 for unlimited;
             defaults to the agent's budget, otherwise the framework default
         - **max_loops** (int|None): Maximum consecutive rounds without one
@@ -1067,8 +1070,9 @@ class TokeoAi(MetaMixin):
         - **model_params** (dict|None): Per-call model parameters that override
             the profile's ```model_params``` for this request only
         - **purpose** (str|None): Select the first enabled profile by purpose
-        - **agent** (str|None): Select an agent by name; defaults to the
-            configured ```ai.defaults.agent``` when one is set
+        - **agent** (str|None): Select an agent by name; without it the
+            profile's ```agent``` (```null``` is none), then
+            ```ai.defaults.agent```, then the implicit agent without tools
         - **turndata_preset** (dict|None): Starting values for the run's
             ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
         - **userdata**: An opaque value carried through the run on the context,

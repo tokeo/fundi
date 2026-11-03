@@ -37,7 +37,7 @@ class TokeoAiPolicyGuard(TokeoAiGuard):
     (```on_call``` is where a pending ```Invocation``` is denied via its
     ```decision```/```reason```; ```on_begin```/```on_prompt``` see
     ```ctx.messages```; ```on_answer```/```on_close``` a ```ChatResult```), see
-    the stage guide in the ```TokeoAiGuard``` class documentation, the single
+    the stage guide in the ```TokeoAiGovernor``` class documentation, the single
     reference for building a guard across its stations.
 
     The two levels of refusal matter most for a policy guard:
@@ -48,9 +48,12 @@ class TokeoAiPolicyGuard(TokeoAiGuard):
         action is the problem.
     - Hard abort: ```raise TokeoAiPolicyGuardError```. The loop does not
         catch it, so it ends the whole run at once (see the stop-the-run section
-        in ```TokeoAiGuard```). Use this when the policy violation must stop
-        everything, not just skip a call, and at the non-tool stages, where a
-        soft per-call denial has no meaning, a raise is the only way to refuse.
+        in ```TokeoAiGovernor```). Use this when the policy violation must stop
+        everything, not just skip a call.
+
+    At the stages without a tool call a soft per-call denial has no meaning:
+    there a governor either stops hard or declines the run in order with
+    ```TokeoAiRunDeclined``` (the result gets the status ```declined```).
 
     Raise the typed ```TokeoAiPolicyGuardError``` (not the bare base) so a caller
     can catch a policy abort specifically.

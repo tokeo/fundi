@@ -1,9 +1,10 @@
 # The WASM Sandbox and the python-exec Tools
 
 The wasm sandbox runs a tool call inside a WebAssembly guest under
-[Wasmtime](https://wasmtime.dev/). It is the only sandbox in tokeo that gives
-real isolation against untrusted code rather than mere fault-and-resource
-cleanup: the guest has no network at all, sees no host file outside the paths
+[Wasmtime](https://wasmtime.dev/). Next to the docker sandbox it is the one
+that gives real isolation against untrusted code rather than mere
+fault-and-resource cleanup, and the only one that needs no container service:
+the guest has no network at all, sees no host file outside the paths
 you explicitly mount, runs under a hard memory cap that holds on every
 platform, and is interrupted by an epoch timeout. It is opt-in, needs the
 ```wasmtime``` package (48 or later) and a user-supplied CPython-WASI build.
@@ -39,7 +40,7 @@ except its inputs.
 
 Do not use it for tools whose purpose is outside access: fetching a URL, writing a
 host file, running a shell command, querying a database. Those belong in the
-```in_process``` or ```subprocess``` sandbox. The rule across the sandbox track is:
+```in_process```, ```subprocess``` or ```docker``` sandbox. The rule across the sandbox track is:
 a tool defines what runs, the sandbox decides where; a tool that needs the network
 or a path is simply not a fit for a network-less, path-less box.
 
@@ -97,8 +98,9 @@ point the sandbox options at it. The recommended source is Brett Cannon's
 prebuilt WASI releases, which the Python core developers point to.
 
 The examples below install the build into a ```./wasm``` folder at your project
-root, matching the default option paths (```./wasm/python.wasm``` and
-```./wasm/lib/python3.13```).
+root, the paths the examples and the ramani template use
+(```./wasm/python.wasm``` and ```./wasm/lib/python3.13```). The options
+```runtime``` and ```stdlib``` have no default; a call without them fails.
 
 ### 1. Install the runtime
 
@@ -183,7 +185,8 @@ The ```stdlib``` directory name must match the interpreter's version: a 3.13
 
 The wasm sandbox and the two python-exec tools are not registered by
 default; the core extension registers only the framework built-ins
-(```in_process```, ```subprocess```, the guards, ```fundi```, ```mock```).
+(```in_process```, ```subprocess```, ```docker```, the guards, ```fundi```,
+```mock```, ```oai_compat```).
 Optional and security-sensitive components like these are referenced by their
 full class path in ```type``` (```module:Class```), which the resolver imports
 on demand. (A project that uses them often can register an alias itself in a
@@ -314,9 +317,12 @@ There is no stdin runner here. For each call the sandbox:
 
 Only JSON-able arguments and the value as data cross the bridge; the host
 rebuilds ```as_data``` from ```as_json```, so a value's structured form survives
-without the guest having to send a possibly non-JSON-able object. The guest
-cannot set ```stdout```, ```stderr```, or ```exception``` of its result: the host
-reads them from the captures and the exit code.
+without the guest having to send a possibly non-JSON-able object. The host
+captures ```stdout``` and ```stderr``` and reads the exit code itself; on a failed
+exit the last stderr line becomes ```exception```. The guest still writes the
+text of those streams and reports ```incomplete```, so these states are a hint
+the host does not trust; it decides only on the exit code, a trap, the
+timeout and the limits it observed.
 
 The whole path, host and guest across the file bridge, at a glance: the
 host writes the task and picks the entry, the guest runs it and writes the
@@ -376,7 +382,7 @@ value, the host builds the ```ToolResult``` (or raises on a machinery error):
   <line x1="210" y1="432" x2="210" y2="524" stroke="#888780" stroke-width="1.5" marker-end="url(#ah3)"/>
   <rect x="60" y="526" width="240" height="48" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
   <text x="180" y="547" text-anchor="middle" font-size="14" font-weight="500" fill="#04342C">build the ToolResult</text>
-  <text x="180" y="564" text-anchor="middle" font-size="12" fill="#0F6E56">guest value, host states</text>
+  <text x="180" y="564" text-anchor="middle" font-size="12" fill="#0F6E56">guest value, host exit and captures</text>
 </svg>
 
 
@@ -459,8 +465,8 @@ is exactly why this path is for trusted input only.
 
 The exec-tool guest entry (```_GUEST_ENTRY_EXEC_TOOL```) in detail: it reads
 the task, rebuilds the tool with ```app=None``` and calls its ```exec```. A
-returned ```ToolResult``` hands over its value; its states are not taken, the
-host tells them. A tool that raises exits with code 1, a tool error (A); a
+returned ```ToolResult``` hands over its value and ```incomplete```; its other
+states are not taken, the host captures them. A tool that raises exits with code 1, a tool error (A); a
 failure before the call (the task, the import, the setup) exits with code 3, a
 machinery error (B):
 
@@ -547,7 +553,9 @@ runs. A missing source ends the run with an error. The rules:
   of the list; a test checks that by the syntax tree.
 - The guest writes only ```/io``` and ```/work```; everything else is read-only.
 - The guest hands back only data: the value in ```/io/value.json```, read with
-  ```json.loads``` up to ```REPLY_LIMIT``` bytes. The run states are the host's.
+  ```json.loads``` up to ```REPLY_LIMIT``` bytes, with ```incomplete```. The
+  exit code, a trap and the timeout are observed by the host; the text of
+  stdout, stderr and the exception is the guest's and only a hint.
 - ```PYTHONDONTWRITEBYTECODE=1```: the guest writes no bytecode next to the
   copies.
 

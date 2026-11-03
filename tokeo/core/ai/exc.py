@@ -17,11 +17,13 @@ class TokeoAiError(TokeoError):
 
 class TokeoAiRunDeclined(TokeoAiError):
     """
-    Raised by a governor that declines the run at a stage without a tool call.
+    Raised by a governor that declines the whole run.
 
-    The loop catches it and ends the run in order: the result carries the
-    status ```declined``` with the stage, the reason and who decided, instead of
-    an error. At the tool stages a call is denied instead, the run goes on.
+    The loop catches it at any stage and ends the run in order: the result
+    carries the status ```declined``` with the stage, the reason and who
+    decided, instead of an error. To refuse a single call at the tool stages, a
+    guard denies it instead and the run goes on; a confirm raises this there
+    only when its retries ran out.
 
     ### Args
 

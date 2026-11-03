@@ -1,5 +1,5 @@
 """
-The in-process sandbox: zero isolation, the lean default.
+The in-process sandbox: zero isolation.
 
 It runs a tool call directly in the application process, the same place the
 loop ran tools before the sandbox seam existed. It isolates nothing, so it
@@ -50,7 +50,8 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
     Run a tool call in the application process, with no isolation.
 
     The honest baseline: full access to the running app, no overhead, no
-    containment. Caps in ```options``` are meaningless here and are ignored.
+    containment. It takes no options; any key under ```options``` is a lint
+    error.
     """
 
     def exec(self, tool, arguments):

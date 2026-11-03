@@ -1,17 +1,16 @@
 """
-Resolve a guard composition into an ordered, deduplicated participation list.
+Resolve a governor composition into an ordered, deduplicated participation list.
 
 This is the composition notation made executable. A composition is what an
-agent's ```guards``` list (or a chain under ```ai.guards```) declares: *where and
-in what
-order* guards run, carrying no config (config lives in the declaration under
-```ai.guards```). This module turns that notation (bare names, ```name:
-[stages]``` stage lists, ```_any```, imported chains, and the agent's ```omit```)
-into a flat, ordered list of ```(config_name, stages)``` entries the handler
-can build and run.
+agent's ```governors``` list (or a chain under ```ai.guards```,
+```ai.transformers``` or ```ai.conductors```) declares: *where and in what order*
+governors run, carrying no config (config lives in the declaration). This
+module turns that notation (bare names, ```name: [stages]``` stage lists,
+```_any```, imported chains, and the agent's ```omit```) into a flat, ordered
+list of ```(config_name, stages)``` entries the handler can build and run.
 
 It holds no app state and does no class loading; it works on the raw config
-(the ```ai.guards``` mapping and an agent's ```guards```/```omit```) plus a
+(the merged governor sections and an agent's ```governors```/```omit```) plus a
 ```stages_of``` callback that yields a governor's class stages (by reflection),
 so the resolver stays pure and testable. Class loading, building,
 and per-stage running stay in the handler.
@@ -79,7 +78,7 @@ def parse_entry(entry):
 
     ### Args
 
-    - **entry** (str|dict): One element of a ```guards``` composition list
+    - **entry** (str|dict): One element of a ```governors``` composition list
 
     ### Returns
 
@@ -129,9 +128,9 @@ def _resolve_stages(config_name, stages, stages_of):
 
 def resolve_governors(governors_section, agent_governors, agent_omit, stages_of, logger=None):
     """
-    Resolve an agent's guard composition into an ordered participation list.
+    Resolve an agent's governor composition into an ordered participation list.
 
-    Expands chains (a list entry under ```ai.guards```), parses each entry,
+    Expands chains (a list entry in a governor section), parses each entry,
     unions stages per config_name, resolves conflicts (nearest wins:
     agent over chain), applies ```omit```, and returns the entries in first-
     appearance order. The result is what the handler builds and runs.
@@ -147,9 +146,10 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
 
     ### Args
 
-    - **governors_section** (dict): The raw ```ai.guards``` mapping (declarations,
-        short forms, and chains share this namespace)
-    - **agent_governors** (list): The agent's ```guards``` composition list
+    - **governors_section** (dict): The guards, transformers and conductors
+        merged into one mapping by name (declarations, short forms, and chains
+        share this namespace)
+    - **agent_governors** (list): The agent's ```governors``` composition list
     - **agent_omit** (list): The agent's ```omit``` list (config names to drop)
     - **stages_of** (callable): ```config_name -> iterable of stage names``` the
         class can do (the handler passes a reflection-backed lookup)

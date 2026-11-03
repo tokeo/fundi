@@ -131,7 +131,8 @@ class TokeoAiGovernor(MetaMixin):
         The result is *not* filled yet. Reshape ```arguments``` here (e.g. mask a
         secret-looking value). Return ```None``` (mutate in place) or a new
         ```Invocation```. A guard may additionally deny the call here (see the
-        guard role); other roles reshape but do not deny.
+        guard role); other roles are meant to reshape, not deny, though the
+        loop honours a deny from any governor.
 
     - ```on_return(ctx, invocation)```: after the tool ran, on the same
         ```Invocation```. Now ```invocation.result``` (a ```ToolResult``` whose

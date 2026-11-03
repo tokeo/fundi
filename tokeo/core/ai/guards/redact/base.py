@@ -37,14 +37,14 @@ class TokeoAiRedactGuard(TokeoAiGuard):
     ```on_return``` the ```invocation.result.value.as_str``` of a tool call;
     ```on_answer```/```on_close``` a ```ChatResult.text```;
     ```on_begin```/```on_prompt``` the contents in ```ctx.messages```), see the
-    stage guide in the ```TokeoAiGuard``` class documentation, the single
+    stage guide in the ```TokeoAiGovernor``` class documentation, the single
     reference for building a guard across its stations.
 
     A redact guard normally only masks and never stops the run. If masking is
     *required* and cannot be done (a masking backend it depends on is
     unreachable and the run must not proceed with unmasked content), raise
     ```TokeoAiRedactGuardError```. That raise is not caught by the loop: it ends
-    the whole run at once (see the stop-the-run section in ```TokeoAiGuard```).
+    the whole run at once (see the stop-the-run section in ```TokeoAiGovernor```).
     Raise only when proceeding unmasked would be wrong; otherwise mask and let
     the run continue.
 

@@ -13,16 +13,17 @@ realistic cap errors the call there instead of silently running uncapped),
 a working directory, and a scrubbed environment. A crashing or run-away tool
 is contained from the parent, but this is not a jail against hostile code:
 it cannot stop the tool from reading files or reaching the network. Real path
-or network isolation needs a container, VM, or WASM backend the user supplies.
+or network isolation needs the docker or the wasm sandbox.
 
 ### Notes
 
-: The tool is rebuilt in the child from its dotted ```type``` and ```options```
-    (carried on the instance by the handler), with ```app=None```; a child has
-    no live parent app, and the uniformity rule means a tool that needs an app
-    builds it itself. The full ```ToolResult``` (its value views and run states)
-    crosses the boundary as JSON; only a sandbox-machinery failure (timeout, a
-    runner crash, a non-JSON reply) is raised as a ```TokeoAiError```.
+: The tool is rebuilt in the child from the import path of its class and its
+    ```options``` (carried on the instance by the handler), with ```app=None```;
+    a child has no live parent app, and the uniformity rule means a tool that
+    needs an app builds it itself. The full ```ToolResult``` (its value views
+    and run states) crosses the boundary as JSON; only a sandbox-machinery
+    failure (timeout, a runner crash, a non-JSON reply) is raised as a
+    ```TokeoAiError```.
 """
 
 import os

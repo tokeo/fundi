@@ -96,11 +96,13 @@ class ToolValue:
 @dataclass
 class ToolStates:
     """
-    Facts about a tool run, filled by trusted framework or tool code.
+    Facts about a tool run, filled by the framework, the tool, or the sandbox.
 
-    Never written by executed untrusted content: the tool is the trust
-    boundary; the executed code writes only its value, the surrounding tool code
-    observes the run and fills these states.
+    In process the surrounding tool code fills them. Behind a process or wasm
+    wall they come back with the value and are a hint, not a trusted fact:
+    the wasm guest reports ```incomplete```, and ```exception``` is the last line
+    of its stderr on a failed exit (see the wasm sandbox for what the host
+    observes itself).
 
     ### Args
 
@@ -208,7 +210,9 @@ class Invocation:
         ```on_call``` guard may set it to deny the call
     - **reason** (str|None): Why a guard denied or flagged the call
     - **result** (ToolResult|None): The tool's result when it ran
-    - **error** (str|None): The error text when the tool raised
+    - **error** (str|None): The text of a failure of the sandbox machinery
+        (timeout, broken reply); a raise of the tool itself lands in
+        ```result.state.exception```
     - **sandbox** (str|None): The configured name of the sandbox the tool
         ran in (e.g. ```in_process```, ```jailed```, ```wasm_untrusted```), so
         the trace shows where each call executed, the honest-tier record.
@@ -297,8 +301,8 @@ class TokeoAiLoopdata:
     - **failed_loops** (int): Consecutive rounds with no successful tool call,
         against ```max_loops```; reset by any successful call
     - **confirmations** (list): Every confirm decision of the run in order,
-        each a dict (stage, subject, verdict, decision, by, who, at), for the
-        app to keep and learn from
+        each a dict (stage, guard, subject, state_before, answer, state_after,
+        note, by, who, retry, recalled, at), for the app to keep and learn from
 
     """
 
@@ -356,7 +360,8 @@ class TokeoAiResult:
         reasoning, tool_calls, usage, raw). The answer is not always plain text
         (a refusal is distinct from empty text), so the full ```ChatResult```
         is kept, not a flattened string.
-    - the loopdata: the loop's counters (```steps```, ```failed_loops```).
+    - the loopdata: the loop's counters (```steps```, ```failed_loops```) and
+        the ```confirmations```.
     - the trace: the ordered ```TraceStep``` history of the run (every
         model round, tool call, and guard that ran).
 
@@ -371,7 +376,8 @@ class TokeoAiResult:
     - **loopdata** (TokeoAiLoopdata): The loop's live counters for the run
     - **trace** (list): The run's ```TraceStep``` history, in order
     - **status** (str): ```DONE```, or ```DECLINED``` when a governor declined
-        the run at a stage without a tool call
+        the run (```TokeoAiRunDeclined```), e.g. a confirm said no at a stage
+        without a tool call or its retries ran out
     - **declined** (dict|None): On ```DECLINED``` the stage, the reason, and
         who decided (```by```)
 

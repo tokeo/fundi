@@ -13,10 +13,13 @@ be granted it explicitly, or run in a different sandbox.
 
 ### Notes
 
-: The guest delivers only the value, as data in ```/io/value.json```. The host
-    tells everything else itself: the exit code, a trap, the timeout, and the
-    stdout and stderr it captures outside ```/io```. A guest cannot forge the
-    run states of its result.
+: The guest delivers its value as data in ```/io/value.json```, with the flag
+    ```incomplete```. The host observes the exit code, a trap, the timeout and
+    the limits itself, and captures stdout and stderr outside ```/io```; on a
+    failed exit the last stderr line becomes ```exception```. What the guest
+    writes (the value, ```incomplete```, the text of stdout, stderr and the
+    exception) is a hint the host does not trust; it decides only on what it
+    observed.
 
 : On the untrusted path the guest runs the snippet directly and sees nothing of
     tokeo; on the trusted path it rebuilds the tool with ```app=None``` from the
@@ -208,9 +211,10 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         """
         Run the tool in a wasm guest and return its result.
 
-        The guest delivers only the value; the host builds the run states from
-        what it observed: the exit code, the captured stdout and stderr, and on
-        a raising tool the last line of stderr as ```exception```.
+        The guest delivers its value and ```incomplete```; the host builds the
+        rest from what it observed: the exit code, the captured stdout and
+        stderr, and on a failed exit the last line of stderr as
+        ```exception```. The guest's part is a hint, not a trusted fact.
 
         ### Args
 

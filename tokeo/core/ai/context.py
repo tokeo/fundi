@@ -37,12 +37,13 @@ class TokeoAiContext:
     hands back a fresh object (so a cache stays one entry per tool call, while the
     trace keeps every step).
 
-    The context carries only what accumulates: the trace, the caches, and
-    ```status``` (the counters). The current single objects (the round's result,
-    a call's invocation) are not fields here: the loop tracks them and hands them
-    to the stage that needs them, and ```cur_invocation``` reaches the latest from
-    the cache. Apart from these it holds ```userdata```: an opaque value the
-    caller may set once and the framework never touches, carried unchanged
+    The context carries only what accumulates: the trace, the caches,
+    ```loopdata``` (the counters and confirmations) and ```notes```. The current
+    single objects (the round's result, a call's invocation) are not fields
+    here: the loop tracks them and hands them to the stage that needs them, and
+    ```cur_invocation``` reaches the latest from the cache. Apart from these it
+    holds ```userdata```: an opaque value the caller may set once and the
+    framework never touches, carried unchanged
     through the run (not history, not a counter; a constant the caller can read
     its own context back from). It also holds ```turndata```: a free, shared
     dict that lives one run for in-process participants to keep working state

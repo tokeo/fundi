@@ -34,16 +34,16 @@ class TokeoAiAuditGuard(TokeoAiGuard):
     and the trace. For *what object each stage hands you and how to read it*
     (```on_begin```/```on_prompt``` see ```ctx.messages```, ```on_answer```/
     ```on_close``` a ```ChatResult```, ```on_call```/```on_return``` an
-    ```Invocation```), see the stage guide in the ```TokeoAiGuard``` class
+    ```Invocation```), see the stage guide in the ```TokeoAiGovernor``` class
     documentation, the single reference for building a guard across its
     stations. An audit guard uses those objects read-only.
 
     An audit guard normally never stops the run. If observation is *required*
     and must not be skipped (an external audit store is unreachable and the run
     must not proceed unrecorded), raise ```TokeoAiAuditGuardError```. That raise
-    is not caught by the loop: it ends the whole run at once (see the stop-the-run
-    section in ```TokeoAiGuard```). Raise only when proceeding unrecorded would be
-    wrong; otherwise observe and let the run continue.
+    is not caught by the loop: it ends the whole run at once (see the
+    stop-the-run section in ```TokeoAiGovernor```). Raise only when proceeding
+    unrecorded would be wrong; otherwise observe and let the run continue.
 
     Example (log only denied tool calls):
 

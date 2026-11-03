@@ -22,9 +22,12 @@ same kind (to replace it), exactly like any governor. What it must not do is
 deny a call: it never sets ```invocation.decision = DENY```. Denial is the guard's
 power; steering is the conductor's. A transformer only shapes what passes through.
 
-The section-purity check enforces this at config time: a ```type``` listed
-under ```ai.transformers``` must resolve to a ```TokeoAiTransformer``` subclass, so
-a guard cannot slip into the transformer section.
+The section-purity check binds the section to the class at config time: a
+```type``` listed under ```ai.transformers``` must resolve to a
+```TokeoAiTransformer``` subclass, so a guard cannot slip into the transformer
+section. It checks the class, not the behaviour: the loop honours a deny from
+any governor and names it on the trace, so a transformer that denies breaks its
+role, not the run.
 
 ## Stopping the run
 

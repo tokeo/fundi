@@ -5,8 +5,8 @@ A thin synchronous client over the OpenAI-compatible chat-completions transport,
 the protocol that Ollama, llama.cpp, vLLM, MLX and the commercial APIs all
 speak, so one provider serves them all. It is a dumb transport: it posts the
 messages (and any tool specs) to ```{base_url}/chat/completions``` and maps the
-reply into a ```ChatResult```. Tool-call normalization and the native-vs-prompt
-decision live in the agent layer, so this provider stays small.
+reply into a ```ChatResult```, turning the native ```tool_calls``` into
+```ToolCall``` objects; the governor chain only ever sees that one form.
 
 It is sync on purpose: the agent loop is synchronous and
 needs the whole result before it can run the next tool round. Streaming, if it

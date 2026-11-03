@@ -22,8 +22,10 @@ A guard may refuse a single tool call at ```on_call``` by setting
 ```invocation.decision = Invocation.DENY``` with a ```reason```. This skips
 *that one* call; the loop continues, the remaining governors and stages still
 run, and the model is told the call was denied so it can react. This soft denial
-is the guard's own; a transformer or conductor reshapes and steers but never
-denies. For stopping the whole run, any governor may ```raise``` a
+is the guard's role; a transformer or conductor is meant to reshape and steer,
+not to deny. The loop honours a deny from any governor and names it on the
+trace; the role is a promise of the class, the linter checks the section, not
+the behaviour. For stopping the whole run, any governor may ```raise``` a
 ```TokeoAiGuardError``` (the hard abort described on ```TokeoAiGovernor```); use
 the typed error of the guard's family so a caller can catch one kind specifically.
 """
