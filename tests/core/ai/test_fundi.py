@@ -54,9 +54,7 @@ def test_expand_env_scrubs_and_expands(monkeypatch):
     assert set(out) == {'A', 'B', 'C', 'D', 'E'}
 
 
-# --------------------------------------------------------------------------------------
-# linter coverage of the new section and fields
-# --------------------------------------------------------------------------------------
+# ---- linter coverage of the new section and fields --------------------------
 
 
 def test_runner_memory_cap_falls_back_per_platform(monkeypatch):

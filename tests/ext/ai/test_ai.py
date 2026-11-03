@@ -124,9 +124,7 @@ def run(app, tool_name, agent_name, **arguments):
     return out.value.as_str if out.value else ''
 
 
-# --------------------------------------------------------------------------------------
-# the agent classes
-# --------------------------------------------------------------------------------------
+# ---- the agent classes ------------------------------------------------------
 
 
 def test_fundi_agent_is_the_concrete_default():
@@ -139,9 +137,7 @@ def test_fundi_agent_is_the_concrete_default():
             app.ai.resolve('agent', 'default')
 
 
-# --------------------------------------------------------------------------------------
-# in_process sandbox (behaviour 1:1)
-# --------------------------------------------------------------------------------------
+# ---- in_process sandbox (behaviour 1:1) -------------------------------------
 
 
 def test_in_process_runs_directly():
@@ -150,9 +146,7 @@ def test_in_process_runs_directly():
         assert run(app, 'echo', 'plain', text='hi') == 'hi'
 
 
-# --------------------------------------------------------------------------------------
-# subprocess sandbox: real execution, cwd, env, timeout
-# --------------------------------------------------------------------------------------
+# ---- subprocess sandbox: real execution, cwd, env, timeout ------------------
 
 
 def test_subprocess_runs_in_a_child(tmp):
@@ -252,9 +246,7 @@ def test_subprocess_end_ends_the_processes_the_tool_started(tmp_path):
     assert wait_until(lambda: not _alive(pid))
 
 
-# --------------------------------------------------------------------------------------
-# selection: chain order, except, hard deny, deny-by-default
-# --------------------------------------------------------------------------------------
+# ---- selection: chain order, except, hard deny, deny-by-default -------------
 
 
 def test_chain_picks_first_sandbox_whose_tools_contain():
@@ -568,9 +560,7 @@ def test_the_implicit_agent_offers_no_tool():
             app.ai._exec_in_sandbox('echo', dict(text='x'), agent, None, None, None, None)
 
 
-# --------------------------------------------------------------------------------------
-# env expansion helper
-# --------------------------------------------------------------------------------------
+# ---- env expansion helper ---------------------------------------------------
 
 
 def test_linter_accepts_a_sound_sandbox_config():
@@ -754,9 +744,7 @@ def test_subprocess_keeps_a_user_pythonpath_in_the_lead():
         assert out.startswith('/user/extra' + os.pathsep)
 
 
-# --------------------------------------------------------------------------------------
-# the config surface: every ai class is set up the same way
-# --------------------------------------------------------------------------------------
+# ---- the config surface: every ai class is set up the same way --------------
 
 
 def test_setup_is_one_form_across_the_ai_classes():

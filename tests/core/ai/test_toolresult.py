@@ -56,6 +56,4 @@ def test_create_tool_result_carries_state_fields():
     assert result.state.exception is None
 
 
-# --------------------------------------------------------------------------------------
-# the sandbox catches a tool that raises: tool-error A in state.exception
-# --------------------------------------------------------------------------------------
+# ---- the sandbox catches a tool that raises: tool-error A in state.exception ----

@@ -145,7 +145,7 @@ def test_no_governors_gives_empty_lists_for_every_stage():
         assert all(by_stage[stage] == [] for stage in GOVERNOR_STAGES)
 
 
-# ---- deny stamps: trace and feedback name who decided ----
+# ---- deny stamps: trace and feedback name who decided -----------------------
 
 
 class DenyingSilently(TokeoAiTransformer):
@@ -246,7 +246,7 @@ def test_governor_label_reads_class_character_and_config_name():
         assert app.ai._governor_label(stray) == f'conductor {path!r}'
 
 
-# ---- a no always wins, only a guard decides ----
+# ---- a no always wins, only a guard decides ---------------------------------
 
 
 def test_a_no_at_on_return_stays_when_a_later_guard_allows():

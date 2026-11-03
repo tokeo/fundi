@@ -13,7 +13,7 @@ from tokeo.core.ai.pysnippet import run_snippet, TokeoAiSnippetError
 
 import pytest
 
-# ---- value delivery: the snippet hands a value back -----------------------
+# ---- value delivery: the snippet hands a value back -------------------------
 
 
 def test_jupyter_last_expression_is_the_value():
@@ -61,7 +61,7 @@ def test_tuple_target_delivers_a_tuple_of_names():
     assert run_snippet('a, b = 1, 2') == (1, 2)
 
 
-# ---- no value: the block runs but delivers nothing ------------------------
+# ---- no value: the block runs but delivers nothing --------------------------
 
 
 def test_attribute_assignment_delivers_none():
@@ -100,7 +100,7 @@ def test_comment_only_delivers_none():
     assert run_snippet('# nothing here') is None
 
 
-# ---- rejection and propagation --------------------------------------------
+# ---- rejection and propagation ----------------------------------------------
 
 
 def test_top_level_await_is_rejected():
@@ -132,7 +132,7 @@ def test_runtime_error_propagates():
         run_snippet('1 / 0')
 
 
-# ---- namespace is the run context, not the result channel -----------------
+# ---- namespace is the run context, not the result channel -------------------
 
 
 def test_snippet_runs_at_module_level_in_its_namespace():

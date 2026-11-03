@@ -59,9 +59,7 @@ def ai_config():
     return cfg
 
 
-# --------------------------------------------------------------------------------------
-# create_tool_result: the termination states and the three views
-# --------------------------------------------------------------------------------------
+# ---- create_tool_result: the termination states and the three views ---------
 
 
 def test_in_process_catches_a_raising_tool_into_state_exception():
@@ -111,9 +109,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
             app.ai._exec_in_sandbox('slow', dict(seconds=3), agent, None, None, None, None)
 
 
-# --------------------------------------------------------------------------------------
-# state fields: stdout the sandbox captures, no-result value
-# --------------------------------------------------------------------------------------
+# ---- state fields: stdout the sandbox captures, no-result value -------------
 
 
 def test_in_process_captures_tool_stdout_into_state():

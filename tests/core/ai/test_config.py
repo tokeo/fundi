@@ -167,7 +167,7 @@ def test_parse_a_single_stage_as_a_list_of_one():
     assert parse_entry({'alpha': 'on_call'}) == ('alpha', ['on_call'])
 
 
-# ---- tools: group expansion and cycle finding (config.tools) ----
+# ---- tools: group expansion and cycle finding (config.tools) ----------------
 
 
 def test_tools_bare_name_passes_through():
@@ -207,7 +207,7 @@ def test_find_cycles_empty_when_acyclic():
     assert find_cycles({'g': ['a', 'b']}) == set()
 
 
-# ---- sandboxes: containment and the chain walk (config.sandboxes) ----
+# ---- sandboxes: containment and the chain walk (config.sandboxes) -----------
 
 
 def _resolve_passthrough(names):
@@ -254,7 +254,7 @@ def test_sandbox_for_exhausted_chain_returns_none():
     assert sandbox_for('other', ['jailed'], items.get, _resolve_passthrough) is None
 
 
-# ---- profiles: selection and agent binding (config.profiles) ----
+# ---- profiles: selection and agent binding (config.profiles) ----------------
 
 
 _PROFILES = {
