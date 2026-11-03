@@ -20,7 +20,7 @@ One sentence carries the whole design: fundi (the master) wields the tools, akil
 
 Fundi is the AI extension for [Tokeo](https://github.com/tokeo/tokeo). It adds a compact agent runtime built on one rule: the model plans, the pipeline governs and the tools compute. Every step is explicit and can be inspected.
 
-Where Tokeo gives you the event-driven CLI framework, Fundi gives that framework a governed way to talk to AI providers: typed message and tool contracts, an agent pipeline where every tool call passes through guards, sandboxes that contain what the tools do, and a full trace of every run. The same agent definitions drive a deterministic mock provider, a model you train yourself, and any large OpenAI-compatible endpoint. A switch between them is an edit of the profile and not a refactor.
+Where Tokeo gives you the event-driven CLI framework, Fundi gives that framework a governed way to talk to AI providers: typed message and tool contracts, an agent pipeline where every tool call passes through governors, sandboxes that contain what the tools do, and a full trace of every run. The same agent definitions drive a deterministic mock provider, a model you train yourself, and any large OpenAI-compatible endpoint. A switch between them is an edit of the profile and not a refactor.
 
 Fundi is the source-available core of that runtime, and consists of these parts: the code under ```tokeo.core.ai```, the extension ```tokeo.ext.ai``` that wires it into an application, and its tests under ```tests/core/ai``` and ```tests/ext/ai```. It is its own distribution that lives in the shared ```tokeo``` namespace, is installed alongside Tokeo, inherits Tokeo's ```tokeo``` command, and you reach it through ```tokeo ai ...```. The concrete tools, guards, and providers a project builds on top of fundi are generated into your own application and belong to you.
 
@@ -31,53 +31,57 @@ Fundi is the source-available core of that runtime, and consists of these parts:
 Most ways of wiring an application to an LLM let the model reach straight into your system. Fundi puts a pipeline in between, and makes every part of it explicit and typed.
 
 - Messages, tool calls, results and traces are typed values (```tokeo.core.ai```), independent of any provider SDK. The providers plug into these contracts.
-- An agent is a named composition in YAML: its tools, its guard chain, its sandbox chain and its step budget. ```audited``` records everything and forbids nothing; ```guarded``` adds schema validation and policy (for example a read-only filesystem). Without an agent, the default, a request runs plain and untraced; governance is opted into.
-- Tools are plain functions, registered with a spec and activated in named groups (calendar, filesystem, mathematics) per profile. The provider never executes anything itself; a tool's result returns as feedback through the guards.
-- A before-guard may deny a call ahead of execution; an after-guard observes every outcome, so even a denial is recorded. A denied call is not executed; the loop continues and the model sees the denial, so it can correct itself.
-- A guard decides whether a call may run; a sandbox is the wall it runs behind. Fundi ships in-process (no isolation), subprocess (fault and resource isolation), docker (a hardened throwaway container) and a WebAssembly sandbox with no network, explicit mounts only and a hard memory cap, the place for model-generated code.
-- Every run leaves a typed trace that can be inspected: the prompts, the calls, the guard decisions and the results. A pipeline that denies nothing still records that.
+- An agent is a named composition in YAML: its tools, its governors, its sandbox chain and its step budget. ```audited``` records everything and forbids nothing; ```guarded``` adds schema validation, policy (for example a read-only filesystem) and a person to confirm before writing. There is always an agent: when none is named, the implicit agent offers no tools and no governors, so a plain question gets an answer and nothing can be called.
+- Tools are plain classes with a spec, named in ```ai.tools``` and grouped by name (calendar, filesystem, mathematics). The agent is the only source of tools; a profile or a call can only take tools away. The provider never executes anything itself; a tool's result returns through the governors.
+- Governors act at six stages from the request to the final answer, in three roles: a guard secures, a transformer reshapes, a conductor directs. A guard may deny a call before it runs; the call is not executed, the loop continues and the model sees the reason, so it can correct itself. A confirm asks a person or the app, and never turns a no into a yes.
+- A governor decides whether a call may run; a sandbox is the wall it runs behind. Fundi ships in-process (no isolation), subprocess (fault and resource isolation), docker (a hardened throwaway container) and a WebAssembly sandbox with no network, explicit mounts only and a hard memory cap, the place for model-generated code. A sandbox runs only the tools it names; there is no catch-all.
+- Every run leaves a typed trace that can be inspected: the prompts, the calls, the governor decisions and the results, each with the one who made it. A pipeline that denies nothing still records that.
+
+The position paper is [MISSION.md](MISSION.md); the threat model is in [DRAFT-SAFETY-INFORMATION.md](DRAFT-SAFETY-INFORMATION.md).
 
 <br/>
 
 ## Getting started
 
-Fundi is its own distribution, installed alongside Tokeo:
+Fundi is its own distribution, installed alongside Tokeo. The way in is a project generated from the Ramani template with the AI branch: it comes with the AI configuration, example tools, governors and agents already in place.
 
 ```bash
-# Install Tokeo and the Fundi AI extension
-pip install tokeo tokeo-fundi
+# Install Tokeo, the Fundi AI runtime and the Ramani templates
+pip install tokeo tokeo-fundi tokeo-ramani
 
-# Verify
-tokeo --help
-```
-
-When you generate a Tokeo project and enable the AI feature, the project is scaffolded with the AI configuration, example tools, and the agent definitions already in place.
-
-```bash
-# Generate a project with the AI branch
+# Generate a project and answer yes to the AI feature
 tokeo generate project your_app
+cd your_app
+pip install -e .
+
+# Check the AI configuration
+your_app ai lint
 ```
+
+Read ```LICENSE.md``` and set ```ai.license_acknowledged: true``` in ```config/your_app/base.d/ai.yaml```; until then every AI command shows a notice.
 
 <br/>
 
 ## A first look
 
-The mock provider needs no server and no network, it is the deterministic driver that makes the whole pipeline testable and demonstrable:
+The mock provider needs no server and no network, it is the deterministic driver that makes the whole pipeline testable and demonstrable. It calls a tool when the first word of the prompt names one:
 
 ```bash
 # Ask through the default profile (mock provider)
 your_app ai ask "ping"
 
-# Run the guarded agent: every tool call passes validate, policy, audit
-your_app ai ask "add 14 days to 2026-06-08" --agent guarded
+# Run the guarded agent: every tool call passes validate, policy, redact, audit
+your_app ai ask "weekday 2026-06-08" --agent guarded
 
-# Watch a policy denial: the readonly agent may read but not write
+# Watch a policy denial: the guarded agent may read but not write
 your_app ai ask "read_file notes.txt" --agent guarded
 your_app ai ask "append_file hello"    --agent guarded   # denied, and the model is told why
 
-# Inspect the full trace as JSON
-your_app ai ask "add 14 days to 2026-06-08" --agent guarded --json
+# Inspect the result with its full trace as JSON
+your_app ai ask "weekday 2026-06-08" --agent guarded --trace
 ```
+
+In a terminal the guarded agent asks you to confirm before ```append_file```. The policy's no stands whatever you answer; your answer and your note are recorded on the trace.
 
 <br/>
 
@@ -96,7 +100,7 @@ akili does one thing: it turns a natural-language request (English or German, pl
 # Train the weights once, then plan tool calls with the model
 python -m your_app.core.akili.train
 your_app ai ask "der wochentag von heute" --profile akili
-your_app ai ask "weekday of 2026-12-24" --profile akili --json
+your_app ai ask "weekday of 2026-12-24" --profile akili --trace
 
 # a nested request becomes a real three-step chain
 your_app ai ask "the weekday of today plus 14 days" --profile akili --agent guarded
@@ -112,7 +116,7 @@ The generated project carries akili's full documentation, which is the best plac
 
 ## Providers
 
-The same agents and guards run against every backend, so a change of provider is an edit of the profile and not a refactor.
+The same agents and governors run against every backend, so a change of provider is an edit of the profile and not a refactor.
 
 - ```mock```: the deterministic local provider without server or network, the driver for tests and demos.
 - ```akili```: the trained micro model, running in-process with plain NumPy.
