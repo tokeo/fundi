@@ -159,8 +159,8 @@ as ```**Important:**``` in the notes:
 An admonition is a line ```.. <kind>::```, a blank line, and the text indented
 by four spaces. The kinds are ```note```, ```tip```, ```important```,
 ```warning``` and ```caution```, and also ```info```, ```hint```, ```success```,
-```danger```, ```error``` and ```deprecated```. The same form holds in the
-markdown files. The docs site shows them as coloured boxes:
+```danger```, ```error```, ```deprecated```, ```todo```, ```versionadded``` and
+```versionchanged```. The same form holds in the markdown files. The docs site shows them as coloured boxes:
 
 ```
 ### Reminders
