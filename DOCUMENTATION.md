@@ -1,85 +1,199 @@
 # Tokeo Fundi AI Documentation Guidelines
 
-## Docstring Style
+How the code of this package is documented. The docs site is built from it with
+pdoc and the tokeo theme (```make doc```).
 
-When writing docstrings in this project, follow these Markdown formatting conventions:
+## What to document
+
+1. The package documents its public interface completely: every module, class,
+   function, type and value it hands out gets a docstring or a ```#:``` comment.
+   Internals get a comment only where the code does not show the reason.
+2. Documentation says what the code does and what a user must know, not how
+   the code works in detail. It addresses developers and users; it is never a
+   memo or a record of agreements.
+3. Code, documentation and configuration hold no references to chats,
+   agreements, tickets or project documents. A statement carries itself.
+4. Limits and traps are stated explicitly, e.g. "temper never stops a running
+   call".
+5. Configuration templates get short hints, not a book.
+6. Diagrams are inline mermaid code blocks, never image files of their own.
+
+## Module Docstrings
+
+Every module starts with a docstring: a title after the pattern
+```<Package> <Topic> Module.```, a short description, and if needed the sections
+```### Features```, ```### Example``` and ```### Notes```, in this order:
+
+````python
+"""
+Tokeo Time Limit Module.
+
+Limits the run time of a function by the decorator ```@timelimit```.
+
+### Example
+
+```python
+@timelimit(60)
+def job():
+    ...
+```
+
+### Notes
+
+: A coroutine stops only at an ```await```
+
+"""
+````
+
+An item under ```### Features``` is a concrete statement of behavior and starts
+with a verb, not a bold label:
+
+- Yes: ```- Runs commands locally or remotely over SSH```
+- No: ```- **Remote execution** via SSH or local shells```
+
+The text of a folder is the docstring of its ```__init__.py```, in a namespace
+package an ```__init__.md```. A guide next to the code (e.g. ```WASM.md```) is
+embedded there with ```.. include:: ./FILE.md```.
+
+## Docstring Style
 
 ### Basic Structure
 
-1. Use triple double quotes (\") for all docstrings
-2. Start with a concise description of what the function/class does
-3. For complex functions, add 1-2 additional lines explaining the behavior
-4. Add a blank line between the description and the first section header
-5. Use consistent capitalization and punctuation
-6. Important! Break the lines by a maximum of 84 characters per line
-7. If a line needs to be broken, indent the following lines by 4 chars like python code
-8. Continuation lines of a note follow (7) in both formats, the colon-style
-   ```:``` and the bullet ```-``` (see Notes): they are indented by 4 chars, so
-   both formats line up
+1. Use triple double quotes for all docstrings.
+2. Start with a one-line summary that begins with a verb:
+   ```Acquire a lock ...```, not ```This function ...```. Add one or two
+   sentences on the behavior if needed.
+3. Add a blank line between the description and the first section header.
+4. Break the lines at 84 characters at most.
+5. Indent continuation lines by 4 characters, in entries and in both formats of
+   the notes, so they line up.
+
+```python
+def acquire(self, key, expire=3600):
+    """
+    Acquire a lock with the given key, waits until the lock is free.
+
+    ### Args
+
+    - **key** (str): The lock key to acquire
+    - **expire** (float, optional): Seconds after which the lock expires,
+        also when its holder died without release. Defaults to 3600.
+
+    ### Returns
+
+    - **bool**: True once the lock is acquired
+
+    ### Raises
+
+    - **ValueError**: If expire is not a number above 0
+
+    ### Notes
+
+    : The lock releases only itself
+
+    """
+```
 
 ### Section Headers
 
-1. Structure sections with Markdown H3 headers: ```### Section Name```
-2. Never end a section header with a colon: write ```### Args```, not ```### Args:```.
-   A trailing colon becomes part of the rendered heading and trips up pdoc.
-3. Add a blank line after each section header before the bullets.
-4. Do not show ```None```
-5. Sections in this order:
-   - ```### Args```: function parameters
+1. Write sections as ```### Name```, never with a colon at the end: a trailing
+   colon becomes part of the rendered heading.
+2. Add a blank line after each header and between the sections.
+3. A section without content is left out; ```None``` is not shown.
+4. These sections exist, in this order:
+   - ```### Args```: the parameters
    - ```### Keyword Args```: the single keys of ```**kwargs```
-   - ```### Returns```: return values; for generators ```### Yields``` instead
-   - ```### Raises```: exceptions that may be raised
+   - ```### Returns```: the return value, for generators ```### Yields```
+     instead
+   - ```### Raises```: the exceptions
    - ```### Example```: an example as code block
-   - ```### Notes```: additional information
-   - ```### Reminders```: warnings and important conditions as admonition blocks
-   - ```### References```: list with links or external content
-   - ```### Output```: side effects (e.g., logging)
+   - ```### Notes```: further hints
+   - ```### Reminders```: admonition blocks
+   - ```### References```: links and sources
+   - ```### Output```: side effects such as log output
+5. Other names are not used: no ```### Usage``` (use ```### Example```), no
+   ```### See Also``` (use ```### References```), no ```### Methods```, since
+   pdoc lists the methods itself, and no ```### Attributes``` (use ```#:```).
 6. The docstring of a class documents its constructor: the parameters of
    ```__init__``` go under ```### Args``` (and ```### Keyword Args```) of the
    class. ```__init__``` has no docstring of its own. The order in a class:
-   Args, Keyword Args, Raises, Example, Notes, Reminders, References. Its
-   attributes are documented by ```#:```, see Attributes.
-7. Other section names are not used: no ```### Usage``` (use ```### Example```),
-   no ```### See Also``` (use ```### References```), no ```### Methods```,
-   since pdoc lists the methods itself, and no ```### Attributes``` (use ```#:```).
-8. Add a blank line between each major section
-9. If a section has no sensible content, do not show the section. Especially do not show when Args, Returns, or Raises is None.
+   Args, Keyword Args, Raises, Example, Notes, Reminders, References.
 
-### Argument Documentation
+### Entries
 
-Format parameter documentation as bullet points:
-- **parameter_name** (type): Description
+- **parameter** (type): Description
 - **optional_param** (type, optional): Description. Defaults to value.
+- **param** (str|int): Several types are separated by ```|```.
 
-For multiple types, use pipe separator:
-- **param** (str|int): Description
+The same form holds for ```### Keyword Args```. ```### Returns``` names only
+the type: ```- **bool**: True once the lock is acquired```. ```### Raises```
+names the exception: ```- **ValueError**: If expire is not a number above 0```.
 
-Document the single keys of ```**kwargs``` in their own section:
+### Notes
 
-    ### Keyword Args
+Choose the format by the kind of the content, not by the number of notes:
 
-    - **option1** (str): Description of option1
-    - **option2** (int, optional): Description of option2. Defaults to 0.
+- ```: Text``` for separate hints. Each stands on its own and becomes a
+  paragraph of its own; a blank line separates them.
+- ```- Text``` for an enumeration of short points of the same kind that are
+  read together. They follow each other without a blank line.
 
-### Return Values
+A colon note may hold an enumeration of its own, indented by 4 characters.
 
-Format return value documentation as bullet points:
-- **type**: Description of the return value
+### Lists
 
-For multiple possible return types:
-- **type1|type2**: Description
+Use ```-``` bullets for items with no inherent order; this is the default.
+Numbered lists (```1.```, ```2.```, ...) are for genuine sequences of steps, and
+then numbered properly.
 
-### Exceptions
+### Reminders and Admonitions
 
-Document exceptions that may be raised:
-- **ExceptionType**: Description of when/why this exception occurs
+Warnings and important conditions stand only under ```### Reminders```, never
+as ```**Important:**``` in the notes:
 
-### Attributes
+- ```.. warning::``` for security, e.g. a connection without checking the
+  certificate
+- ```.. important::``` for a condition whose disregard breaks a promise of the
+  function, e.g. an ```expire``` shorter than the run time
+
+An admonition is a line ```.. <kind>::```, a blank line, and the text indented
+by four spaces. The kinds are ```note```, ```tip```, ```important```,
+```warning``` and ```caution```, and also ```info```, ```hint```, ```success```,
+```danger```, ```error``` and ```deprecated```. The same form holds in the
+markdown files. The docs site shows them as coloured boxes:
+
+```
+### Reminders
+
+.. important::
+
+    expire must be larger than the longest run time of the wrapped
+    function, otherwise the limit breaks.
+```
+
+Do not place a horizontal rule (```---```) directly after an admonition; let the
+next heading follow after a blank line.
+
+### Code in Text
+
+1. Code in running text stands in triple backticks: ```` ```app.cache.locks``` ````.
+   This holds for docstrings and for the markdown files of the package. The span
+   may hold single backticks.
+2. Parameter names and types in entries are **bold**: ```**param_name**```.
+3. Escape special characters with backslashes: ```` ```\_\_special\_\_``` ````.
+
+### Properties
+
+A property describes the value it provides. It has ```### Returns``` and no
+```### Args``` (only a setter has Args). Mention caching if the property loads
+lazily.
+
+## Attributes and Values
 
 1. Values on module and class level, also those of ```Meta```, and instance
-   attributes (```self.x = ...``` in ```__init__```) are documented by a
-   ```#:``` comment right above the assignment. pdoc shows the text at the
-   value:
+   attributes (```self.x = ...``` in ```__init__```) are documented by a ```#:```
+   comment right above the assignment. pdoc shows the text at the value. Each
+   key of ```Meta.config_defaults``` has a comment above it:
 
         #: Dict with initial settings
         config_defaults = dict(
@@ -93,16 +207,16 @@ Document exceptions that may be raised:
 
 2. An instance attribute appears in the documentation only with its ```#:```;
    without one it stays hidden, even with a public name. pdoc finds instance
-   attributes in ```__init__``` only; for one set elsewhere see (5).
-3. A private name (with a leading underscore) stays hidden. ```@public``` at
-   the start of its ```#:``` shows it, ```@private``` hides a public one; the
-   marker itself is not shown:
+   attributes in ```__init__``` only.
+3. A private name (with a leading underscore) stays hidden. ```@public``` at the
+   start of its ```#:``` shows it, ```@private``` hides a public one; the marker
+   itself is not shown:
 
         #: @public Strong refs to scheduled log tasks
         self._pending_log_tasks = set()
 
 4. A type may lead the text in parentheses, as in Args. pdoc shows it as the
-   annotation of the value; it is optional:
+   annotation of the value:
 
         #: (str) Identifier of the executed task
         self.task_id = task_id
@@ -110,134 +224,43 @@ Document exceptions that may be raised:
 5. An instance attribute that ```__init__``` does not set with one assignment,
    because it is set in ```_setup``` or another method or only in the branches
    of an ```if```, is declared on class level with ```None``` and documented
-   there. Code that asks whether such an attribute is set checks its value
+   there. Code that asks whether it is set checks its value
    (```getattr(obj, 'x', None) is not None```), not ```hasattr```, which always
    finds the value of the class:
 
-        #: (TokeoDiskCacheLocksHandler) Handler for locks and rate limiting, set on
-        #: setup
+        #: (TokeoDiskCacheLocksHandler) Handler for locks and rate limiting, set
+        #: on setup
         locks = None
 
-### Notes
+## Comments
 
-Choose the format by the kind of the notes, not by their number:
+1. A comment never retells the line below it. It explains the intent or the
+   reason the code does not show.
+2. Simple code gets no comment: imports, assignments, mappings, configuration
+   that reads as it is written.
+3. A flow of several steps gets a short lowercase comment before each step, also
+   for short steps. Read together, the comments tell the flow.
+4. A comment says a thing once, at the place it belongs. Other places refer to
+   it briefly (```# see Context.turndata```).
+5. A place that is dangerous to touch wrongly gets a hint with ```Attention!```.
+6. A separator line splits a file or a large class into sections. It starts
+   with four dashes, then the name of the section, then dashes to fill the line:
+   ```# ---- locks ----...```.
+7. Comments are ASCII and at most 84 characters per line.
 
-Use the colon format for separate hints. Each note stands on its own and is
-shown as its own paragraph; a blank line separates the notes:
+## Type Annotations
 
-### Notes
+Do not use type annotations. They stay only where the code needs them at
+runtime (FastAPI parameters, pydantic models, dataclasses). All others are
+removed, also in code taken over from other projects, until the framework is
+moved to annotations completely.
 
-: First hint that stands on its own and may span
-    multiple lines with consistent indentation
+## Linter Interactions
 
-: Second hint, independent of the first
-
-Use bullet points for an enumeration, short points of the same kind that are
-read together, e.g. the parts of an output or the steps of a setup; the
-bullets follow each other without a blank line:
-
-### Notes
-
-- First point of the enumeration
-- Second point of the enumeration
-- Third point of the enumeration
-
-A colon note may hold an enumeration of its own, indented by 4 chars. In both
-formats continuation lines are indented by 4 chars (see Basic Structure 8).
-
-### Lists
-
-Use ```-``` bullets for items with no inherent order; this is the default.
-Reserve numbered lists (```1.```, ```2.```, ...) for genuine step-by-step
-sequences, and then number them properly instead of repeating ```1.```. The same
-rule applies to a sub-list inside a single colon-style note.
-
-### Reminders and Admonitions
-
-Warnings and important conditions are put only under the ```### Reminders```
-section as RST-style admonition blocks, never as ```**Important:**``` in the
-Notes:
-
-- ```.. warning::``` for security, e.g. a connection without checking the
-  certificate
-- ```.. important::``` for a condition whose disregard breaks a promise of the
-  function, e.g. an ```expire``` shorter than the run time
-
-For example:
-
-    ### Reminders
-
-    .. warning::
-
-        Disabling certificate verification exposes the connection to
-        man-in-the-middle attacks. Use it only for local development.
-
-Other admonition types follow the same form: ```.. note::```, ```.. tip::```,
-```.. caution::```. Always leave a blank line after the directive and indent the
-body by four spaces.
-
-Do not place a horizontal rule (```---```) directly after an admonition or
-between an admonition and the next section heading. The admonition box already
-closes the block visually; a rule on top of it reads as a double divider. Let
-the next heading follow after a blank line instead.
-
-### Code Formatting
-
-1. Use **bold** (double asterisks) for parameter names and return types: ```**param_name**```
-2. Use triple backticks for inline code: ```` ```code``` ````, e.g.
-   ```` ```app.dramatiq.locks``` ````. The span may hold single backticks.
-3. Escape special characters with backslashes: ```` ```\_\_special\_\_``` ````
-4. For multiple return types or parameter types, use the pipe symbol: ```(str|int)```
-
-### Property Documentation
-
-Document Python ```@property``` methods with the same style as functions, but focus on the value they provide rather than implementation details.
-
-Key points for property docstrings:
-- Include Returns section to document the type returned
-- Don't include Args section for the property itself (only for property setters)
-- Describe caching behavior if the property uses lazy loading
-- Focus on explaining what the property represents
-
-### Module Docstrings and Feature Lists
-
-Module-level docstrings may include a ```### Features``` section listing what the
-module provides. Write each item as a concrete, verb-led statement of behavior,
-not a bold marketing label:
-
-- Yes: ```- Runs commands locally or remotely over SSH```
-- No:  ```- **Remote execution** via SSH or local shells```
-
-Do not lead a bullet with a bold noun phrase; describe what the code does,
-starting with a verb where possible.
-
-### Linter Interactions
-
-Docstrings are checked by the same lint pass as code, so a few interactions
-matter:
-
-1. Triple backticks count toward W505. flake8 with ```--max-doc-length 84```
-   counts the backtick characters of an inline ```` ```identifier``` ```` span. A
-   docstring line with a long dotted path in backticks can exceed 84 even though
-   the prose is short: rephrase to keep the long identifier out of the running
-   text, or break the line.
-2. A docstring containing a regex needs an ```r"""``` prefix. Backslash escapes
-   in a normal ```"""``` docstring raise W605 or a SyntaxWarning (and the compile
-   check runs with ```-W error::SyntaxWarning```). Use a raw docstring
-   ```r"""..."""``` whenever the text shows a regex or other backslashes.
-3. Template sources are not valid Python. A file under
-   ```templates/generate/``` contains ```{{ }}``` placeholders, so
-   flake8/compile/pyink cannot read it as Python. Lint and format the GENERATED
-   output instead, and exclude the template tree from pyink with
-   ```--force-exclude '/templates/generate/'```.
-
-### Additional Best Practices
-
-1. Keep descriptions clear and concise
-2. Include format specifications when relevant (e.g., ```Format: 'YYYY-MM-DD'```)
-3. Document default values for optional parameters
-4. For class methods, document the purpose, parameters, and return values in the same style
-5. Use consistent indentation within docstring sections
-6. For properties, focus on what they provide rather than implementation details
-
-This ensures consistent, readable documentation that renders correctly in documentation tools.
+1. Triple backticks count toward W505: flake8 with ```--max-doc-length 84```
+   counts the backtick characters of an inline span. Keep a long dotted path out
+   of the running text, or break the line.
+2. A docstring with a regex or other backslashes needs the prefix ```r"""```,
+   otherwise flake8 reports W605 or Python a SyntaxWarning.
+3. Templates with ```{{ }}``` placeholders are not valid Python. Lint and format
+   the generated output instead, and exclude the templates from pyink.
