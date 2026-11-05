@@ -131,6 +131,38 @@ class ChatterTool(TokeoAiTool):
         return create_tool_result('done')
 
 
+class LoudTool(TokeoAiTool):
+    """Print the given bytes of x to stdout and stderr, then return done."""
+
+    class Meta:
+        description = 'print many bytes'
+        parameters = {
+            'type': 'object',
+            'properties': {'size': {'type': 'integer'}},
+            'required': ['size'],
+        }
+
+    def exec(self, **arguments):
+        print('x' * int(arguments['size']), end='')
+        print('y' * int(arguments['size']), end='', file=sys.stderr)
+        return create_tool_result('done')
+
+
+class BigTool(TokeoAiTool):
+    """Return a text of the given bytes, to test the limit of a reply."""
+
+    class Meta:
+        description = 'return a large text'
+        parameters = {
+            'type': 'object',
+            'properties': {'size': {'type': 'integer'}},
+            'required': ['size'],
+        }
+
+    def exec(self, **arguments):
+        return create_tool_result('z' * int(arguments['size']))
+
+
 class RaiseTool(TokeoAiTool):
     """Raise a ValueError, to prove the sandbox catches a tool that fails."""
 

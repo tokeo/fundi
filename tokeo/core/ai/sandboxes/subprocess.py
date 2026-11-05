@@ -34,36 +34,47 @@ import tempfile
 import subprocess
 
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError
-from tokeo.core.ai.sandboxes._common import _importable_path, expand_env, result_from_reply
+from tokeo.core.ai.sandbox import SANDBOX_OUTPUT_MAX_MB
+from tokeo.core.ai.sandboxes._common import (
+    _importable_path,
+    expand_env,
+    result_from_reply,
+    output_bytes,
+    read_reply,
+    read_diagnostics,
+    check_output,
+)
 
 
 class TokeoAiSubprocessSandbox(TokeoAiSandbox):
     """
     Run a tool call in a fresh interpreter via the generic runner.
 
-    Enforced caps: ```timeout``` (wall-clock, then SIGKILL) and ```memory_mb```
-    (the child's address-space rlimit). ```cwd``` steers relative paths
-    (advisory). ```env``` is scrubbed and ```${NAME}```-expanded. Path and network
-    caps are intentionally absent; they cannot be promised here.
+    Enforced caps: ```timeout``` (wall-clock, then SIGKILL), ```memory_mb```
+    (the child's address-space rlimit) and ```output_mb``` (the captured
+    output is cut, a larger reply is an error). ```cwd``` steers relative
+    paths (advisory). ```env``` is scrubbed and ```${NAME}```-expanded. Path,
+    network and disk caps are intentionally absent; they cannot be promised
+    here.
     """
 
     class Meta:
         """The subprocess mechanism's own settings (its option keys)."""
 
-        # the configurable defaults, as one dict; the item's options overlay
-        # this, read at runtime via _config. timeout: wall-clock seconds before
-        # the run is killed (None = unbounded). memory_mb: memory cap in MB via
-        # rlimit (RLIMIT_AS, fallback RLIMIT_DATA); a refused cap errors the
-        # call (current macos rejects caps below the mapped size), no sham caps,
-        # None = unbounded. cwd: scratch working directory (steers relative
-        # writes, created on demand), advisory only; absolute paths are not
-        # blocked. env: environment for the run, scrubbed/empty by default, only
-        # the listed keys are set, ${NAME} expands against out -> host env -> ''
+        # the configurable defaults; the item's options overlay them, read at
+        # runtime via _config
         config_defaults = dict(
+            # wall-clock seconds, then the process group is killed; None = no limit
             timeout=None,
+            # MB of memory via rlimit (RLIMIT_AS, else RLIMIT_DATA); a refused
+            # cap errors the call (macos rejects small caps); None = no limit
             memory_mb=None,
+            # working dir, created on demand; steers relative paths, no wall
             cwd=None,
+            # the only variables of the run, ${NAME} expands; empty by default
             env=None,
+            # MB of stdout and stderr kept, and the largest reply read
+            output_mb=SANDBOX_OUTPUT_MAX_MB,
         )
 
     def exec(self, tool, arguments):
@@ -98,12 +109,14 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         dotted = _importable_path(type(tool), 'tool')
         timeout = self._config('timeout')
         memory_mb = self._config('memory_mb')
+        output_mb = self._config('output_mb')
         job = json.dumps(
             dict(
                 tool=dotted,
                 arguments=arguments or {},
                 options=getattr(tool, '_tokeo_parent_instance_options', {}) or {},
                 caps=dict(memory_mb=memory_mb),
+                output_mb=output_mb,
             )
         )
         # a fresh interpreter running the generic runner module; stdin carries
@@ -149,10 +162,13 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
                 raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the subprocess sandbox')
             finally:
                 self._end_group(proc)
+            # read at most output_mb, so a reply without end cannot fill memory
             out.seek(0)
             err.seek(0)
-            proc = subprocess.CompletedProcess(cmd, proc.returncode, out.read().decode(), err.read().decode())
-        return result_from_reply(proc.stdout, proc.stderr, dotted, 'subprocess')
+            stdout = read_reply(out, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'subprocess')
+            stderr = read_diagnostics(err, output_bytes(output_mb))
+        result = result_from_reply(stdout, stderr, dotted, 'subprocess')
+        return check_output(result, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'subprocess')
 
     def _end_group(self, proc):
         # kill every process of the call's group; the group may be gone already

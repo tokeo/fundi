@@ -14,7 +14,8 @@ The job has the shape::
       "tool": "dotted.path.To.ToolClass",
       "arguments": { ... },          # the parsed call arguments
       "options": { ... },            # the tool item's options, as declared
-      "caps": { "memory_mb": 256 }   # caps to enforce in this process
+      "caps": { "memory_mb": 256 },  # caps to enforce in this process
+      "output_mb": 1                 # MB of stdout and stderr kept per stream
     }
 
 The reply is the JSON-encoded ```ToolResult``` on success::
@@ -44,7 +45,6 @@ traceback, so nothing leaks across the boundary.
     app is not available in a child process and must not be relied on.
 """
 
-import io
 import sys
 import json
 import importlib
@@ -142,6 +142,7 @@ def main():
     # and crosses as {"error": ...}, not as a tool result
     from tokeo.core.ai.data import ToolResult, ToolStates
     from tokeo.core.ai.tool import create_tool_result
+    from tokeo.core.ai.sandboxes._common import OutputBuffer, output_bytes
 
     try:
         job = json.loads(sys.stdin.read() or '{}')
@@ -154,8 +155,11 @@ def main():
         return 1
     # capture the tool's own stdout/stderr while it runs: a print() must not
     # reach the real stdout, where it would corrupt the single JSON reply the
-    # parent reads. the buffers also hold output a tool emitted before raising
-    out_buf, err_buf = io.StringIO(), io.StringIO()
+    # parent reads. the buffers also hold output a tool emitted before raising,
+    # and keep at most output_mb each, so the reply stays small
+    output_mb = job.get('output_mb') or 1
+    out_buf = OutputBuffer(output_bytes(output_mb), f'{output_mb:g} MB')
+    err_buf = OutputBuffer(output_bytes(output_mb), f'{output_mb:g} MB')
     try:
         with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
             output = tool.exec(**(job.get('arguments') or {}))
@@ -176,7 +180,9 @@ def main():
         output.state.stdout = out_buf.getvalue()
     if output.state.stderr is None and err_buf.getvalue():
         output.state.stderr = err_buf.getvalue()
-    sys.stdout.write(json.dumps(_encode_result(output)))
+    # the reply as UTF-8 without escaping non-ASCII, so its size stays close to
+    # the texts it frames and the parent's read limit holds
+    sys.stdout.buffer.write(json.dumps(_encode_result(output), ensure_ascii=False).encode('utf-8'))
     return 0
 
 

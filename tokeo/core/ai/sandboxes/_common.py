@@ -7,6 +7,7 @@ reply of the generic runner, so these helpers live here rather than in either
 sandbox; the sandboxes are siblings and should not import from each other.
 """
 
+import io
 import os
 import sys
 import json
@@ -121,3 +122,186 @@ def result_from_reply(stdout, stderr, dotted, where):
         exception=state_doc.get('exception'),
     )
     return ToolResult(value=value, state=state)
+
+
+def output_bytes(output_mb):
+    """
+    Turn the option ```output_mb``` into bytes.
+
+    ### Args
+
+    - **output_mb** (int|float): The MB of the option
+
+    ### Returns
+
+    - **int**: The bytes
+
+    """
+    return int(output_mb * 1024 * 1024)
+
+
+class OutputBuffer(io.StringIO):
+    """
+    A text buffer for the captured stdout or stderr of a tool, with a limit.
+
+    It keeps the first ```max_bytes``` (UTF-8) of what is written and drops the
+    rest, so a tool that prints without end cannot fill the memory. A cut
+    output ends with a mark that says where it was cut. Every sandbox captures
+    a tool's output through it.
+
+    ### Args
+
+    - **max_bytes** (int): The bytes to keep
+    - **label** (str): How the limit is named in the mark, e.g. ```1 MB```
+
+    """
+
+    def __init__(self, max_bytes, label):
+        super(OutputBuffer, self).__init__()
+        #: (bool) Whether output was dropped
+        self.cut = False
+        self._room = max_bytes
+        self._label = label
+
+    def write(self, text):
+        """
+        Keep the text while there is room, drop the rest.
+
+        ### Args
+
+        - **text** (str): The text written
+
+        ### Returns
+
+        - **int**: The length of the text, as if it was all written
+
+        """
+        if self._room > 0 and text:
+            data = text.encode('utf-8', 'replace')
+            if len(data) > self._room:
+                data = data[: self._room]
+                self.cut = True
+            self._room -= len(data)
+            super(OutputBuffer, self).write(data.decode('utf-8', 'ignore'))
+        elif text:
+            self.cut = True
+        return len(text)
+
+    def getvalue(self):
+        """
+        The kept output, with the mark when output was dropped.
+
+        ### Returns
+
+        - **str**: The output
+
+        """
+        value = super(OutputBuffer, self).getvalue()
+        return f'{value}\n[... cut after {self._label}]' if self.cut else value
+
+
+def reply_bytes(max_bytes):
+    """
+    The bytes the host reads at most of a raw reply, for an output limit.
+
+    A reply frames up to four texts of ```max_bytes``` each (the two views of
+    the value, stdout and stderr), JSON escaping can double them, and the frame
+    itself is small: eight times the limit and 64 KiB.
+
+    ### Args
+
+    - **max_bytes** (int): The output limit in bytes
+
+    ### Returns
+
+    - **int**: The bytes of a raw reply
+
+    """
+    return 8 * max_bytes + 64 * 1024
+
+
+def read_reply(file, max_bytes, label, dotted, where):
+    """
+    Read the raw reply of a tool run from a file, at most ```reply_bytes```.
+
+    The host reads only so much, so a reply that grows without end cannot fill
+    its memory. A larger reply is an error, a cut reply is no value.
+
+    ### Args
+
+    - **file**: The file in binary mode, at its start
+    - **max_bytes** (int): The output limit in bytes
+    - **label** (str): How the limit is named in the message, e.g. ```1 MB```
+    - **dotted** (str): The tool's import path, for the message
+    - **where** (str): The sandbox, e.g. ```subprocess```, for the message
+
+    ### Returns
+
+    - **str**: The reply
+
+    ### Raises
+
+    - **TokeoAiError**: On a reply over ```reply_bytes(max_bytes)```
+
+    """
+    limit = reply_bytes(max_bytes)
+    data = file.read(limit + 1)
+    if len(data) > limit:
+        raise TokeoAiError(f'tool {dotted!r} delivered more than {label} in the {where} sandbox')
+    return data.decode('utf-8', 'replace')
+
+
+def check_output(result, max_bytes, label, dotted, where):
+    """
+    Hold a tool result to the output limit, the same in every sandbox.
+
+    A value view (```as_str``` or ```as_json```) over ```max_bytes``` is an
+    error, the value is the result and a cut value would mislead. A captured
+    stdout or stderr over it is cut and marked, it is only a hint.
+
+    ### Args
+
+    - **result** (ToolResult): The result of the tool run
+    - **max_bytes** (int): The output limit in bytes
+    - **label** (str): How the limit is named, e.g. ```1 MB```
+    - **dotted** (str): The tool's import path, for the message
+    - **where** (str): The sandbox, e.g. ```in_process```, for the message
+
+    ### Returns
+
+    - **ToolResult**: The same result, its captured output cut where needed
+
+    ### Raises
+
+    - **TokeoAiError**: On a value view over ```max_bytes```
+
+    """
+    value = result.value
+    if value is not None:
+        for view in (value.as_str, value.as_json):
+            if len((view or '').encode('utf-8', 'replace')) > max_bytes:
+                raise TokeoAiError(f'tool {dotted!r} delivered more than {label} in the {where} sandbox')
+    for name in ('stdout', 'stderr'):
+        text = getattr(result.state, name)
+        if text is not None and len(text.encode('utf-8', 'replace')) > max_bytes:
+            buffer = OutputBuffer(max_bytes, label)
+            buffer.write(text)
+            setattr(result.state, name, buffer.getvalue())
+    return result
+
+
+def read_diagnostics(file, max_bytes):
+    """
+    Read the stderr of a sandbox mechanism for a message, at most ```max_bytes```.
+
+    ### Args
+
+    - **file**: The file in binary mode, at its start
+    - **max_bytes** (int): The bytes to read at most
+
+    ### Returns
+
+    - **str**: The text, cut at ```max_bytes```
+
+    """
+    return file.read(max_bytes).decode('utf-8', 'replace')

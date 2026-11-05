@@ -413,6 +413,22 @@ def test_the_watcher_stops_a_guest_that_writes_endlessly():
 
 
 @needs_build
+def test_the_watcher_counts_what_a_guest_prints():
+    """A guest printing without end fills no host disk: disk_mb 1 stops it."""
+    with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
+        run_untrusted('while True:\n    print("x" * 65536)', disk_mb=1, timeout=None)
+
+
+@needs_build
+def test_the_wasm_sandbox_cuts_the_output_and_refuses_a_large_value():
+    """output_mb 0.001: 5000 bytes printed are cut, a value of 5000 bytes fails."""
+    out = run_untrusted('print("x" * 5000)\n1', output_mb=0.001)
+    assert out.state.stdout == 'x' * 1048 + '\n[... cut after 0.001 MB]'
+    with pytest.raises(TokeoAiError, match='delivered more than 0.001 MB in the wasm sandbox'):
+        run_untrusted('"z" * 5000', output_mb=0.001)
+
+
+@needs_build
 def test_a_quick_guest_over_the_disk_limit_fails_too():
     """2 MB written at once with disk_mb 1 fails, even if the guest ended first."""
     with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):

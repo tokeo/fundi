@@ -19,8 +19,9 @@ itself is the simplest choice.
 Always set, not configurable: ```--rm```, ```--cap-drop ALL```,
 ```--security-opt no-new-privileges```, never ```--privileged```, and every
 mount read-only. Configurable with safe defaults: no network, a read-only root
-file system (with a small ```/tmp```), a memory and a process cap, a timeout,
-and a user that is not root.
+file system with a ```/tmp``` of ```disk_mb```, a memory and a process cap, a
+timeout, a user that is not root, and ```output_mb``` for the output the host
+reads.
 
 ```yaml
 sandboxes:
@@ -51,10 +52,24 @@ import json
 import uuid
 import atexit
 import threading
+import tempfile
 import subprocess
 
+from tokeo.core.utils.validate import is_int_ge
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError
-from tokeo.core.ai.sandboxes._common import _importable_path, expand_env, result_from_reply
+from tokeo.core.ai.sandbox import SANDBOX_OUTPUT_MAX_MB
+from tokeo.core.ai.sandboxes._common import (
+    _importable_path,
+    expand_env,
+    result_from_reply,
+    output_bytes,
+    read_reply,
+    read_diagnostics,
+    check_output,
+)
+
+# seconds the client may take to remove a container after a timeout
+_DOCKER_KILL_TIMEOUT = 30
 
 
 class TokeoAiDockerSandbox(TokeoAiSandbox):
@@ -75,24 +90,37 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
     class Meta:
         """The docker mechanism's own settings (its option keys)."""
 
-        # image: required. command: docker or podman. python: the interpreter
-        # in the image. network, read_only, memory_mb, pids, user: hardening
-        # with safe defaults. mounts: {guest_path: host_path}, read-only. env:
-        # scrubbed, ${NAME} expands. timeout: seconds. reuse: one container
-        # for the process instead of one per call
+        # the configurable defaults; the item's options overlay them, read at
+        # runtime via _config
         config_defaults = dict(
+            # required: an image with tokeo, fundi and the tools of the app
             image=None,
+            # the client: docker or podman (rootless)
             command='docker',
+            # the interpreter in the image, it replaces the image's entrypoint
             python='python3',
+            # a docker network, none = no network at all
             network='none',
+            # a read-only root file system with a tmpfs /tmp of disk_mb
             read_only=True,
+            # MB of the tmpfs /tmp, the only writable place with read_only
+            disk_mb=64,
+            # MB of memory (cgroup), 0 = no limit
             memory_mb=512,
+            # processes in the container, 0 = no limit
             pids=128,
+            # the user in the container, never root
             user='65534:65534',
+            # {guest_path: host_path}, mounted read-only
             mounts=None,
+            # the only variables of the run, ${NAME} expands; empty by default
             env=None,
+            # wall-clock seconds, then the container is killed
             timeout=30,
+            # true = one container for the process, else one per call
             reuse=False,
+            # MB of stdout and stderr kept, and the largest reply read
+            output_mb=SANDBOX_OUTPUT_MAX_MB,
         )
 
     def __init__(self, app, *args, **kw):
@@ -111,10 +139,13 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
 
         ### Returns
 
-        - **list[str]**: An error for a missing image or a root user
+        - **list[str]**: An error for a missing image, a root user, a disk_mb
+            that is no whole number from 1, or an output_mb not above 0
 
         """
-        errors = []
+        errors = TokeoAiSandbox.validate_options(self, options)
+        if 'disk_mb' in (options or {}) and not is_int_ge(options['disk_mb'], 1):
+            errors.append('disk_mb must be a whole number of MB, at least 1')
         if not (options or {}).get('image'):
             errors.append('image is required')
         if str((options or {}).get('user', '65534:65534')).split(':')[0] in ('root', '0'):
@@ -150,6 +181,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 arguments=arguments or {},
                 options=getattr(tool, '_tokeo_parent_instance_options', {}) or {},
                 caps={},
+                output_mb=self._config('output_mb'),
             )
         )
         # the image's own entrypoint (often the app) is replaced by python
@@ -177,7 +209,9 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 if self._container == name:
                     self._container = None
             raise
-        return result_from_reply(out, err, dotted, 'docker')
+        output_mb = self._config('output_mb')
+        result = result_from_reply(out, err, dotted, 'docker')
+        return check_output(result, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'docker')
 
     def close(self):
         """Remove the container of ```reuse```, if one is running."""
@@ -197,7 +231,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         args += ['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges']
         args += ['--network', str(self._config('network'))]
         if self._config('read_only'):
-            args += ['--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m']
+            args += ['--read-only', '--tmpfs', f'/tmp:rw,noexec,nosuid,size={self._config("disk_mb")}m']
         if self._config('memory_mb'):
             args += ['--memory', f'{self._config("memory_mb")}m']
         if self._config('pids'):
@@ -211,19 +245,27 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         return args
 
     def _call(self, args, job, dotted):
-        # run the client, stdin carries the job; a timeout is a failure
-        try:
-            proc = subprocess.run(
-                args,
-                input=job.encode() if job is not None else None,
-                capture_output=True,
-                timeout=self._config('timeout'),
-            )
-        except subprocess.TimeoutExpired:
-            raise TokeoAiError(f'tool {dotted!r} timed out after {self._config("timeout")}s in the docker sandbox')
-        except OSError as err:
-            raise TokeoAiError(f'the docker sandbox cannot run {args[0]!r}: {err}')
-        out, err = proc.stdout.decode(errors='replace'), proc.stderr.decode(errors='replace')
+        # run the client, stdin carries the job; a timeout is a failure. stdout
+        # and stderr go to files and are read at most output_mb, so a reply
+        # without end cannot fill the memory of the host
+        output_mb = self._config('output_mb')
+        with tempfile.TemporaryFile() as out_file, tempfile.TemporaryFile() as err_file:
+            try:
+                proc = subprocess.run(
+                    args,
+                    input=job.encode() if job is not None else None,
+                    stdout=out_file,
+                    stderr=err_file,
+                    timeout=self._config('timeout'),
+                )
+            except subprocess.TimeoutExpired:
+                raise TokeoAiError(f'tool {dotted!r} timed out after {self._config("timeout")}s in the docker sandbox')
+            except OSError as err:
+                raise TokeoAiError(f'the docker sandbox cannot run {args[0]!r}: {err}')
+            out_file.seek(0)
+            err_file.seek(0)
+            out = read_reply(out_file, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'docker')
+            err = read_diagnostics(err_file, output_bytes(output_mb))
         if job is None and proc.returncode != 0:
             raise TokeoAiError(f'the docker sandbox cannot start its container: {err.strip()[:200]}')
         return out, err
@@ -231,6 +273,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
     def _kill(self, name):
         # remove the container; it may be gone already (--rm)
         try:
-            subprocess.run([self._config('command'), 'kill', name], capture_output=True, stdin=subprocess.DEVNULL, timeout=30)
+            kill = [self._config('command'), 'kill', name]
+            subprocess.run(kill, capture_output=True, stdin=subprocess.DEVNULL, timeout=_DOCKER_KILL_TIMEOUT)
         except (OSError, subprocess.TimeoutExpired):
             pass

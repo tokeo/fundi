@@ -22,7 +22,9 @@ ECHO = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
 ENV = 'tests.ext.ai.lib.ai_tests_helper:EnvTool'
 SLEEP = 'tests.ext.ai.lib.ai_tests_helper:SleepTool'
 RAISE = 'tests.ext.ai.lib.ai_tests_helper:RaiseTool'
-TOOLS = ['echo', 'env', 'sleep', 'boom']
+LOUD = 'tests.ext.ai.lib.ai_tests_helper:LoudTool'
+BIG = 'tests.ext.ai.lib.ai_tests_helper:BigTool'
+TOOLS = ['echo', 'env', 'sleep', 'boom', 'loud', 'big']
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 DOCKER_FAKE_SCRIPT = """#!{python}
@@ -85,7 +87,14 @@ def ai_config(command, **options):
     cfg['ai'] = dict(
         license_acknowledged=False,
         defaults=dict(profile='mock', agent=None),
-        tools=dict(echo=dict(type=ECHO), env=dict(type=ENV), sleep=dict(type=SLEEP), boom=dict(type=RAISE)),
+        tools=dict(
+            echo=dict(type=ECHO),
+            env=dict(type=ENV),
+            sleep=dict(type=SLEEP),
+            boom=dict(type=RAISE),
+            loud=dict(type=LOUD),
+            big=dict(type=BIG),
+        ),
         sandboxes=dict(docked=dict(type='docker', tools=TOOLS, options=dict(image='app:test', command=command, **options))),
         agents=dict(contained=dict(type='fundi', options=dict(governors=[], tools=TOOLS, sandboxes=['docked']))),
         profiles=dict(mock=dict(type='mock', agent='contained')),
@@ -139,6 +148,23 @@ def test_the_docker_sandbox_takes_its_caps_from_the_options(docker):
     assert '--read-only' not in args and '--memory' not in args and '--pids-limit' not in args
     assert args[-5:] == ['--entrypoint', 'python3.13', 'app:test', '-m', 'tokeo.core.ai.sandboxes.runner']
     assert '--privileged' not in args
+
+
+def test_disk_mb_sizes_the_tmpfs_of_a_read_only_container(docker):
+    """disk_mb 16 makes /tmp a tmpfs of 16m."""
+    with DockerTest(config_defaults=ai_config(docker, disk_mb=16)) as app:
+        run(app, 'echo', dict(text='x'))
+    args = calls(docker)[0]
+    assert args[args.index('--tmpfs') + 1] == '/tmp:rw,noexec,nosuid,size=16m'
+
+
+def test_the_docker_sandbox_cuts_the_output_and_refuses_a_large_value(docker):
+    """output_mb 0.001: 5000 bytes printed are cut, a value of 5000 bytes fails."""
+    with DockerTest(config_defaults=ai_config(docker, output_mb=0.001)) as app:
+        out = run(app, 'loud', dict(size=5000))
+        assert out.state.stdout == 'x' * 1048 + '\n[... cut after 0.001 MB]'
+        with pytest.raises(TokeoAiError, match='delivered more than 0.001 MB in the docker sandbox'):
+            run(app, 'big', dict(size=5000))
 
 
 def test_a_raising_tool_in_the_docker_sandbox_is_a_tool_error(docker):
@@ -220,6 +246,9 @@ def test_the_docker_sandbox_needs_an_image(docker):
         (dict(user='root'), 'ai.sandboxes.docked.options', 'user must not be root'),
         (dict(user='0:0'), 'ai.sandboxes.docked.options', 'user must not be root'),
         (dict(privileged=True), 'ai.sandboxes.docked.options.privileged', "unknown option 'privileged'"),
+        (dict(disk_mb=0), 'ai.sandboxes.docked.options', 'disk_mb must be a whole number'),
+        (dict(disk_mb=1.5), 'ai.sandboxes.docked.options', 'disk_mb must be a whole number'),
+        (dict(output_mb=0), 'ai.sandboxes.docked.options', 'output_mb must be a number of MB above 0'),
     ],
 )
 def test_the_linter_checks_the_docker_options(options, path, message):

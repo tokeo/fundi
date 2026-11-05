@@ -8,7 +8,13 @@ import copy
 from cement.core.meta import MetaMixin
 
 from tokeo.core.utils.dict import deep_merge
+from tokeo.core.utils.validate import is_number_gt
 from tokeo.core.ai.exc import TokeoAiError
+
+#: The MB of output a sandbox takes from one tool run, the default of the
+#: option output_mb: the captured stdout and stderr are cut there, a larger
+#: reply is an error.
+SANDBOX_OUTPUT_MAX_MB = 1
 
 
 class TokeoAiSandbox(MetaMixin):
@@ -57,7 +63,7 @@ class TokeoAiSandbox(MetaMixin):
         timeout, a memory cap, a container name, a scratch mount ...) is the
         concrete mechanism's business, declared in its own ```config_defaults```;
         the linter reports any other key as an error, values are checked by
-        ```validate_options```. ```in_process``` has none.
+        ```validate_options```. Every built-in sandbox has ```output_mb```.
         """
 
         # the configurable defaults, as one dict; the item's options overlay
@@ -165,8 +171,8 @@ class TokeoAiSandbox(MetaMixin):
         Validate the item's ```options``` for the linter.
 
         The linter checks the keys against ```Meta.config_defaults```. The base
-        accepts any value; a derivation that checks its values overrides this
-        and returns error strings.
+        checks ```output_mb```, the option every built-in sandbox has; a
+        derivation that checks more values calls it and adds its own errors.
 
         ### Args
 
@@ -174,7 +180,10 @@ class TokeoAiSandbox(MetaMixin):
 
         ### Returns
 
-        - **list[str]|None**: Error messages, or ```None```/empty when valid
+        - **list[str]**: Error messages, empty when valid
 
         """
-        return None
+        errors = []
+        if 'output_mb' in (options or {}) and not is_number_gt(options['output_mb'], 0):
+            errors.append('output_mb must be a number of MB above 0')
+        return errors

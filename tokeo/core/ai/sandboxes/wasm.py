@@ -15,8 +15,9 @@ network must be granted it explicitly, or run in a different sandbox.
 
 : The guest delivers its value as data in ```/io/value.json```, with the flag
     ```incomplete```. The host observes the exit code, a trap, the timeout and
-    the limits itself, and captures stdout and stderr outside ```/io```; on a
-    failed exit the last stderr line becomes ```exception```. What the guest
+    the limits itself, and captures stdout and stderr outside ```/io``` (they
+    count for ```disk_mb```, and are cut at ```output_mb```); on a failed exit
+    the last stderr line becomes ```exception```. What the guest
     writes (the value, ```incomplete```, the text of stdout, stderr and the
     exception) is a hint the host does not trust; it decides only on what it
     observed.
@@ -26,9 +27,10 @@ network must be granted it explicitly, or run in a different sandbox.
     mounted code.
 
 : Full documentation (when to use it, the two python-exec tools, installing a
-    WASI Python build into ```./wasm```, every option, the file bridge, the two
-    trust models, the WASI stdlib shim, and troubleshooting) lives in
-    ```WASM.md``` next to this module.
+    WASI Python build into ```./wasm```, the file bridge, the two trust
+    models, the WASI stdlib shim, and troubleshooting) lives in ```WASM.md```
+    next to this module; the options are specified in section 5.5 of
+    ```CONFIG.md```.
 """
 
 import os
@@ -40,7 +42,8 @@ import threading
 import importlib.util
 
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
-from tokeo.core.ai.sandboxes._common import _importable_path, expand_env
+from tokeo.core.ai.sandbox import SANDBOX_OUTPUT_MAX_MB
+from tokeo.core.ai.sandboxes._common import _importable_path, expand_env, output_bytes, reply_bytes, check_output
 from tokeo.core.utils.validate import is_number_ge
 
 #: The stdlib-only modules the guest gets as copies in ```/io/_guest```, per run.
@@ -50,9 +53,6 @@ WASM_GUEST_MODULE_COPIES = (
     'tokeo.core.utils.date_compat',
     'tokeo.core.ai.pysnippet',
 )
-
-#: The most bytes the host reads of the value, stdout and stderr of a run.
-WASM_GUEST_OUTPUT_MAX_BYTES = 1024 * 1024
 
 # the exit code of a guest entry whose own machinery failed
 _GUEST_EXIT_MACHINERY = 3
@@ -157,26 +157,35 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
     class Meta:
         """The wasm mechanism's own settings (its option keys)."""
 
-        # runtime: python.wasm, stdlib: its stdlib (read-only at /lib), mounts:
-        # {guest_path: host_path} read-only, cwd: host dir read-write at /work,
-        # env: scrubbed, ${NAME} expands, timeout: seconds, memory_mb: hard
-        # cap, disk_mb and max_files: what the guest may add to /io and /work,
-        # watch_interval: seconds between their checks (at least 0.1), cache:
-        # a trusted dir for the compiled runtime, shim_wasi_stdlib: a
-        # multiprocessing stand-in on the trusted path
+        # the configurable defaults; the item's options overlay them, read at
+        # runtime via _config
         config_defaults = dict(
+            # required: the CPython-WASI interpreter, python.wasm
             runtime=None,
+            # required: its stdlib, mounted read-only at /lib
             stdlib=None,
+            # {guest_path: host_path}, mounted read-only
             mounts=None,
+            # a host dir mounted read-write at /work, created on demand
             cwd=None,
+            # the only variables of the run, ${NAME} expands; empty by default
             env=None,
+            # wall-clock seconds, then a timer stops the guest; None = no limit
             timeout=None,
+            # MB of memory, a hard cap by the store limits; None = no limit
             memory_mb=None,
+            # MB the guest may add to /io, /work and its stdout and stderr
             disk_mb=64,
+            # files and dirs the guest may add to /io and /work
             max_files=1000,
+            # seconds between two checks of disk_mb and max_files, at least 0.1
             watch_interval=1.0,
+            # a dir only the operator can write, for the compiled runtime
             cache=None,
+            # a multiprocessing stand-in, only on the trusted path
             shim_wasi_stdlib=True,
+            # MB of stdout and stderr kept, and the largest value read
+            output_mb=SANDBOX_OUTPUT_MAX_MB,
         )
 
     def __init__(self, app, *args, **kw):
@@ -216,10 +225,11 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         ### Returns
 
-        - **list[str]**: An error for a watch_interval below 0.1 seconds
+        - **list[str]**: An error for a watch_interval below 0.1 seconds or an
+            output_mb not above 0
 
         """
-        errors = []
+        errors = TokeoAiSandbox.validate_options(self, options)
         if not is_number_ge((options or {}).get('watch_interval', 1.0), 0.1):
             errors.append('watch_interval must be a number of seconds, at least 0.1')
         return errors
@@ -292,20 +302,33 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                     shutil.copyfile(os.path.join(source, name), os.path.join(io_dir, '_shims', name))
             code = self._run_guest(wasmtime, io_dir, cap_dir, dotted, shims)
 
-            def read(path):
-                # at most WASM_GUEST_OUTPUT_MAX_BYTES, a missing file reads as empty
-                if not os.path.exists(path):
-                    return ''
-                with open(path, 'rb') as f:
-                    return f.read(WASM_GUEST_OUTPUT_MAX_BYTES + 1).decode('utf-8', 'replace')
+            output_mb = self._config('output_mb')
+            max_bytes = output_bytes(output_mb)
 
-            stdout = read(os.path.join(cap_dir, 'stdout'))[:WASM_GUEST_OUTPUT_MAX_BYTES]
-            stderr = read(os.path.join(cap_dir, 'stderr'))[:WASM_GUEST_OUTPUT_MAX_BYTES]
+            def read(path, limit):
+                # one byte over the limit, cut in bytes before decoding; a
+                # missing file reads as empty
+                if not os.path.exists(path):
+                    return b''
+                with open(path, 'rb') as f:
+                    return f.read(limit + 1)
+
+            def text(data):
+                # the captured output, cut at output_mb and marked like the
+                # captures of the other sandboxes
+                cut = f'\n[... cut after {output_mb:g} MB]' if len(data) > max_bytes else ''
+                return data[:max_bytes].decode('utf-8', 'replace') + cut
+
+            stdout = text(read(os.path.join(cap_dir, 'stdout'), max_bytes))
+            stderr = text(read(os.path.join(cap_dir, 'stderr'), max_bytes))
             if code == _GUEST_EXIT_MACHINERY:
                 raise TokeoAiError(f'tool {dotted!r} failed in the wasm sandbox: {stderr.strip()[-400:]}')
-            reply = read(os.path.join(io_dir, 'value.json')) if code == 0 else ''
-        if len(reply) > WASM_GUEST_OUTPUT_MAX_BYTES:
-            raise TokeoAiError(f'tool {dotted!r} delivered a value over {WASM_GUEST_OUTPUT_MAX_BYTES} bytes in the wasm sandbox')
+            # the raw value.json frames two views of the value, read with the
+            # cap of a raw reply; the views are held to output_mb below
+            data = read(os.path.join(io_dir, 'value.json'), reply_bytes(max_bytes)) if code == 0 else b''
+        if len(data) > reply_bytes(max_bytes):
+            raise TokeoAiError(f'tool {dotted!r} delivered more than {output_mb:g} MB in the wasm sandbox')
+        reply = data.decode('utf-8', 'replace')
         value, incomplete = None, False
         if reply:
             try:
@@ -318,7 +341,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         lines = [line for line in stderr.splitlines() if line.strip()]
         exception = lines[-1].strip() if code != 0 and lines else None
         state = ToolStates(incomplete=incomplete, stdout=stdout or None, stderr=stderr or None, exception=exception)
-        return ToolResult(value=value, state=state)
+        return check_output(ToolResult(value=value, state=state), max_bytes, f'{output_mb:g} MB', dotted, 'wasm')
 
     def _run_guest(self, wasmtime, io_dir, cap_dir, dotted, shims):
         # assemble the wasmtime store with the cap, the mounts and the scrubbed
@@ -374,7 +397,9 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         store.set_epoch_deadline(1)
         instance = linker.instantiate(store, module)
         start = instance.exports(store)['_start']
-        roots = [io_dir] + ([work] if work else [])
+        # the guest's stdout and stderr in cap_dir count too, they fill the
+        # disk of the host as well
+        roots = [io_dir, cap_dir] + ([work] if work else [])
         disk_mb, max_files, timeout = self._config('disk_mb'), self._config('max_files'), self._config('timeout')
         interval = self._config('watch_interval')
 

@@ -7,12 +7,13 @@ names only trusted, quick tools in its ```tools```; a tool no sandbox of the
 chain names is denied.
 """
 
-import io
 import sys
 import threading
 import contextvars
 
 from tokeo.core.ai import TokeoAiSandbox, ToolResult, ToolStates
+from tokeo.core.ai.sandbox import SANDBOX_OUTPUT_MAX_MB
+from tokeo.core.ai.sandboxes._common import OutputBuffer, output_bytes, check_output
 from tokeo.core.ai.tool import create_tool_result
 
 # the buffers of the call running in this thread or task, (stdout, stderr), or
@@ -50,9 +51,17 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
     Run a tool call in the application process, with no isolation.
 
     The honest baseline: full access to the running app, no overhead, no
-    containment. It takes no options; any key under ```options``` is a lint
-    error.
+    containment. Its only option limits the captured output; it enforces no
+    time, memory, disk or network limit.
     """
+
+    class Meta:
+        """The in-process options: only the limit of the captured output."""
+
+        config_defaults = dict(
+            # MB of stdout and stderr kept per call, the rest is cut
+            output_mb=SANDBOX_OUTPUT_MAX_MB,
+        )
 
     def exec(self, tool, arguments):
         """
@@ -76,6 +85,7 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
         run states match what a process-boundary sandbox reports. Each call
         keeps its own output, also when calls run in parallel threads or asyncio
         tasks; a thread the tool starts itself may write to the real streams.
+        Each stream keeps at most ```output_mb```, the rest is cut and marked.
 
         Only the tool call is guarded: an exception from the sandbox machinery
         (not from ```tool.exec```) is not caught here and reaches the loop.
@@ -98,7 +108,9 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
         # the buffers belong to this call only, also when calls run in parallel,
         # and hold output a tool emitted before raising
         self._stand_in_streams()
-        out_buf, err_buf = io.StringIO(), io.StringIO()
+        output_mb = self._config('output_mb')
+        out_buf = OutputBuffer(output_bytes(output_mb), f'{output_mb:g} MB')
+        err_buf = OutputBuffer(output_bytes(output_mb), f'{output_mb:g} MB')
         token = _call_buffers.set((out_buf, err_buf))
         try:
             # the raw call: in process the real object is right here, with no
@@ -123,7 +135,10 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
             output.state.stdout = out_buf.getvalue()
         if output.state.stderr is None and err_buf.getvalue():
             output.state.stderr = err_buf.getvalue()
-        return output
+        # the same output limit as behind a wall: a value over output_mb is an
+        # error, a stdout or stderr the tool set itself is cut
+        dotted = f'{type(tool).__module__}.{type(tool).__qualname__}'
+        return check_output(output, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'in_process')
 
     def _stand_in_streams(self):
         # put the stand-ins in place of sys.stdout and sys.stderr, once; again

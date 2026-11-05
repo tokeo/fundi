@@ -264,20 +264,28 @@ python -c "import cement, os; print(os.path.dirname(os.path.dirname(cement.__fil
 
 ## Options
 
-| Option | Required | Meaning |
-| --- | --- | --- |
-| ```runtime``` | yes | Path to the CPython-WASI interpreter (```python.wasm```). |
-| ```stdlib``` | yes | Path to the matching WASI standard library, mounted read-only at ```/lib```. The version must match the interpreter. |
-| ```mounts``` | no | A ```{guest_path: host_path}``` map of read-only mounts. This is the entire attack surface: only what you mount is visible. Empty means the guest sees no host code at all. |
-| ```cwd``` | no | A host scratch directory mounted read-write at ```/work```, created on demand. |
-| ```env``` | no | The guest environment: scrubbed and empty by default, only the listed keys are set, ```${NAME}``` expands against this map, then the host env, then ```''```. |
-| ```timeout``` | no | Wall-clock seconds before the guest is stopped. A timer stops it at its next epoch check; there is no child to kill. |
-| ```memory_mb``` | no | A hard memory cap in MB via Wasmtime store limits. A runaway allocation traps the guest. Platform-independent. |
-| ```disk_mb``` | no (default ```64```) | The MB the guest may add to ```/io``` and ```/work```. What is in ```/work``` before the run does not count. ```null``` removes the limit. |
-| ```max_files``` | no (default ```1000```) | The files and directories the guest may add to ```/io``` and ```/work```. ```null``` removes the limit. |
-| ```watch_interval``` | no (default ```1.0```) | The seconds between two checks of ```disk_mb``` and ```max_files```, at least ```0.1```. Each check walks ```/io``` and ```/work```, so a large ```/work``` costs more per check; a longer interval lets the guest write more past the limit before it is stopped. A check after the run catches what is left. |
-| ```cache``` | no | A directory for the compiled runtime. The first run compiles ```python.wasm``` (about 2 s) and stores it there, later runs of any process load it in milliseconds. Off by default. |
-| ```shim_wasi_stdlib``` | no (default ```true```) | Put the bundled ```multiprocessing``` shim ahead of the stdlib so a framework that imports it at load can be rebuilt in the guest. Only on the trusted/rebuild path; the untrusted guest never gets it. |
+The options of the wasm sandbox, with their defaults and allowed values, are
+specified in one place: section 5.5 of ```CONFIG.md``` (```tokeo/core/ai/config```),
+next to the other sandboxes and a table of what each sandbox can enforce. What
+matters beyond the table:
+
+- ```mounts``` are the entire attack surface: only what you mount is visible.
+  Empty means the guest sees no host code at all.
+- ```disk_mb``` counts what the guest adds to ```/io``` and ```/work``` and what it
+  writes to stdout and stderr. What is in ```/work``` before the run does not
+  count.
+- ```watch_interval```: each check walks ```/io```, ```/work``` and the captured
+  output, so a large ```/work``` costs more per check; a longer interval lets
+  the guest write more past the limit before it is stopped. A check after the
+  run catches what is left.
+- ```output_mb``` cuts stdout and stderr at that size (with a mark) and makes a
+  larger value an error.
+- ```cache```: the first run compiles ```python.wasm``` (about 2 s) and stores it
+  there, later runs of any process load it in milliseconds. A file in it is
+  native code the host runs, so only the operator may write the directory.
+- ```shim_wasi_stdlib``` puts the bundled ```multiprocessing``` shim ahead of the
+  stdlib, so a framework that imports it at load can be rebuilt in the guest.
+  Only on the trusted path; the untrusted guest never gets it.
 
 .. warning::
 
@@ -300,7 +308,8 @@ There is no stdin runner here. For each call the sandbox:
    read-only at their guest paths.
 4. Runs the interpreter on the entry script with a scrubbed environment, a hard
    memory cap, and an epoch deadline. The guest's stdout and stderr go to files
-   the host keeps outside ```/io```, out of the guest's reach.
+   the host keeps outside ```/io```, out of the guest's reach; they count for
+   ```disk_mb``` and are cut at ```output_mb```.
 5. The guest entry either runs the ```code``` argument directly (untrusted,
    ```_GUEST_ENTRY_EXEC_PYSNIPPET```) or rebuilds the tool and calls it
    (trusted, ```_GUEST_ENTRY_EXEC_TOOL```); the two are detailed under the trust
@@ -308,7 +317,7 @@ There is no stdin runner here. For each call the sandbox:
    ```/io/value.json```: its model-facing string, its json, and whether the json
    is incomplete. No file means no value.
 6. The host builds the ```ToolResult```: the value from ```/io/value.json``` (read
-   with ```json.loads``` up to ```WASM_GUEST_OUTPUT_MAX_BYTES``` bytes), the states from what it
+   with ```json.loads``` up to ```output_mb```), the states from what it
    observed itself. A clean exit leaves ```exception``` empty. A tool or snippet
    that raises exits with code 1: the result has no value and the last stderr
    line as ```exception``` (a tool error, A). A failure of the entry's own
@@ -554,7 +563,7 @@ runs. A missing source ends the run with an error. The rules:
   of the list; a test checks that by the syntax tree.
 - The guest writes only ```/io``` and ```/work```; everything else is read-only.
 - The guest hands back only data: the value in ```/io/value.json```, read with
-  ```json.loads``` up to ```WASM_GUEST_OUTPUT_MAX_BYTES``` bytes, with ```incomplete```. The
+  ```json.loads``` up to ```output_mb```, with ```incomplete```. The
   exit code, a trap and the timeout are observed by the host; the text of
   stdout, stderr and the exception is the guest's and only a hint.
 - ```PYTHONDONTWRITEBYTECODE=1```: the guest writes no bytecode next to the

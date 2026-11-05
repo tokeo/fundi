@@ -306,3 +306,43 @@ def test_agent_name_from_profile_then_default():
 def test_agent_name_profile_null_opts_out():
     """An explicit agent: null on the profile opts out: None despite default_x."""
     assert resolve_agent_name(None, {'agent': None}, 'default_x') is None
+
+
+# ---- CONFIG.md: the sandbox options as specified ------------------------------
+
+
+def _yaml_default(value):
+    # a default as CONFIG.md writes it in its tables
+    if value is None:
+        return 'null'
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    return str(value)
+
+
+@pytest.mark.parametrize(
+    'heading, cls_path',
+    [
+        ('### 5.2 ```in_process```', 'tokeo.core.ai.sandboxes.in_process:TokeoAiInProcessSandbox'),
+        ('### 5.3 ```subprocess```', 'tokeo.core.ai.sandboxes.subprocess:TokeoAiSubprocessSandbox'),
+        ('### 5.4 ```docker```', 'tokeo.core.ai.sandboxes.docker:TokeoAiDockerSandbox'),
+        ('### 5.5 wasm', 'tokeo.core.ai.sandboxes.wasm:TokeoAiWasmSandbox'),
+    ],
+)
+def test_config_md_lists_every_sandbox_option_with_its_default(heading, cls_path):
+    """CONFIG.md names exactly the options and defaults of each sandbox type."""
+    import os
+    import re
+    import importlib
+
+    module, _, name = cls_path.partition(':')
+    cls = getattr(importlib.import_module(module), name)
+    path = os.path.join(os.path.dirname(importlib.import_module('tokeo.core.ai.config').__file__), 'CONFIG.md')
+    with open(path) as f:
+        text = f.read()
+    # the section of the type, up to the next heading of any level
+    start = text.index(heading)
+    section = text[start:]
+    section = section[: min(i for i in (section.find('\n### '), section.find('\n## ')) if i > 0)]
+    rows = re.findall(r'^\| ```(\w+)``` \| ```([^`]*)``` \|', section, flags=re.M)
+    assert dict(rows) == {key: _yaml_default(value) for key, value in cls.Meta.config_defaults.items()}
