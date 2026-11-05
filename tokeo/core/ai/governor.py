@@ -172,6 +172,12 @@ class TokeoAiGovernor(MetaMixin):
     guard has, in addition, a soft denial that skips only one call (see the guard
     role).
 
+    To decline the run in order instead, a governor raises
+    ```TokeoAiRunDeclinedError``` with the stage, the reason and who decided.
+    ```chat``` catches it, notes the decline on the trace, puts the run so far
+    (trace, counters, confirmations, no answer) into its ```result``` and
+    raises it on to the caller. A confirm declines this way.
+
     ### Args
 
     - **app**: The Tokeo application instance

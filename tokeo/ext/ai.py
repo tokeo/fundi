@@ -97,9 +97,8 @@ from tokeo.core.ai import (
     TokeoAiContext,
     TokeoAiFundiAgent,
     TokeoAiResult,
-    TokeoAiRunDeclined,
+    TokeoAiRunDeclinedError,
     TokeoAiTraceNote,
-    ChatResult,
 )
 from tokeo.core.ai.agent import AGENT_NONE_IMPLICIT
 from tokeo.core.ai.governor import (
@@ -876,16 +875,19 @@ class TokeoAi(MetaMixin):
             untouched by the framework, for a guard or confirm hook to read back
             the caller's own context; its content is the caller's concern
         - **notes** (list|None): Notes of confirm answers from earlier runs,
-            e.g. ```result.loopdata.confirmations``` of a run before; the
-            guards read them as ```ctx.notes```
+            e.g. ```result.confirmations``` of a run before; the guards read
+            them as ```ctx.notes```
 
         ### Returns
 
         - **TokeoAiResult**: The run result: the final answer (a
-            ```ChatResult```, no pending tool calls), the trace, and the status
+            ```ChatResult```, no pending tool calls), the trace, the counters
+            and the confirmations
 
         ### Raises
 
+        - **TokeoAiRunDeclinedError**: When a governor declined the run; its
+            ```result``` holds the run so far, without the declined answer
         - **TokeoAiError**: If no profile resolves or it carries no ```type```,
             or when a budget aborts the execution
 
@@ -949,9 +951,8 @@ class TokeoAi(MetaMixin):
 
             return step
 
-        # a governor may decline the run at a stage without a tool call: the
-        # run ends in order with that status, the answer so far is kept
-        result = ChatResult()
+        # a governor may decline the run: it ends in order, the decline goes on
+        # to the caller with the run so far
         try:
             # on_begin: once, on the raw incoming request, before any model call.
             # begin/prompt act on the accumulated conversation (no single handed-in
@@ -1033,13 +1034,15 @@ class TokeoAi(MetaMixin):
             # on_close: once, on the final result, after the loop
             result = self._govern(at_close, on_result(GOVERNOR_STAGE_ON_CLOSE), result)
             # the run result: the final answer (a ChatResult), plus the run's
-            # history and counters lifted off the context (which ends here). the
-            # answer is just the model answer; the trace and status ride alongside
-            return TokeoAiResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace)
-        except TokeoAiRunDeclined as err:
-            declined = dict(stage=err.stage, reason=err.reason, by=err.by)
-            ctx.track(self, TokeoAiTraceNote(dict(declined=declined)))
-            return TokeoAiResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace, status=TokeoAiResult.DECLINED, declined=declined)
+            # history, counters and confirmations lifted off the context (which
+            # ends here). the answer is just the model answer
+            return TokeoAiResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace, confirmations=ctx.confirmations)
+        except TokeoAiRunDeclinedError as err:
+            # the declined answer stays on the trace only, so no caller uses it
+            # by mistake
+            ctx.track(self, TokeoAiTraceNote(dict(declined=dict(stage=err.stage, reason=err.reason, by=err.by))))
+            err.result = TokeoAiResult(loopdata=ctx.loopdata, trace=ctx.trace, confirmations=ctx.confirmations)
+            raise
 
     def _assistant_turn(self, result):
         # rebuild the assistant message that requested the tool calls, in the
@@ -1100,8 +1103,8 @@ class TokeoAi(MetaMixin):
 
         ### Raises
 
-        - **TokeoAiRunDeclined**: When a governor declined the run; the status
-            of a run is only in ```chat```'s result
+        - **TokeoAiRunDeclinedError**: When a governor declined the run, with
+            the run so far in its ```result```
 
         """
         messages = [{'role': 'user', 'content': prompt}]
@@ -1117,9 +1120,6 @@ class TokeoAi(MetaMixin):
             userdata=userdata,
             notes=notes,
         )
-        if result.status == TokeoAiResult.DECLINED:
-            declined = result.declined
-            raise TokeoAiRunDeclined(declined['stage'], declined['reason'], by=declined['by'])
         return result.answer.text
 
 
@@ -1235,28 +1235,36 @@ class AiController(Controller):
         # a person in a terminal answers a confirm; else the default decides
         if sys.stdin.isatty():
             self.app.hook.register(CONFIRM_HOOK, terminal_channel(input, self.app.print))
-        result = self.app.ai.chat(
-            [{'role': 'user', 'content': prompt}],
-            profile=self.app.pargs.profile,
-            model=self.app.pargs.model,
-            purpose=self.app.pargs.purpose,
-            agent=self.app.pargs.agent,
-            model_params=model_params or None,
-        )
+        try:
+            result = self.app.ai.chat(
+                [{'role': 'user', 'content': prompt}],
+                profile=self.app.pargs.profile,
+                model=self.app.pargs.model,
+                purpose=self.app.pargs.purpose,
+                agent=self.app.pargs.agent,
+                model_params=model_params or None,
+            )
+        except TokeoAiRunDeclinedError as declined:
+            # a declined run shows its trace on request, then the decline
+            if self.app.pargs.as_trace or self.app.pargs.as_trace_compact:
+                self._print_trace(declined.result)
+            self.app.print(self._declined(declined))
+            return
         # --trace prints the whole result with the full trace; --trace-compact
         # prints it with a compact trace (unchanged steps drop their repeated
         # object); otherwise just the answer text
         if self.app.pargs.as_trace or self.app.pargs.as_trace_compact:
-            self.app.print(json_dump(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.as_trace_compact), indent=2))
-        elif result.status == TokeoAiResult.DECLINED:
-            self.app.print(self._declined(result))
+            self._print_trace(result)
         else:
             self.app.print(result.answer.text)
 
-    def _declined(self, result):
+    def _print_trace(self, result):
+        # the whole result with the full or the compact trace
+        self.app.print(json_dump(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.as_trace_compact), indent=2))
+
+    def _declined(self, declined):
         # the line for a run a governor declined
-        declined = result.declined
-        return f"declined at {declined['stage']}: {declined['reason']} (by {declined['by'] or '-'})"
+        return f'declined at {declined.stage}: {declined.reason} (by {declined.by or "-"})'
 
     @ex(
         help='start an interactive, multi-turn chat session',
@@ -1354,6 +1362,11 @@ class AiController(Controller):
                             agent=session['agent'],
                             model_params=session['model_params'] or None,
                         )
+                    except TokeoAiRunDeclinedError as declined:
+                        # a declined turn stays out of the conversation
+                        messages.pop()
+                        self.app.print(f'ai chat - {self._declined(declined)}')
+                        continue
                     except TokeoAiError as err:
                         # a selector or provider problem from the handler
                         # (for example an agent given on the command line that
@@ -1368,11 +1381,6 @@ class AiController(Controller):
                         # handlers below decide about the session
                         messages.pop()
                         raise
-                    if result.status == TokeoAiResult.DECLINED:
-                        # a declined turn stays out of the conversation
-                        messages.pop()
-                        self.app.print(f'ai chat - {self._declined(result)}')
-                        continue
                     messages.append({'role': 'assistant', 'content': result.answer.text})
                     self.app.print(result.answer.text)
                 except KeyboardInterrupt:

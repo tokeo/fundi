@@ -291,7 +291,7 @@ The answers, each may carry a note:
 |--------|--------|
 | ```yes``` | the state of the guards stands |
 | ```yes_run``` | the same, and the same question (stage, content and state 1:1) is not asked again in this run |
-| ```no``` | the state becomes deny: ```on_call``` skips the call, ```on_return``` replaces the result, every other stage ends the run with the status ```declined``` |
+| ```no``` | the state becomes deny: ```on_call``` skips the call, ```on_return``` replaces the result, every other stage declines the run (```TokeoAiRunDeclinedError```) |
 | ```no_retry``` | not like this: the note (required) goes to ```ctx.notes```, the stage runs again, its guards judge anew with the notes, and the channel is asked again |
 
 Without an answer the option ```default``` decides: ```no``` turns every state
@@ -308,11 +308,36 @@ into deny, ```yes``` confirms the state of the guards.
 
 Every answer says who decided, ```by``` is required: ```human``` for a person,
 ```auto``` for a function of the app; without an answer it is ```default```.
-Every answer lands in ```result.loopdata.confirmations``` (stage, content, state
-before and after, answer, note, by, who, time) and on the trace, a note also in
+Every answer lands in ```result.confirmations``` (stage, content, state before
+and after, answer, note, by, who, time) and on the trace, a note also in
 ```ctx.notes```. The guards read ```ctx.notes```; a later run gets the notes by
-```chat(..., notes=result.loopdata.confirmations)```. Whether the model sees a
-note is a guard's decision, confirm never hands it on by itself.
+```chat(..., notes=result.confirmations)```. Whether the model sees a note is a
+guard's decision, confirm never hands it on by itself.
+
+A declined run raises ```TokeoAiRunDeclinedError``` with ```stage```, ```reason```,
+```by``` and the run so far in ```result``` (trace, counters, confirmations,
+no answer). In a dramatiq actor an exception means a retry, up to
+```max_retries```, and a retried run asks the confirm again. Take the decline
+out of the retries in one of two ways:
+
+```python
+# the decline is expected: no retry, the message goes to the dead letters
+@app.dramatiq.actor(queue_name='ai', throws=(TokeoAiRunDeclinedError,))
+def summarize(document_id):
+    app.ai.ask(f'summarize {document_id}')
+
+
+# the decline is an outcome: the actor keeps it and ends normally
+@app.dramatiq.actor(queue_name='ai')
+def summarize(document_id):
+    try:
+        app.ai.ask(f'summarize {document_id}')
+    except TokeoAiRunDeclinedError as declined:
+        keep_declined(document_id, declined.stage, declined.reason, declined.result.confirmations)
+```
+
+The dramatiq guide of tokeo (```tokeo/ext/dramatiq/DRAMATIQ.md```) explains
+```throws``` and the dead letters.
 
 ## 5. The execution walls in ```sandboxes```
 
@@ -571,8 +596,8 @@ text = app.ai.ask(
 # -> str: the assistant text
 ```
 
-A run a governor declined raises ```TokeoAiRunDeclined``` (stage, reason, by);
-```chat``` returns it as the status of its result instead.
+A run a governor declined raises ```TokeoAiRunDeclinedError``` (stage, reason,
+by, and the run so far in ```result```), from ```ask``` as from ```chat```.
 
 ### 9.2 Full control and the full result with ```chat```
 
@@ -592,9 +617,18 @@ result = app.ai.chat(
 
 result.answer      # the model's ChatResult (result.answer.text is the text)
 result.trace       # the ordered step history (empty if ai.trace is false)
-result.loopdata    # the run's loop counters and its confirmations
-result.status      # done, or declined when a governor declined the run
-result.declined    # on declined: the stage, the reason, and who decided
+result.loopdata    # the run's loop counters
+result.confirmations  # every confirm decision of the run, in order
+```
+
+A declined run does not return, it raises ```TokeoAiRunDeclinedError```:
+
+```python
+try:
+    result = app.ai.chat(messages=[{'role': 'user', 'content': 'append_file hello'}], agent='careful')
+except TokeoAiRunDeclinedError as declined:
+    declined.stage, declined.reason, declined.by  # where, why, and who decided
+    declined.result.trace                         # the run so far, no answer
 ```
 
 The call arguments and where each is resolved:

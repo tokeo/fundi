@@ -1,11 +1,12 @@
 """
 Exceptions for confirm guards.
 
-A leaf module importing only the base ```TokeoAiGuardError```, so a confirm
-guard can raise ```TokeoAiConfirmGuardError``` at the top level without a
-circular import.
+A leaf module importing only the bases ```TokeoAiGuardError``` and
+```TokeoBaseException```, so a confirm guard can raise its exceptions at the
+top level without a circular import.
 """
 
+from tokeo.core.exc import TokeoBaseException
 from tokeo.core.ai.guards.exc import TokeoAiGuardError
 
 
@@ -21,12 +22,14 @@ class TokeoAiConfirmGuardError(TokeoAiGuardError):
     """
 
 
-class TokeoAiConfirmRetry(Exception):
+class TokeoAiConfirmRetry(TokeoBaseException):
     """
     Raised by a confirm guard on the answer no_retry.
 
-    Not an error: the loop catches it and runs the stage again, so its guards
-    judge anew with the note in ```ctx.notes```.
+    Not an error but a signal to the loop: it catches it and runs the stage
+    again, so its guards judge anew with the note in ```ctx.notes```. It
+    derives only from ```TokeoBaseException```, so no ```except Exception``` of
+    a governor on the way catches it by mistake.
 
     ### Args
 

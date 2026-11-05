@@ -38,7 +38,7 @@ class TokeoAiContext:
     trace keeps every step).
 
     The context carries only what accumulates: the trace, the caches,
-    ```loopdata``` (the counters and confirmations) and ```notes```. The current
+    ```loopdata``` (the counters), ```confirmations``` and ```notes```. The current
     single objects (the round's result, a call's invocation) are not fields
     here: the loop tracks them and hands them to the stage that needs them, and
     ```cur_invocation``` reaches the latest from the cache. Apart from these it
@@ -100,6 +100,9 @@ class TokeoAiContext:
         # the notes of confirm answers, from earlier runs and this one, for the
         # guards to judge with
         self.notes = list(notes or [])
+        #: (list) Every confirm decision of this run in order; chat hands it
+        #: out as the result's confirmations
+        self.confirmations = []
         # seed the incoming conversation, as ChatMessage so it is typed in the
         # cache; a plain dict is wrapped, an existing ChatMessage kept as is. the
         # context itself is the origin of these seed steps (the incoming request,

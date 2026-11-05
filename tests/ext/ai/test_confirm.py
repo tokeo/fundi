@@ -9,8 +9,8 @@ the config, the stages without a tool call, and the terminal channel.
 """
 
 import pytest
-from tokeo.core.ai import TokeoAiError, TokeoAiResult, TokeoAiRunDeclined, TokeoAiGuard, Invocation
-from tokeo.core.ai.guards.confirm import CONFIRM_HOOK, TokeoAiConfirmAnswer, TokeoAiConfirmRequest
+from tokeo.core.ai import TokeoAiError, TokeoAiRunDeclinedError, TokeoAiGuard, Invocation
+from tokeo.core.ai.guards.confirm import CONFIRM_HOOK, TokeoAiConfirmAnswer, TokeoAiConfirmRequest, TokeoAiConfirmRetry
 from tests.ext.ai.test_loop import LoopTest, loop_config, call
 
 YES = TokeoAiConfirmAnswer('yes', by='human', who='tom')
@@ -38,9 +38,12 @@ def confirm_config(script, stages=('on_call',), options=None, forbid=False):
     return cfg
 
 
-def run(cfg, *answers, **chat):
-    """Chat once as careful; the channel answers in order, none means no channel."""
-    asked = []
+def run(cfg, *answers, asked=None, **chat):
+    """
+    Chat once as careful; the channel answers in order, none means no channel.
+    The requests go to asked, a list of the caller's to keep them on a raise.
+    """
+    asked = [] if asked is None else asked
 
     def channel(app, request):
         asked.append(request)
@@ -61,7 +64,7 @@ def test_without_a_channel_the_default_says_no():
     """No channel: echo is skipped, the record says no by default, allow to deny."""
     result, _ = run(confirm_config([call('moin'), dict(text='done')]))
     assert tool_contents(result) == ['denied: declined by confirmation']
-    record = result.loopdata.confirmations[0]
+    record = result.confirmations[0]
     assert (record['answer'], record['by']) == ('no', 'default')
     assert (record['state_before']['decision'], record['state_after']) == ('allow', 'deny')
 
@@ -79,7 +82,7 @@ def test_a_yes_confirms_the_state_and_is_recorded():
     assert tool_contents(result) == ['moin']
     assert asked[0].answers == ('yes', 'yes_run', 'no', 'no_retry')
     assert asked[0].state == dict(decision='allow', reason=None)
-    record = result.loopdata.confirmations[0]
+    record = result.confirmations[0]
     assert (record['answer'], record['by'], record['who'], record['state_after']) == ('yes', 'human', 'tom', 'allow')
     assert record['subject'] == dict(tool='echo', arguments=dict(text='moin'))
 
@@ -102,7 +105,7 @@ def test_yes_run_is_recalled_only_for_the_same_question():
     result, asked = run(confirm_config([call('a'), call('a'), call('b'), dict(text='done')]), YES_RUN)
     assert tool_contents(result) == ['a', 'a', 'b']
     assert [request.subject.arguments for request in asked] == [dict(text='a'), dict(text='b')]
-    assert [(c['recalled'], c['by']) for c in result.loopdata.confirmations] == [(False, 'human'), (True, 'human'), (False, 'human')]
+    assert [(c['recalled'], c['by']) for c in result.confirmations] == [(False, 'human'), (True, 'human'), (False, 'human')]
 
 
 def test_no_retry_lets_the_guards_judge_anew_with_the_note():
@@ -111,7 +114,7 @@ def test_no_retry_lets_the_guards_judge_anew_with_the_note():
     assert tool_contents(result) == ['bad']
     assert [request.state['decision'] for request in asked] == ['deny', 'allow']
     assert [note['note'] for note in asked[1].notes] == ['trust it']
-    assert [c['answer'] for c in result.loopdata.confirmations] == ['no_retry', 'yes']
+    assert [c['answer'] for c in result.confirmations] == ['no_retry', 'yes']
 
 
 def test_the_dialog_is_asked_again_after_each_retry_until_yes():
@@ -130,8 +133,9 @@ def test_no_retry_needs_a_note():
 def test_more_than_ten_retries_decline_the_run():
     """A channel that always retries: after 10 retries the run is declined."""
     again = TokeoAiConfirmAnswer('no_retry', by='auto', note='again')
-    result, asked = run(confirm_config([call('bad'), dict(text='done')], forbid=True), again)
-    assert result.status == TokeoAiResult.DECLINED and 'retried more than 10 times' in result.declined['reason']
+    asked = []
+    with pytest.raises(TokeoAiRunDeclinedError, match='retried more than 10 times'):
+        run(confirm_config([call('bad'), dict(text='done')], forbid=True), again, asked=asked)
     assert len(asked) == 11
 
 
@@ -147,7 +151,7 @@ def test_a_note_on_a_yes_is_kept_for_the_run_and_the_result():
     """yes with a note: the record carries it, the next request shows it."""
     noted = TokeoAiConfirmAnswer('yes', by='auto', who='a model', note='+20 % for this header')
     result, asked = run(confirm_config([call('a'), call('b'), dict(text='done')]), noted)
-    assert result.loopdata.confirmations[0]['note'] == '+20 % for this header'
+    assert result.confirmations[0]['note'] == '+20 % for this header'
     assert [note['note'] for note in asked[1].notes] == ['+20 % for this header']
 
 
@@ -171,16 +175,17 @@ def test_a_no_at_on_return_replaces_the_result():
 
 @pytest.mark.parametrize('stage', ['on_begin', 'on_prompt', 'on_answer', 'on_close'])
 def test_a_no_at_a_stage_without_a_call_declines_the_run(stage):
-    """A no at a stage without a tool call: status declined at that stage."""
-    result, _ = run(confirm_config([dict(text='done')], stages=(stage,)), NO)
-    assert result.status == TokeoAiResult.DECLINED
-    assert result.declined == dict(stage=stage, reason='not now', by='human')
+    """A no at a stage without a tool call declines the run, its record stays."""
+    with pytest.raises(TokeoAiRunDeclinedError) as declined:
+        run(confirm_config([dict(text='done')], stages=(stage,)), NO)
+    assert (declined.value.stage, declined.value.reason, declined.value.by) == (stage, 'not now', 'human')
+    assert [c['answer'] for c in declined.value.result.confirmations] == ['no']
 
 
 def test_no_retry_at_a_stage_without_a_call_asks_again():
     """no_retry at on_answer, then yes: the run answers done."""
     result, asked = run(confirm_config([dict(text='done')], stages=('on_answer',)), TRUST, YES)
-    assert (result.status, result.answer.text, len(asked)) == (TokeoAiResult.DONE, 'done', 2)
+    assert (result.answer.text, len(asked)) == ('done', 2)
 
 
 def test_the_request_carries_the_userdata_of_the_run():
@@ -204,13 +209,13 @@ def test_a_wrong_answer_is_an_error(answer, message):
 
 
 def test_ask_raises_when_the_run_is_declined():
-    """ask declined at on_prompt raises TokeoAiRunDeclined with the stage."""
+    """ask declined at on_prompt raises TokeoAiRunDeclinedError with the stage."""
 
     def channel(app, request):
         return NO
 
     with LoopTest(config_defaults=confirm_config([dict(text='done')], stages=('on_prompt',)), hooks=[(CONFIRM_HOOK, channel)]) as app:
-        with pytest.raises(TokeoAiRunDeclined) as declined:
+        with pytest.raises(TokeoAiRunDeclinedError) as declined:
             app.ai.ask('hi', agent='careful')
     assert (declined.value.stage, declined.value.reason) == ('on_prompt', 'not now')
 
@@ -269,3 +274,8 @@ def test_ai_ask_asks_in_the_terminal(monkeypatch, capsys, key, out):
     with LoopTest(argv=['ai', 'ask', 'hi', '--agent', 'careful'], config_defaults=cfg) as app:
         app.run()
     assert capsys.readouterr().out.splitlines()[-1] == out
+
+
+def test_a_retry_passes_an_except_exception_of_a_governor():
+    """TokeoAiConfirmRetry is a signal to the loop, no Exception to catch."""
+    assert not issubclass(TokeoAiConfirmRetry, Exception)

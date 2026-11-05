@@ -300,15 +300,11 @@ class TokeoAiLoopdata:
         ```max_steps```
     - **failed_loops** (int): Consecutive rounds with no successful tool call,
         against ```max_loops```; reset by any successful call
-    - **confirmations** (list): Every confirm decision of the run in order,
-        each a dict (stage, guard, subject, state_before, answer, state_after,
-        note, by, who, retry, recalled, at), for the app to keep and learn from
 
     """
 
     steps: int = 0
     failed_loops: int = 0
-    confirmations: list = field(default_factory=list)
 
 
 class TokeoAiTurndata(dict):
@@ -360,34 +356,30 @@ class TokeoAiResult:
         reasoning, tool_calls, usage, raw). The answer is not always plain text
         (a refusal is distinct from empty text), so the full ```ChatResult```
         is kept, not a flattened string.
-    - the loopdata: the loop's counters (```steps```, ```failed_loops```) and
-        the ```confirmations```.
+    - the loopdata: the loop's counters (```steps```, ```failed_loops```).
     - the trace: the ordered ```TraceStep``` history of the run (every
         model round, tool call, and guard that ran).
+    - the confirmations: every confirm decision of the run, in order.
 
-    The trace and loop counters live on the context during the run; ```chat```
-    hands them out here so the caller has them without reaching into the context
-    (now gone), and without the answer carrying its own trace, which made the
-    answer enclose itself.
+    The trace, the counters and the confirmations live on the context during
+    the run; ```chat``` hands them out here so the caller has them without
+    reaching into the context (now gone), and without the answer carrying its
+    own trace, which made the answer enclose itself. A declined run raises
+    ```TokeoAiRunDeclinedError``` instead, with this result (without the
+    answer) in its ```result```.
 
     ### Args
 
     - **answer** (ChatResult): The final model reply in full
     - **loopdata** (TokeoAiLoopdata): The loop's live counters for the run
     - **trace** (list): The run's ```TraceStep``` history, in order
-    - **status** (str): ```DONE```, or ```DECLINED``` when a governor declined
-        the run (```TokeoAiRunDeclined```), e.g. a confirm said no at a stage
-        without a tool call or its retries ran out
-    - **declined** (dict|None): On ```DECLINED``` the stage, the reason, and
-        who decided (```by```)
+    - **confirmations** (list): Every confirm decision of the run in order,
+        each a dict (stage, guard, subject, state_before, answer, state_after,
+        note, by, who, retry, recalled, at), for the app to keep and learn from
 
     """
-
-    DONE = 'done'
-    DECLINED = 'declined'
 
     answer: ChatResult = field(default_factory=ChatResult)
     loopdata: TokeoAiLoopdata = field(default_factory=TokeoAiLoopdata)
     trace: list = field(default_factory=list)
-    status: str = DONE
-    declined: dict | None = None
+    confirmations: list = field(default_factory=list)

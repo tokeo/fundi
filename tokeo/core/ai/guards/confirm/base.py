@@ -40,10 +40,11 @@ class TokeoAiConfirmGuard(TokeoAiGuard):
     ```TokeoAiGovernor``` class documentation, the single reference for building a
     guard across its stations.
 
-    A confirm guard that must abort the run rather than continue (the human
-    declined and the run must not proceed) raises ```TokeoAiConfirmGuardError```;
-    that raise is not caught by the loop and ends the run at once (see the
-    stop-the-run section in ```TokeoAiGovernor```).
+    A confirm guard that declines the run (the human said no and the run must
+    not proceed) raises ```TokeoAiRunDeclinedError```: ```chat``` ends the run in
+    order and raises it on with the run so far. A broken confirm (no way to ask,
+    a bad answer) raises ```TokeoAiConfirmGuardError``` (see the stop-the-run
+    section in ```TokeoAiGovernor```).
     """
 
     class Meta:

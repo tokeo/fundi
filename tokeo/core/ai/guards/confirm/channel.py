@@ -42,7 +42,7 @@ ai:
     happens when a guard judges anew with the notes and the new state is
     confirmed.
 
-: Every answer is recorded in ```result.loopdata.confirmations``` and on the
+: Every answer is recorded in ```result.confirmations``` and on the
     trace, a note also in ```ctx.notes```; ```chat(notes=...)``` hands notes of
     earlier runs to the guards of a new one.
 """
@@ -51,7 +51,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from tokeo.core.ai import Invocation, TokeoAiError, TokeoAiRunDeclined
+from tokeo.core.ai import Invocation, TokeoAiError, TokeoAiRunDeclinedError
 from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_BEGIN,
     GOVERNOR_STAGE_ON_PROMPT,
@@ -133,8 +133,9 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
     Ask the ```tokeo_ai_confirm``` channels to confirm the state of a stage.
 
     A no skips the call at ```on_call```, replaces the result at
-    ```on_return```, and ends the run with the status ```declined``` at the
-    other stages. A no_retry runs the stage again with the note.
+    ```on_return```, and declines the run at the other stages
+    (```TokeoAiRunDeclinedError```). A no_retry runs the stage again with the
+    note.
     """
 
     class Meta:
@@ -182,7 +183,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         if answer.answer == TokeoAiConfirmAnswer.NO_RETRY:
             raise TokeoAiConfirmRetry(None if isinstance(subject, list) else subject)
         if answer.answer == TokeoAiConfirmAnswer.NO:
-            raise TokeoAiRunDeclined(stage, answer.note or 'declined by confirmation', by=answer.by)
+            raise TokeoAiRunDeclinedError(stage, answer.note or 'declined by confirmation', by=answer.by)
 
     def _confirm_call(self, ctx, stage, invocation, no_reason):
         # the tool stages: only the configured tools are asked
@@ -234,7 +235,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             if not answer.note:
                 raise TokeoAiError(f'confirm guard {self.config_name!r}: no_retry needs a note')
             if retries >= CONFIRM_RETRIES:
-                raise TokeoAiRunDeclined(stage, f'retried more than {CONFIRM_RETRIES} times in a confirm', by=answer.by)
+                raise TokeoAiRunDeclinedError(stage, f'retried more than {CONFIRM_RETRIES} times in a confirm', by=answer.by)
             memory['retries'][retry_key] = retries + 1
         if answer.answer == TokeoAiConfirmAnswer.YES_RUN:
             memory['run'][question] = answer
@@ -255,7 +256,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             recalled=recalled,
             at=datetime.now(timezone.utc).isoformat(),
         )
-        ctx.loopdata.confirmations.append(record)
+        ctx.confirmations.append(record)
         if answer.note:
             ctx.notes.append(record)
         ctx.track(self, record, stage=stage)

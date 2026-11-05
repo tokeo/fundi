@@ -53,7 +53,7 @@ class TokeoAiPolicyGuard(TokeoAiGuard):
 
     At the stages without a tool call a soft per-call denial has no meaning:
     there a governor either stops hard or declines the run in order with
-    ```TokeoAiRunDeclined``` (the result gets the status ```declined```).
+    ```TokeoAiRunDeclinedError``` (```chat``` raises it on with the run so far).
 
     Raise the typed ```TokeoAiPolicyGuardError``` (not the bare base) so a caller
     can catch a policy abort specifically.
