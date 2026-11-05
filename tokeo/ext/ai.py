@@ -100,7 +100,7 @@ from tokeo.core.ai import (
     TokeoAiRunDeclinedError,
     TokeoAiTraceNote,
 )
-from tokeo.core.ai.agent import AGENT_NONE_IMPLICIT
+from tokeo.core.ai.agent import AGENT_IMPLICIT_NAME
 from tokeo.core.ai.governor import (
     GOVERNOR_STAGES,
     GOVERNOR_STAGE_ON_BEGIN,
@@ -123,7 +123,7 @@ from tokeo.core.ai.guards.policy import TokeoAiToolPolicyGuard, TokeoAiDenyPolic
 from tokeo.core.ai.guards.validate import TokeoAiToolSchemaValidator
 from tokeo.core.ai.guards.redact import TokeoAiRegexRedactGuard
 from tokeo.core.ai.guards.confirm import (
-    CONFIRM_HOOK,
+    GOVERNOR_CONFIRM_CHANNEL_HOOK,
     TokeoAiConfirmGuard,
     TokeoAiConfirmRetry,
     TokeoAiChannelConfirmGuard,
@@ -527,7 +527,7 @@ class TokeoAi(MetaMixin):
             return self._agent(name)
         if self._agent_implicit is None:
             self._agent_implicit = TokeoAiFundiAgent(self.app)
-            self._agent_implicit._setup(self.app, AGENT_NONE_IMPLICIT, {})
+            self._agent_implicit._setup(self.app, AGENT_IMPLICIT_NAME, {})
         return self._agent_implicit
 
     def _deny_set(self, agent_obj, profile, call_deny=None):
@@ -1234,7 +1234,7 @@ class AiController(Controller):
         model_params = parse_model_params(self.app.pargs.model_param)
         # a person in a terminal answers a confirm; else the default decides
         if sys.stdin.isatty():
-            self.app.hook.register(CONFIRM_HOOK, terminal_channel(input, self.app.print))
+            self.app.hook.register(GOVERNOR_CONFIRM_CHANNEL_HOOK, terminal_channel(input, self.app.print))
         try:
             result = self.app.ai.chat(
                 [{'role': 'user', 'content': prompt}],
@@ -1314,7 +1314,7 @@ class AiController(Controller):
         editor = self._chat_session(InMemoryHistory(), completer)
         # a person in a terminal answers a confirm in the same session
         if sys.stdin.isatty():
-            self.app.hook.register(CONFIRM_HOOK, terminal_channel(editor.prompt, self.app.print))
+            self.app.hook.register(GOVERNOR_CONFIRM_CHANNEL_HOOK, terminal_channel(editor.prompt, self.app.print))
         self.app.print('ai chat - "--" for options, "exit"/"quit" or Ctrl-D to quit')
         # patch_stdout keeps any guard/audit log lines printed during a turn
         # from corrupting the live prompt line
@@ -1630,7 +1630,7 @@ def load(app):
 
     """
     # the channel a confirm guard asks, see TokeoAiChannelConfirmGuard
-    app.hook.define(CONFIRM_HOOK)
+    app.hook.define(GOVERNOR_CONFIRM_CHANNEL_HOOK)
     app.hook.register('post_setup', ai_extend_app)
     # after the post_setup hooks of the project, which may register aliases
     app.hook.register('post_setup', ai_lint_on_setup, weight=100)

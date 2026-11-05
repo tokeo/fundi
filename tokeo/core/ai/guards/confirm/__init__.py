@@ -15,8 +15,8 @@ every answer.
 from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmGuardError, TokeoAiConfirmRetry
 from tokeo.core.ai.guards.confirm.base import TokeoAiConfirmGuard
 from tokeo.core.ai.guards.confirm.channel import (
-    CONFIRM_HOOK,
-    CONFIRM_RETRIES,
+    GOVERNOR_CONFIRM_CHANNEL_HOOK,
+    GOVERNOR_CONFIRM_STAGE_MAX_RETRIES,
     TokeoAiConfirmRequest,
     TokeoAiConfirmAnswer,
     TokeoAiChannelConfirmGuard,
@@ -26,8 +26,8 @@ __all__ = [
     'TokeoAiConfirmGuardError',
     'TokeoAiConfirmRetry',
     'TokeoAiConfirmGuard',
-    'CONFIRM_HOOK',
-    'CONFIRM_RETRIES',
+    'GOVERNOR_CONFIRM_CHANNEL_HOOK',
+    'GOVERNOR_CONFIRM_STAGE_MAX_RETRIES',
     'TokeoAiConfirmRequest',
     'TokeoAiConfirmAnswer',
     'TokeoAiChannelConfirmGuard',

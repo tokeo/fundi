@@ -4,12 +4,12 @@ The wasm sandbox: real isolation against untrusted code, not just cleanup.
 It runs a tool call inside a WebAssembly guest under Wasmtime. The guest is a
 user-supplied CPython-WASI build (the ```runtime```/```stdlib``` options). Per
 call the host writes the task, a small entry script and copies of the
-stdlib-only ```GUEST_MODULES``` into a fresh scratch dir mounted read-write at
-```/io```. The guest has no network (the syscalls do not exist in its world),
-sees no host file outside the explicit ```mounts```, and runs under a hard
-memory cap (Wasmtime store limits, the same on every platform) and an epoch
-timeout. This is deny-by-default: a tool that needs a path or the network must
-be granted it explicitly, or run in a different sandbox.
+stdlib-only ```WASM_GUEST_MODULE_COPIES``` into a fresh scratch dir mounted
+read-write at ```/io```. The guest has no network (the syscalls do not exist
+in its world), sees no host file outside the explicit ```mounts```, and runs
+under a hard memory cap (Wasmtime store limits, the same on every platform)
+and an epoch timeout. This is deny-by-default: a tool that needs a path or the
+network must be granted it explicitly, or run in a different sandbox.
 
 ### Notes
 
@@ -44,7 +44,7 @@ from tokeo.core.ai.sandboxes._common import _importable_path, expand_env
 from tokeo.core.utils.validate import is_number_ge
 
 #: The stdlib-only modules the guest gets as copies in ```/io/_guest```, per run.
-GUEST_MODULES = (
+WASM_GUEST_MODULE_COPIES = (
     'tokeo.core.utils.json',
     'tokeo.core.utils.date',
     'tokeo.core.utils.date_compat',
@@ -52,13 +52,13 @@ GUEST_MODULES = (
 )
 
 #: The most bytes the host reads of the value, stdout and stderr of a run.
-REPLY_LIMIT = 1024 * 1024
+WASM_GUEST_OUTPUT_MAX_BYTES = 1024 * 1024
 
 # the exit code of a guest entry whose own machinery failed
-_EXIT_MACHINERY = 3
+_GUEST_EXIT_MACHINERY = 3
 
 # the start of both guest entries: a failure before the tool code runs is the
-# machinery's, so it exits with _EXIT_MACHINERY
+# machinery's, so it exits with _GUEST_EXIT_MACHINERY
 _GUEST_SETUP = r"""
 import sys
 import json
@@ -276,7 +276,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             guest_dir = os.path.join(io_dir, '_guest')
             os.makedirs(guest_dir)
             open(os.path.join(guest_dir, '__init__.py'), 'w').close()
-            for name in GUEST_MODULES:
+            for name in WASM_GUEST_MODULE_COPIES:
                 try:
                     spec = importlib.util.find_spec(name)
                 except ImportError:
@@ -293,19 +293,19 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             code = self._run_guest(wasmtime, io_dir, cap_dir, dotted, shims)
 
             def read(path):
-                # at most REPLY_LIMIT bytes, a missing file reads as empty
+                # at most WASM_GUEST_OUTPUT_MAX_BYTES, a missing file reads as empty
                 if not os.path.exists(path):
                     return ''
                 with open(path, 'rb') as f:
-                    return f.read(REPLY_LIMIT + 1).decode('utf-8', 'replace')
+                    return f.read(WASM_GUEST_OUTPUT_MAX_BYTES + 1).decode('utf-8', 'replace')
 
-            stdout = read(os.path.join(cap_dir, 'stdout'))[:REPLY_LIMIT]
-            stderr = read(os.path.join(cap_dir, 'stderr'))[:REPLY_LIMIT]
-            if code == _EXIT_MACHINERY:
+            stdout = read(os.path.join(cap_dir, 'stdout'))[:WASM_GUEST_OUTPUT_MAX_BYTES]
+            stderr = read(os.path.join(cap_dir, 'stderr'))[:WASM_GUEST_OUTPUT_MAX_BYTES]
+            if code == _GUEST_EXIT_MACHINERY:
                 raise TokeoAiError(f'tool {dotted!r} failed in the wasm sandbox: {stderr.strip()[-400:]}')
             reply = read(os.path.join(io_dir, 'value.json')) if code == 0 else ''
-        if len(reply) > REPLY_LIMIT:
-            raise TokeoAiError(f'tool {dotted!r} delivered a value over {REPLY_LIMIT} bytes in the wasm sandbox')
+        if len(reply) > WASM_GUEST_OUTPUT_MAX_BYTES:
+            raise TokeoAiError(f'tool {dotted!r} delivered a value over {WASM_GUEST_OUTPUT_MAX_BYTES} bytes in the wasm sandbox')
         value, incomplete = None, False
         if reply:
             try:

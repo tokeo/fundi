@@ -49,7 +49,7 @@ from tokeo.core.ai.guards.validate.base import TokeoAiValidateGuard
 # the basic json-schema types a tool declaration uses, mapped to their
 # python counterparts; bool subclasses int, so integer and number exclude
 # it explicitly in the check below
-_TYPES = {
+_SCHEMA_TYPES = {
     'string': str,
     'integer': int,
     'number': (int, float),
@@ -122,7 +122,7 @@ class TokeoAiToolSchemaValidator(TokeoAiValidateGuard):
                     problems.append(f'unknown argument {name!r}')
         for name, value in arguments.items():
             declared = (properties.get(name) or {}).get('type')
-            expected = _TYPES.get(declared)
+            expected = _SCHEMA_TYPES.get(declared)
             if expected is None:
                 continue
             wrong = not isinstance(value, expected)

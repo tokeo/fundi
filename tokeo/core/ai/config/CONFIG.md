@@ -278,6 +278,7 @@ guards:
     options:
       tools: [filesystem]       # the calls asked at the tool stages (all if unset)
       default: no               # no channel answers: no (or yes)
+      max_retries: 5            # no_retry runs a stage again at most so often
 agents:
   careful:
     type: fundi
@@ -304,7 +305,8 @@ into deny, ```yes``` confirms the state of the guards.
     the notes (after a ```no_retry```) and that new state is confirmed. The
     limits of the config (what the agent offers, the deny sets, the sandbox
     chain) stand anyway: an agent can never do more than its config allows. A
-    retry runs at most 10 times per stage, then the run is declined.
+    stage runs again at most ```max_retries``` times (default 5, per guard or
+    per stage), then the run is declined.
 
 Every answer says who decided, ```by``` is required: ```human``` for a person,
 ```auto``` for a function of the app; without an answer it is ```default```.

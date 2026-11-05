@@ -10,7 +10,7 @@ the config, the stages without a tool call, and the terminal channel.
 
 import pytest
 from tokeo.core.ai import TokeoAiError, TokeoAiRunDeclinedError, TokeoAiGuard, Invocation
-from tokeo.core.ai.guards.confirm import CONFIRM_HOOK, TokeoAiConfirmAnswer, TokeoAiConfirmRequest, TokeoAiConfirmRetry
+from tokeo.core.ai.guards.confirm import GOVERNOR_CONFIRM_CHANNEL_HOOK, TokeoAiConfirmAnswer, TokeoAiConfirmRequest, TokeoAiConfirmRetry
 from tests.ext.ai.test_loop import LoopTest, loop_config, call
 
 YES = TokeoAiConfirmAnswer('yes', by='human', who='tom')
@@ -49,7 +49,7 @@ def run(cfg, *answers, asked=None, **chat):
         asked.append(request)
         return answers[min(len(asked), len(answers)) - 1] if answers else None
 
-    hooks = [(CONFIRM_HOOK, channel)] if answers else []
+    hooks = [(GOVERNOR_CONFIRM_CHANNEL_HOOK, channel)] if answers else []
     with LoopTest(config_defaults=cfg, hooks=hooks) as app:
         result = app.ai.chat([dict(role='user', content='hi')], agent='careful', **chat)
     return result, asked
@@ -130,13 +130,42 @@ def test_no_retry_needs_a_note():
         run(confirm_config([call('moin'), dict(text='done')]), TokeoAiConfirmAnswer('no_retry', by='human'))
 
 
-def test_more_than_ten_retries_decline_the_run():
-    """A channel that always retries: after 10 retries the run is declined."""
+def test_more_retries_than_the_default_decline_the_run():
+    """A channel that always retries: after 5 retries (default) it is declined."""
     again = TokeoAiConfirmAnswer('no_retry', by='auto', note='again')
     asked = []
-    with pytest.raises(TokeoAiRunDeclinedError, match='retried more than 10 times'):
+    with pytest.raises(TokeoAiRunDeclinedError, match='retried more than 5 times'):
         run(confirm_config([call('bad'), dict(text='done')], forbid=True), again, asked=asked)
-    assert len(asked) == 11
+    assert len(asked) == 6
+
+
+@pytest.mark.parametrize('options, asks', [(dict(max_retries=2), 3), (dict(on_call=dict(options=dict(max_retries=1))), 2)])
+def test_max_retries_is_set_per_guard_or_per_stage(options, asks):
+    """max_retries 2 for the guard, or 1 for its stage on_call, ends the retries."""
+    again = TokeoAiConfirmAnswer('no_retry', by='auto', note='again')
+    cfg = confirm_config([call('bad'), dict(text='done')], forbid=True)
+    if 'on_call' in options:
+        cfg['ai']['guards']['ask'].update(options)
+    else:
+        cfg['ai']['guards']['ask']['options'].update(options)
+    asked = []
+    with pytest.raises(TokeoAiRunDeclinedError, match='retried more than'):
+        run(cfg, again, asked=asked)
+    assert len(asked) == asks
+
+
+@pytest.mark.parametrize('value', [0, -1, 1.5, True, 'five'])
+def test_the_linter_checks_max_retries(value):
+    """max_retries is a whole number of at least 1, for the guard and per stage."""
+    from tokeo.core.ai.linter import TokeoAiLinter
+
+    cfg = confirm_config([dict(text='done')])
+    cfg['ai']['guards']['ask']['options']['max_retries'] = value
+    cfg['ai']['guards']['ask']['on_call'] = dict(options=dict(max_retries=value))
+    with LoopTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+        errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
+    expected = 'max_retries must be a whole number, at least 1'
+    assert (errors.get('ai.guards.ask.options'), errors.get('ai.guards.ask.on_call.options')) == (expected, expected)
 
 
 def test_notes_of_an_earlier_run_reach_the_guards():
@@ -214,7 +243,8 @@ def test_ask_raises_when_the_run_is_declined():
     def channel(app, request):
         return NO
 
-    with LoopTest(config_defaults=confirm_config([dict(text='done')], stages=('on_prompt',)), hooks=[(CONFIRM_HOOK, channel)]) as app:
+    cfg = confirm_config([dict(text='done')], stages=('on_prompt',))
+    with LoopTest(config_defaults=cfg, hooks=[(GOVERNOR_CONFIRM_CHANNEL_HOOK, channel)]) as app:
         with pytest.raises(TokeoAiRunDeclinedError) as declined:
             app.ai.ask('hi', agent='careful')
     assert (declined.value.stage, declined.value.reason) == ('on_prompt', 'not now')

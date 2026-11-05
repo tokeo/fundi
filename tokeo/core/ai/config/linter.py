@@ -66,8 +66,8 @@ _GUARD_ITEM_KEYS = _ITEM_KEYS | set(GOVERNOR_STAGES)
 # must derive from, so the linter keeps each section pure (a guard type only
 # in ai.guards, a transformer only in ai.transformers, ...)
 _GOVERNOR_SECTIONS = ('guards', 'transformers', 'conductors')
-_ROLE_BASE = {'guards': TokeoAiGuard, 'transformers': TokeoAiTransformer, 'conductors': TokeoAiConductor}
-_ROLE_NAME = {'guards': 'guard', 'transformers': 'transformer', 'conductors': 'conductor'}
+_GOVERNOR_ROLE_BASE = {'guards': TokeoAiGuard, 'transformers': TokeoAiTransformer, 'conductors': TokeoAiConductor}
+_GOVERNOR_ROLE_NAME = {'guards': 'guard', 'transformers': 'transformer', 'conductors': 'conductor'}
 _SANDBOX_KEYS = {'type', 'tools', 'except', 'options'}
 
 
@@ -219,6 +219,7 @@ class TokeoAiLinter:
             self._lint_options(path, value)
             self._lint_type('governor', path, value)
             self._lint_option_keys('governor', f'{path}.options', value.get('type'), value.get('options'))
+            self._validate_options_via_class('governor', path, value)
             # an on_<stage> block holds only its own options for that stage
             for stage in GOVERNOR_STAGES:
                 block = value.get(stage)
@@ -226,6 +227,8 @@ class TokeoAiLinter:
                     self._lint_keys(f'{path}.{stage}', block, {'options'})
                     self._lint_options(f'{path}.{stage}', block)
                     self._lint_option_keys('governor', f'{path}.{stage}.options', value.get('type'), block.get('options'))
+                    staged = dict(type=value.get('type'), options=block.get('options'))
+                    self._validate_options_via_class('governor', f'{path}.{stage}', staged)
                 elif block is not None:
                     self._add(f'{path}.{stage}', 'must be a mapping with "options"')
             self._lint_governor_purity(section, path, value.get('type'))
@@ -271,12 +274,12 @@ class TokeoAiLinter:
         except TokeoAiError:
             # an unresolved type is already reported by _lint_type
             return
-        expected = _ROLE_BASE.get(section)
+        expected = _GOVERNOR_ROLE_BASE.get(section)
         if expected is None or not isinstance(cls, type):
             return
         if not issubclass(cls, expected):
             where = f'{cls.__module__}:{cls.__qualname__}'
-            self._add(path, f'class {where} can not be used as {_ROLE_NAME[section]}')
+            self._add(path, f'class {where} can not be used as {_GOVERNOR_ROLE_NAME[section]}')
 
     def _lint_tool_name_options(self, path, item):
         # a governor class that decides by tool names declares which of its

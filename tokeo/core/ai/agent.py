@@ -12,7 +12,7 @@ from tokeo.core.utils.dict import deep_merge
 from tokeo.core.ai.exc import TokeoAiError
 
 # the agent when none results: offers nothing, no name selects it
-AGENT_NONE_IMPLICIT = '__implicit'
+AGENT_IMPLICIT_NAME = '__implicit'
 
 
 class TokeoAiAgent(MetaMixin):

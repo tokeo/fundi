@@ -14,7 +14,7 @@ import pytest
 
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.sandboxes import wasm
-from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox, GUEST_MODULES
+from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox, WASM_GUEST_MODULE_COPIES
 from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExecTool
 from tokeo.core.ai.tools.python_trusted_exec import TokeoAiPythonTrustedExecTool
 
@@ -159,9 +159,9 @@ def test_untrusted_exec_without_a_value_returns_none():
 
 
 def test_guest_modules_import_only_the_stdlib_or_each_other():
-    """Each module of GUEST_MODULES imports the stdlib or another of the list."""
-    names = {name.rpartition('.')[2] for name in GUEST_MODULES}
-    for name in GUEST_MODULES:
+    """Each module of WASM_GUEST_MODULE_COPIES imports the stdlib or another one."""
+    names = {name.rpartition('.')[2] for name in WASM_GUEST_MODULE_COPIES}
+    for name in WASM_GUEST_MODULE_COPIES:
         with open(importlib.util.find_spec(name).origin) as f:
             tree = ast.parse(f.read())
         for node in ast.walk(tree):
@@ -178,7 +178,7 @@ def test_guest_modules_import_only_the_stdlib_or_each_other():
 def test_wasm_refuses_a_guest_module_without_source(tmp, monkeypatch):
     """A guest module no.such.module that does not exist aborts the run."""
     pytest.importorskip('wasmtime')
-    monkeypatch.setattr(wasm, 'GUEST_MODULES', ('no.such.module',))
+    monkeypatch.setattr(wasm, 'WASM_GUEST_MODULE_COPIES', ('no.such.module',))
     sandbox = TokeoAiWasmSandbox(None)
     sandbox._setup(None, 'wasm', dict(options=dict(runtime=os.path.join(tmp.dir, 'python.wasm'), stdlib=tmp.dir)))
     with pytest.raises(TokeoAiError, match="guest module 'no.such.module' has no source file"):

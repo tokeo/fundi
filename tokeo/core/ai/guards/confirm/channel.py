@@ -51,6 +51,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from tokeo.core.utils.validate import is_int_ge
 from tokeo.core.ai import Invocation, TokeoAiError, TokeoAiRunDeclinedError
 from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_BEGIN,
@@ -64,10 +65,11 @@ from tokeo.core.ai.guards.confirm.base import TokeoAiConfirmGuard
 from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmRetry
 
 #: The cement hook a confirm channel registers on.
-CONFIRM_HOOK = 'tokeo_ai_confirm'
+GOVERNOR_CONFIRM_CHANNEL_HOOK = 'tokeo_ai_confirm'
 
-#: How often one stage may be retried before the run is declined.
-CONFIRM_RETRIES = 10
+#: How often one stage may be retried before the run is declined, the default
+#: of the option max_retries.
+GOVERNOR_CONFIRM_STAGE_MAX_RETRIES = 5
 
 
 @dataclass
@@ -107,8 +109,8 @@ class TokeoAiConfirmAnswer:
     ### Args
 
     - **answer** (str): ```YES```, ```YES_RUN```, ```NO``` or ```NO_RETRY```
-    - **by** (str): ```HUMAN``` or ```AUTO```, who decided; required, so an app
-        function never passes for a person
+    - **by** (str): ```BY_HUMAN``` or ```BY_AUTO```, who decided; required, so
+        an app function never passes for a person
     - **who** (str|None): The person or function that decided
     - **note** (str|None): The note; required with ```NO_RETRY```
 
@@ -118,9 +120,9 @@ class TokeoAiConfirmAnswer:
     YES_RUN = 'yes_run'
     NO = 'no'
     NO_RETRY = 'no_retry'
-    HUMAN = 'human'
-    AUTO = 'auto'
-    DEFAULT = 'default'
+    BY_HUMAN = 'human'
+    BY_AUTO = 'auto'
+    BY_DEFAULT = 'default'
 
     answer: str
     by: str
@@ -142,14 +144,35 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         """The confirm options, overridden per guard by its entry's options."""
 
         # tools: the calls asked at the tool stages, None = all. default: the
-        # answer when no channel answers, no or yes
+        # answer when no channel answers, no or yes. max_retries: how often a
+        # stage may run again after no_retry before the run is declined
         config_defaults = dict(
             tools=None,
             default='no',
+            max_retries=GOVERNOR_CONFIRM_STAGE_MAX_RETRIES,
         )
 
         # the options that hold tool and group names, checked by the linter
         tool_name_options = ('tools',)
+
+    def validate_options(self, options):
+        """
+        Check the values the linter cannot know.
+
+        ### Args
+
+        - **options** (dict): The guard's ```options``` block, or the block of
+            one stage
+
+        ### Returns
+
+        - **list[str]**: An error for a max_retries below 1
+
+        """
+        errors = []
+        if 'max_retries' in (options or {}) and not is_int_ge(options['max_retries'], 1):
+            errors.append('max_retries must be a whole number, at least 1')
+        return errors
 
     def on_begin(self, ctx):
         """Confirm before the run starts; a no declines the run."""
@@ -216,7 +239,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         recalled = answer is not None
         if answer is None:
             request = TokeoAiConfirmRequest(stage, self.config_name, subject, state, list(ctx.notes), answers, ctx.userdata)
-            for result in self.app.hook.run(CONFIRM_HOOK, self.app, request):
+            for result in self.app.hook.run(GOVERNOR_CONFIRM_CHANNEL_HOOK, self.app, request):
                 if result is not None:
                     answer = result
                     break
@@ -224,18 +247,19 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             default = self._config('default', stage=stage)
             if default not in (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.YES):
                 raise TokeoAiError(f'confirm guard {self.config_name!r}: default must be no or yes, got {default!r}')
-            answer = TokeoAiConfirmAnswer(default, by=TokeoAiConfirmAnswer.DEFAULT)
+            answer = TokeoAiConfirmAnswer(default, by=TokeoAiConfirmAnswer.BY_DEFAULT)
         elif not recalled:
             if answer.answer not in answers:
                 raise TokeoAiError(f'confirm guard {self.config_name!r}: answer {answer.answer!r} is not one of {answers}')
-            if answer.by not in (TokeoAiConfirmAnswer.HUMAN, TokeoAiConfirmAnswer.AUTO):
+            if answer.by not in (TokeoAiConfirmAnswer.BY_HUMAN, TokeoAiConfirmAnswer.BY_AUTO):
                 raise TokeoAiError(f'confirm guard {self.config_name!r}: an answer must say by human or auto, got {answer.by!r}')
         retries = memory['retries'].get(retry_key, 0)
         if answer.answer == TokeoAiConfirmAnswer.NO_RETRY:
             if not answer.note:
                 raise TokeoAiError(f'confirm guard {self.config_name!r}: no_retry needs a note')
-            if retries >= CONFIRM_RETRIES:
-                raise TokeoAiRunDeclinedError(stage, f'retried more than {CONFIRM_RETRIES} times in a confirm', by=answer.by)
+            max_retries = self._config('max_retries', stage=stage)
+            if retries >= max_retries:
+                raise TokeoAiRunDeclinedError(stage, f'retried more than {max_retries} times in a confirm', by=answer.by)
             memory['retries'][retry_key] = retries + 1
         if answer.answer == TokeoAiConfirmAnswer.YES_RUN:
             memory['run'][question] = answer

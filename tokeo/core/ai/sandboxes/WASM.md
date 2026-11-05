@@ -308,7 +308,7 @@ There is no stdin runner here. For each call the sandbox:
    ```/io/value.json```: its model-facing string, its json, and whether the json
    is incomplete. No file means no value.
 6. The host builds the ```ToolResult```: the value from ```/io/value.json``` (read
-   with ```json.loads``` up to ```REPLY_LIMIT``` bytes), the states from what it
+   with ```json.loads``` up to ```WASM_GUEST_OUTPUT_MAX_BYTES``` bytes), the states from what it
    observed itself. A clean exit leaves ```exception``` empty. A tool or snippet
    that raises exits with code 1: the result has no value and the last stderr
    line as ```exception``` (a tool error, A). A failure of the entry's own
@@ -544,7 +544,7 @@ a package next to the entry script:
 | ```tokeo.core.utils.date```, ```tokeo.core.utils.date_compat``` | used by the json encoder |
 | ```tokeo.core.ai.pysnippet``` | runs the snippet and finds its value |
 
-The list is ```GUEST_MODULES``` in ```wasm.py```. The source of each module comes
+The list is ```WASM_GUEST_MODULE_COPIES``` in ```wasm.py```. The source of each module comes
 from the import system of the host, so the guest always runs the code the host
 runs. A missing source ends the run with an error. The rules:
 
@@ -554,7 +554,7 @@ runs. A missing source ends the run with an error. The rules:
   of the list; a test checks that by the syntax tree.
 - The guest writes only ```/io``` and ```/work```; everything else is read-only.
 - The guest hands back only data: the value in ```/io/value.json```, read with
-  ```json.loads``` up to ```REPLY_LIMIT``` bytes, with ```incomplete```. The
+  ```json.loads``` up to ```WASM_GUEST_OUTPUT_MAX_BYTES``` bytes, with ```incomplete```. The
   exit code, a trap and the timeout are observed by the host; the text of
   stdout, stderr and the exception is the guest's and only a hint.
 - ```PYTHONDONTWRITEBYTECODE=1```: the guest writes no bytecode next to the

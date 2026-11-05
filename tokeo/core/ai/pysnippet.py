@@ -98,7 +98,7 @@ def run_snippet(code, namespace=None):
     else:
         head, value = tree.body, _assignment_value(last)
     ns = namespace if namespace is not None else {}
-    ns[_RETURN] = _SnippetReturn
+    ns[_SNIPPET_RETURN_NAME] = _SnippetReturn
     try:
         # the block runs at module level in ns, like a script: global and the
         # functions it defines see its names
@@ -110,11 +110,11 @@ def run_snippet(code, namespace=None):
     except _SnippetReturn as returned:
         return returned.value
     finally:
-        ns.pop(_RETURN, None)
+        ns.pop(_SNIPPET_RETURN_NAME, None)
 
 
 # the name the rewritten top-level returns raise by, reserved in the run
-_RETURN = '__tokeo_snippet_return__'
+_SNIPPET_RETURN_NAME = '__tokeo_snippet_return__'
 
 
 class _SnippetReturn(BaseException):
@@ -140,7 +140,7 @@ class _TopLevelReturn(ast.NodeTransformer):
 
     def visit_Return(self, node):
         value = node.value if node.value is not None else ast.Constant(value=None)
-        call = ast.Call(func=ast.Name(id=_RETURN, ctx=ast.Load()), args=[value], keywords=[])
+        call = ast.Call(func=ast.Name(id=_SNIPPET_RETURN_NAME, ctx=ast.Load()), args=[value], keywords=[])
         return ast.copy_location(ast.Raise(exc=call, cause=None), node)
 
 

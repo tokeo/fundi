@@ -14,10 +14,10 @@ they run in a terminal, so a person answers a confirm there. A project
 registers it the same way for a command of its own:
 
 ```python
-from tokeo.core.ai.guards.confirm import CONFIRM_HOOK
+from tokeo.core.ai.guards.confirm import GOVERNOR_CONFIRM_CHANNEL_HOOK
 from tokeo.core.ai.guards.confirm.terminal import terminal_channel
 
-app.hook.register(CONFIRM_HOOK, terminal_channel(input, print))
+app.hook.register(GOVERNOR_CONFIRM_CHANNEL_HOOK, terminal_channel(input, print))
 ```
 """
 
@@ -77,6 +77,6 @@ def terminal_channel(read, write):
             who = getpass.getuser()
         except Exception:
             who = None
-        return TokeoAiConfirmAnswer(answer, by=TokeoAiConfirmAnswer.HUMAN, who=who, note=note)
+        return TokeoAiConfirmAnswer(answer, by=TokeoAiConfirmAnswer.BY_HUMAN, who=who, note=note)
 
     return channel
