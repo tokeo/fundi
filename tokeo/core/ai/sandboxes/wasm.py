@@ -33,7 +33,6 @@ be granted it explicitly, or run in a different sandbox.
 
 import os
 import json
-import time
 import shutil
 import hashlib
 import tempfile
@@ -42,6 +41,7 @@ import importlib.util
 
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
 from tokeo.core.ai.sandboxes._common import _importable_path, expand_env
+from tokeo.core.utils.validate import is_number_ge
 
 #: The stdlib-only modules the guest gets as copies in ```/io/_guest```, per run.
 GUEST_MODULES = (
@@ -56,9 +56,6 @@ REPLY_LIMIT = 1024 * 1024
 
 # the exit code of a guest entry whose own machinery failed
 _EXIT_MACHINERY = 3
-
-# the seconds between two checks of the watcher
-_WATCH_INTERVAL = 0.1
 
 # the start of both guest entries: a failure before the tool code runs is the
 # machinery's, so it exits with _EXIT_MACHINERY
@@ -164,7 +161,8 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # {guest_path: host_path} read-only, cwd: host dir read-write at /work,
         # env: scrubbed, ${NAME} expands, timeout: seconds, memory_mb: hard
         # cap, disk_mb and max_files: what the guest may add to /io and /work,
-        # cache: a trusted dir for the compiled runtime, shim_wasi_stdlib: a
+        # watch_interval: seconds between their checks (at least 0.1), cache:
+        # a trusted dir for the compiled runtime, shim_wasi_stdlib: a
         # multiprocessing stand-in on the trusted path
         config_defaults = dict(
             runtime=None,
@@ -176,6 +174,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             memory_mb=None,
             disk_mb=64,
             max_files=1000,
+            watch_interval=1.0,
             cache=None,
             shim_wasi_stdlib=True,
         )
@@ -206,6 +205,24 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # proxied: runtime and stdlib are each used at more than one place
         self._runtime = self._config('runtime')
         self._stdlib = self._config('stdlib')
+
+    def validate_options(self, options):
+        """
+        Check the values the linter cannot know.
+
+        ### Args
+
+        - **options** (dict): The item's ```options``` block
+
+        ### Returns
+
+        - **list[str]**: An error for a watch_interval below 0.1 seconds
+
+        """
+        errors = []
+        if not is_number_ge((options or {}).get('watch_interval', 1.0), 0.1):
+            errors.append('watch_interval must be a number of seconds, at least 0.1')
+        return errors
 
     def exec(self, tool, arguments):
         """
@@ -359,6 +376,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         start = instance.exports(store)['_start']
         roots = [io_dir] + ([work] if work else [])
         disk_mb, max_files, timeout = self._config('disk_mb'), self._config('max_files'), self._config('timeout')
+        interval = self._config('watch_interval')
 
         def usage(stop=None):
             # bytes and entries under the roots, counting stops past stop
@@ -388,23 +406,28 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         reason = []
         done = threading.Event()
 
+        def stop(why):
+            # the first broken limit names the stop; the guest ends at its
+            # next epoch check
+            if not reason:
+                reason.append(why)
+            engine.increment_epoch()
+
         def watch():
-            # one check of time, size and files per interval; a broken limit
-            # stops the guest at its next epoch check
-            deadline = time.monotonic() + timeout if timeout else None
-            while not done.wait(_WATCH_INTERVAL):
-                if deadline and time.monotonic() > deadline:
-                    reason.append(f'timed out after {timeout}s')
-                elif disk_mb or max_files:
-                    broken = exceeded()
-                    if broken:
-                        reason.append(broken)
-                if reason:
-                    engine.increment_epoch()
+            # one check of size and files per interval
+            while not done.wait(interval):
+                broken = exceeded()
+                if broken:
+                    stop(broken)
                     return
 
-        watcher = threading.Thread(target=watch, daemon=True)
-        watcher.start()
+        # the timeout fires once at its time, the limits are checked per interval
+        timer = threading.Timer(timeout, stop, (f'timed out after {timeout}s',)) if timeout else None
+        watcher = threading.Thread(target=watch, daemon=True) if disk_mb or max_files else None
+        for thread in (timer, watcher):
+            if thread:
+                thread.daemon = True
+                thread.start()
         try:
             start(store)
             code = 0
@@ -420,7 +443,10 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             raise TokeoAiError(f'tool {dotted!r} crashed in the wasm sandbox: {detail or str(trap).splitlines()[0]}')
         finally:
             done.set()
-            watcher.join()
+            if timer:
+                timer.cancel()
+            if watcher:
+                watcher.join()
         # a guest that broke a limit and ended before the next check still failed
         broken = (disk_mb or max_files) and exceeded()
         if broken:

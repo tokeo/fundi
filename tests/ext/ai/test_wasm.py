@@ -7,6 +7,7 @@ tested in ```tests/core/ai/test_wasm.py```.
 """
 
 import os
+import time
 import importlib.util
 import pytest
 
@@ -14,6 +15,7 @@ from cement.utils.misc import init_defaults
 
 from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError
+from tokeo.core.ai.linter import TokeoAiLinter
 from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox
 from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExecTool
 
@@ -369,6 +371,37 @@ def test_the_watcher_stops_a_guest_at_the_timeout():
     """while True: pass with timeout 1 ends as 'timed out after 1s'."""
     with pytest.raises(TokeoAiError, match=r'timed out after 1s'):
         run_untrusted('while True:\n    pass', timeout=1)
+
+
+@needs_build
+def test_the_timeout_does_not_wait_for_the_watch_interval():
+    """timeout 1 with watch_interval 30 stops the guest after about 1 second."""
+    start = time.monotonic()
+    with pytest.raises(TokeoAiError, match=r'timed out after 1s'):
+        run_untrusted('while True:\n    pass', timeout=1, watch_interval=30)
+    assert time.monotonic() - start < 10
+
+
+@needs_build
+def test_a_quick_guest_does_not_wait_for_the_watch_interval():
+    """A guest that ends at once returns without waiting for watch_interval 30."""
+    start = time.monotonic()
+    assert run_untrusted('1', watch_interval=30).value.as_str == '1'
+    assert time.monotonic() - start < 10
+
+
+@pytest.mark.parametrize(
+    'value, valid',
+    [(1.0, True), (0.1, True), (5, True), (0.05, False), (0, False), (None, False), (True, False), ('fast', False)],
+)
+def test_the_linter_checks_the_watch_interval(value, valid):
+    """watch_interval is a number of seconds of at least 0.1."""
+    cfg = wasm_ai_config()
+    cfg['ai']['sandboxes']['wasm_untrusted']['options']['watch_interval'] = value
+    with WasmTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+        errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
+    message = errors.get('ai.sandboxes.wasm_untrusted.options')
+    assert message is None if valid else message == 'watch_interval must be a number of seconds, at least 0.1'
 
 
 @needs_build

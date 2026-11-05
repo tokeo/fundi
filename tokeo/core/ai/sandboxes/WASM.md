@@ -271,10 +271,11 @@ python -c "import cement, os; print(os.path.dirname(os.path.dirname(cement.__fil
 | ```mounts``` | no | A ```{guest_path: host_path}``` map of read-only mounts. This is the entire attack surface: only what you mount is visible. Empty means the guest sees no host code at all. |
 | ```cwd``` | no | A host scratch directory mounted read-write at ```/work```, created on demand. |
 | ```env``` | no | The guest environment: scrubbed and empty by default, only the listed keys are set, ```${NAME}``` expands against this map, then the host env, then ```''```. |
-| ```timeout``` | no | Wall-clock seconds before the guest is stopped. Checked by the watcher every 0.1 s; there is no child to kill. |
+| ```timeout``` | no | Wall-clock seconds before the guest is stopped. A timer stops it at its next epoch check; there is no child to kill. |
 | ```memory_mb``` | no | A hard memory cap in MB via Wasmtime store limits. A runaway allocation traps the guest. Platform-independent. |
 | ```disk_mb``` | no (default ```64```) | The MB the guest may add to ```/io``` and ```/work```. What is in ```/work``` before the run does not count. ```null``` removes the limit. |
 | ```max_files``` | no (default ```1000```) | The files and directories the guest may add to ```/io``` and ```/work```. ```null``` removes the limit. |
+| ```watch_interval``` | no (default ```1.0```) | The seconds between two checks of ```disk_mb``` and ```max_files```, at least ```0.1```. Each check walks ```/io``` and ```/work```, so a large ```/work``` costs more per check; a longer interval lets the guest write more past the limit before it is stopped. A check after the run catches what is left. |
 | ```cache``` | no | A directory for the compiled runtime. The first run compiles ```python.wasm``` (about 2 s) and stores it there, later runs of any process load it in milliseconds. Off by default. |
 | ```shim_wasi_stdlib``` | no (default ```true```) | Put the bundled ```multiprocessing``` shim ahead of the stdlib so a framework that imports it at load can be rebuilt in the guest. Only on the trusted/rebuild path; the untrusted guest never gets it. |
 
