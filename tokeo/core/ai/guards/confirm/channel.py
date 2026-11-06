@@ -216,11 +216,11 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
 
     def on_call(self, ctx, invocation):
         """Confirm a tool call; a no skips it."""
-        self._confirm_call(ctx, GOVERNOR_STAGE_ON_CALL, invocation, 'denied by confirmation')
+        self._confirm_call(ctx, GOVERNOR_STAGE_ON_CALL, invocation)
 
     def on_return(self, ctx, invocation):
         """Confirm a tool result; a no replaces it."""
-        self._confirm_call(ctx, GOVERNOR_STAGE_ON_RETURN, invocation, 'denied by confirmation')
+        self._confirm_call(ctx, GOVERNOR_STAGE_ON_RETURN, invocation)
 
     def _confirm_run(self, ctx, stage, subject):
         # the stages without a tool call: the guards there cannot deny, the
@@ -231,7 +231,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         if answer.value == TokeoAiConfirmAnswer.NO:
             raise TokeoAiRunDeclinedError(stage, answer.note or 'declined by confirmation', by=answer.by)
 
-    def _confirm_call(self, ctx, stage, invocation, deny_reason):
+    def _confirm_call(self, ctx, stage, invocation):
         # the tool stages: only the configured tools are asked
         tools = self._config('tools', stage=stage)
         if tools is not None and invocation.name not in self.app.ai.tool_names(tools):
@@ -242,7 +242,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             invocation.decision, invocation.reason = Invocation.ALLOW, None
             raise TokeoAiConfirmRetry(invocation)
         if answer.value == TokeoAiConfirmAnswer.NO and invocation.decision != Invocation.DENY:
-            invocation.decision, invocation.reason = Invocation.DENY, answer.note or deny_reason
+            invocation.decision, invocation.reason = Invocation.DENY, answer.note or 'denied by confirmation'
 
     def _get_answer(self, ctx, stage, subject, decision, reason, retry_key):
         # the answer: recalled for the run when the question is 1:1 the same,
