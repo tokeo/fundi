@@ -417,27 +417,27 @@ program run by the code under test, e.g. by invoke, hands it on.
 For the whole test:
 
 ```python
-def test_tasks_task1_runs_locally(monkeypatch):
-    """task1 runs uname by invoke on the local host and exits with 0."""
+def test_run_calls_a_task_with_its_runner(monkeypatch):
+    """run calls task1 with the runner of the local host, it exits with 0."""
     # invoke hands stdin on, pytest blocks reading it
     monkeypatch.setattr('sys.stdin', io.StringIO(''))
     with AutomateTest() as app:
         task = app.automate.tasks['task1']
-        ran = task['func'](app, connection, **task['kwargs'])
+        results = app.automate.run(task)
         ...
 ```
 
 For one step only:
 
 ```python
-def test_tasks_task1_runs_locally(monkeypatch):
-    """task1 runs uname by invoke on the local host and exits with 0."""
+def test_run_calls_a_task_with_its_runner(monkeypatch):
+    """run calls task1 with the runner of the local host, it exits with 0."""
     with AutomateTest() as app:
         task = app.automate.tasks['task1']
         with monkeypatch.context() as patch:
             # invoke hands stdin on, pytest blocks reading it
             patch.setattr('sys.stdin', io.StringIO(''))
-            ran = task['func'](app, connection, **task['kwargs'])
+            results = app.automate.run(task)
         # from here on sys.stdin is the one of pytest again
         ...
 ```
@@ -447,14 +447,14 @@ for the whole test and ```use_disabled_stdin_capture()``` of
 ```tests.utils``` for one step:
 
 ```python
-def test_tasks_task1_runs_locally(disable_stdin_capture):
+def test_run_calls_a_task_with_its_runner(disable_stdin_capture):
     ...
 
 
-def test_tasks_task1_runs_locally():
+def test_run_calls_a_task_with_its_runner():
     with AutomateTest() as app:
         with use_disabled_stdin_capture():
-            ran = task['func'](app, connection, **task['kwargs'])
+            results = app.automate.run(task)
 ```
 
 ## Waiting
