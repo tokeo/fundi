@@ -47,8 +47,8 @@ final place is decided before the release.
 ## Not protected
 
 - **A hostile developer** of the app, or a hostile config.
-- **Errors in tools that run ```in_process```**: there is no isolation there.
-  ```subprocess``` separates errors and resources, it is no jail: the tool can
+- **Crashes in tools that run ```in_process```**: there is no isolation there.
+  ```subprocess``` separates crashes and resources, it is no jail: the tool can
   read files and reach the network.
 - **Prompt injection steering the plan.** Injected text can change which of
   the permitted calls the model asks for and with which arguments. It cannot

@@ -1554,7 +1554,7 @@ def ai_extend_app(app):
     # ```ai.agents``` and selects one per call, via a profile, or defaults.agent
     app.ai.register('agent', 'fundi', TokeoAiFundiAgent)
     # built-in sandboxes: in_process (zero isolation, for trusted and quick
-    # tools) and subprocess (error/resource isolation via the worker)
+    # tools) and subprocess (crash and resource isolation via the worker)
     app.ai.register('sandbox', 'in_process', TokeoAiInProcessSandbox)
     app.ai.register('sandbox', 'subprocess', TokeoAiSubprocessSandbox)
     # docker: a hardened, throwaway container of the configured image

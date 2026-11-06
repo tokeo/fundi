@@ -50,9 +50,10 @@ class TokeoAiSandbox(MetaMixin):
     ### Notes
 
     : Honesty over promises. A sandbox only enforces what its mechanism truly
-        can: ```in_process``` isolates nothing, ```subprocess``` is error/resource
-        isolation (a memory limit and a wall-clock timeout), not a jail. Real
-        path or network isolation needs the ```docker``` or the wasm sandbox.
+        can: ```in_process``` isolates nothing, ```subprocess``` is crash and
+        resource isolation (a memory limit and a wall-clock timeout), not a
+        jail. Real path or network isolation needs the ```docker``` or the
+        wasm sandbox.
 
     """
 

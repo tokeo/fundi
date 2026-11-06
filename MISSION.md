@@ -43,7 +43,7 @@ cannot enforce it on the target platform sells theatre. On current macOS the
 kernel refuses realistic memory limits for a fresh interpreter; fundi then fails
 the call with "memory limit (max_memory_mb) is not enforceable on this platform"
 instead of letting it run unlimited. The documentation says it plainly:
-```in_process``` is no isolation, ```subprocess``` separates errors and
+```in_process``` is no isolation, ```subprocess``` separates crashes and
 resources but is no jail, real isolation needs the docker or the WebAssembly
 sandbox.
 
@@ -110,7 +110,7 @@ flowchart TD
     subgraph SB["sandbox chain: ordered, no catch-all"]
         direction LR
         S1["in_process<br/>no isolation"]
-        S2["subprocess<br/>errors and resources"]
+        S2["subprocess<br/>crashes and resources"]
         S3["docker<br/>delegated to a container"]
         S4["wasm<br/>no network, explicit mounts"]
     end
@@ -356,7 +356,7 @@ trust the model, the content of tool results, and code the model writes. The
 chain answers for what it can enforce: which tools run at all, behind which
 wall, with which arguments, and what of a result reaches the trace and the
 model. It does not protect against a hostile developer of the app, against
-errors in tools that run ```in_process```, against side channels, or against
+crashes in tools that run ```in_process```, against side channels, or against
 the quality of an answer. Instructions that come in through tool results or
 from outside (prompt injection) can still steer the model's plan; they cannot
 widen what the config allows.

@@ -1,5 +1,5 @@
 """
-The subprocess sandbox: error and resource isolation, not a jail.
+The subprocess sandbox: crash and resource isolation, not a jail.
 
 It runs a tool call in a fresh interpreter through the generic runner
 (```python -m tokeo.core.ai.sandboxes.runner```), feeding the job as JSON on

@@ -2,8 +2,8 @@
 
 The wasm sandbox runs a tool call inside a WebAssembly guest under
 [Wasmtime](https://wasmtime.dev/). Next to the docker sandbox it is the one
-that gives real isolation against untrusted code rather than mere
-error-and-resource cleanup, and the only one that needs no container service:
+that gives real isolation against untrusted code rather than mere crash
+and resource isolation, and the only one that needs no container service:
 the guest has no network at all, sees no host file outside the paths
 you explicitly mount, runs under a hard memory limit that holds on every
 platform, and is interrupted by an epoch timeout. It is opt-in, needs the
