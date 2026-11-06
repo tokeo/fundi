@@ -605,11 +605,13 @@ The guest cannot:
 - Outrun the timeout, or write more than ```max_disk_mb``` or ```max_files``` into
   ```/io``` and ```/work```.
 
-A watcher thread checks the time, the bytes, and the files every 0.1 s and stops
-the guest through Wasmtime's epoch interruption, which is always on. A guest that
-broke a limit and ended before the next check fails all the same, the last check
-runs after the guest. Epoch interruption makes CPU-bound guest code about 30 %
-slower; it is the only way to stop a running guest from outside.
+A timer stops the guest when its timeout is up; a watcher thread checks the
+bytes and the files every ```watch_interval``` (default 1 s, at least 0.1 s).
+Both stop the guest through Wasmtime's epoch interruption, which is always on.
+A guest that broke a limit and ended before the next check fails all the same:
+a last check runs after the guest has ended. Epoch interruption makes CPU-bound
+guest code about 30 % slower; it is the only way to stop a running guest from
+outside.
 
 The guest can still:
 

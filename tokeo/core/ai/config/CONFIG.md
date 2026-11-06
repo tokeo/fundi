@@ -843,10 +843,17 @@ result = app.ai.chat(messages, agent='guarded', userdata={'tenant': 'acme'})
 
 ```python
 # inside a custom guard
-class MyGuard(TokeoAiAuditGuard):
+from tokeo.core.ai import Invocation
+from tokeo.core.ai.guards.policy import TokeoAiPolicyGuard
+
+
+class MyGuard(TokeoAiPolicyGuard):
     def on_call(self, ctx, invocation):
         tenant = (ctx.userdata or {}).get('tenant')
-        # ... decide based on your own context
+        # decide based on your own context
+        if tenant != 'acme':
+            invocation.decision = Invocation.DENY
+            invocation.reason = f'tenant {tenant!r} may not call {invocation.name}'
 ```
 
 .. note::

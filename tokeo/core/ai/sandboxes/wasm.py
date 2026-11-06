@@ -225,7 +225,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         ### Returns
 
-        - **list[str]**: An error for a watch_interval below 0.1 seconds or an
+        - **list[str]**: An error for a watch_interval below 0.1 seconds or a
             max_output_mb not above 0
 
         """
