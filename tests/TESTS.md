@@ -562,7 +562,7 @@ that fails shows the end of its output, leaving the block ends the group:
 
 ```python
 with SubProcess.probe('tests.ext.smtpd.smtpd_tests_serve_probe', config, names) as process:
-    process.wait_for(lambda: banner(port))
+    process.wait_for(lambda: _has_banner(port))
     process.signal(signal.SIGTERM)
     assert process.wait() == 0
 ```

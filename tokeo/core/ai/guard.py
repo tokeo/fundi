@@ -11,7 +11,7 @@ role whose job is to check and, where a call is not allowed, refuse it.
 Write a guard by deriving from one of the guard *types* (```TokeoAiAuditGuard```,
 ```TokeoAiPolicyGuard```, ```TokeoAiRedactGuard```, ...), not from
 ```TokeoAiGuard``` itself. The type states the guard's sub-role (observe, govern,
-mask) on the agent's guard list and on the trace, and says what your subclass
+mask) on the agent's governor list and on the trace, and says what your subclass
 is *for* (an audit guard observes; a policy guard denies; a redact guard
 masks); the implementation decides. Deriving straight from
 ```TokeoAiGuard``` makes a guard with no declared type; avoid it.

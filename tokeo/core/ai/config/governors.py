@@ -196,7 +196,7 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
                 if stages is not None:
                     raise TokeoAiError(f'chain {config_name!r} cannot take a stage list; stages belong to its governors')
                 if config_name in chain_path:
-                    raise TokeoAiError(f'guard chain {config_name!r} imports itself (cycle)')
+                    raise TokeoAiError(f'governor chain {config_name!r} imports itself (cycle)')
                 walk_entries(value, 'chain', chain_path + [config_name])
             else:
                 add_appearance(config_name, stages, source)

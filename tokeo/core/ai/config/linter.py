@@ -217,7 +217,7 @@ class TokeoAiLinter:
             self._lint_governor_purity(section, path, value)
         elif isinstance(value, list):
             # a chain: a composition, the same notation as an agent's governors list
-            self._lint_guard_composition(path, value, [name])
+            self._lint_governor_composition(path, value, [name])
         elif isinstance(value, dict):
             # an item: the keys of every item plus the per-stage blocks
             self._lint_keys(path, value, _GOVERNOR_ITEM_KEYS)
@@ -343,8 +343,8 @@ class TokeoAiLinter:
         # {name: [stages]} mapping; chains (a list value under a governor
         # section) may be referenced too. omit is a sibling field, not a list
         # entry
-        self._lint_guard_composition(f'{path}.governors', options.get('governors'))
-        self._lint_guard_omit(f'{path}.omit', options.get('omit'))
+        self._lint_governor_composition(f'{path}.governors', options.get('governors'))
+        self._lint_governor_omit(f'{path}.omit', options.get('omit'))
         self._lint_max_values(path, options)
         self._lint_names(f'{path}.sandboxes', options.get('sandboxes'), set(self._get_value('sandboxes') or {}), 'sandbox')
         self._lint_names(f'{path}.deny', options.get('deny'), tool_names, 'tool or group')
@@ -352,7 +352,7 @@ class TokeoAiLinter:
         # what a run would do. a not-decidable conflict raises (caught as an
         # error issue by the validator runner); an agent-over-chain override
         # logs a note via this adapter
-        self._lint_guard_resolution(path, options)
+        self._lint_governor_resolution(path, options)
 
     def _lint_max_values(self, path, values):
         # at ai level or on an agent
@@ -361,7 +361,7 @@ class TokeoAiLinter:
             if value is not None and not is_int_ge(value, 0):
                 self._add_issue(f'{path}.{key}', 'must be a whole number of 0 or more (0 = unlimited)')
 
-    def _lint_guard_resolution(self, path, options):
+    def _lint_governor_resolution(self, path, options):
         # drive the resolver with a note-collecting logger, so the override
         # notes (agent wins over chain) become note issues and a not-decidable
         # conflict becomes an error issue. a resolution that cannot even build
@@ -410,7 +410,7 @@ class TokeoAiLinter:
             return None
         return {stage for stage in GOVERNOR_STAGES if getattr(cls, stage) is not getattr(TokeoAiGovernor, stage)}
 
-    def _lint_guard_composition(self, path, guards, chain_path=None):
+    def _lint_governor_composition(self, path, governors, chain_path=None):
         # validate a governors composition list: each entry is a bare name
         # or a one-key {name: [stages]}; a referenced chain (list value under a
         # governor section) is walked too. a named stage must be one the
@@ -418,7 +418,7 @@ class TokeoAiLinter:
         # configured) is an error; an empty/null/[] stage list is an error
         known = set(self._merge_governors())
         chain_path = chain_path or []
-        for entry in as_list(guards):
+        for entry in as_list(governors):
             try:
                 config_name, stages = parse_entry(entry)
             except TokeoAiError as err:
@@ -432,9 +432,9 @@ class TokeoAiLinter:
                     self._add_issue(path, f'chain {config_name!r} cannot take a stage list; stages belong to its governors')
                     continue
                 if config_name in chain_path:
-                    self._add_issue(path, f'guard chain {config_name!r} imports itself (cycle)')
+                    self._add_issue(path, f'governor chain {config_name!r} imports itself (cycle)')
                     continue
-                self._lint_guard_composition(path, value, chain_path + [config_name])
+                self._lint_governor_composition(path, value, chain_path + [config_name])
                 continue
             # a config name must be a configured name or a class path
             if '.' not in config_name and config_name not in known:
@@ -448,7 +448,7 @@ class TokeoAiLinter:
                         if stage != GOVERNOR_STAGE_ANY and stage not in class_stages:
                             self._add_issue(path, f'guard {config_name!r} cannot run at stage {stage!r} (its class does not)')
 
-    def _lint_guard_omit(self, path, omit):
+    def _lint_governor_omit(self, path, omit):
         # omit is a list of governor config names to drop from the composition;
         # it is a sibling field, not a list entry, so it never collides with a
         # guard or chain name. each name should be a known guard or chain

@@ -594,7 +594,7 @@ class TokeoAi(MetaMixin):
         )
 
     def _get_governors_by_stage(self, agent_obj):
-        # build the per-stage running order: one ordered guard list per stage.
+        # build the per-stage running order: one ordered governor list per stage.
         # the stage is the fixed band; within a stage the guards run in agent
         # list order. each resolved entry (GovernorConfigEntry) carries the stages
         # it runs at (the intersection of its configured composition stages
@@ -920,7 +920,7 @@ class TokeoAi(MetaMixin):
         specs = self._build_tool_specs(requested)
         # guards (selected on the agent) are positioned steps in the loop; each
         # participates at the stages whose method it overrides. partition once
-        # the per-stage running order: each stage's ordered guard list. the loop
+        # the per-stage running order: each stage's ordered governor list. the loop
         # asks each stage for its list and runs the guards in that order
         by_stage = self._get_governors_by_stage(agent_obj)
         at_begin = by_stage[GOVERNOR_STAGE_ON_BEGIN]
