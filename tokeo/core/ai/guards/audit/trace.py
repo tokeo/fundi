@@ -2,7 +2,7 @@
 A ready-to-use audit guard that logs every step of the run.
 
 ```TokeoAiTraceAuditGuard``` is built on the audit type and makes the whole
-guard chain visible in the application log: one line per step, at every stage.
+governor list visible in the application log: one line per step, at every stage.
 It is both the standard transparency layer and a worked example of an audit
 guard that acts at many stages.
 """

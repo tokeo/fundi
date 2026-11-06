@@ -283,7 +283,7 @@ format is taken over, the options are reflected in the configuration. The one
 truth stays the ```ai.yaml```: what a fundi can do is read there, not from a
 directory listing.
 
-A skill also *declares* what it needs (```allowed-tools```); the guard chain and
+A skill also *declares* what it needs (```allowed-tools```); the governors and
 the sandbox *enforce* it. A skill can narrow the tools of an agent, never
 widen them. A declaration in a file is influence, the governed path is
 control. A skill is treated like a code dependency: checked, pinned, audited,

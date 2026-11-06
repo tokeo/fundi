@@ -193,9 +193,10 @@ lazily.
 1. Public values on module and class level and public instance attributes
    (```self.x = ...``` in ```__init__```) are documented by a ```#:``` comment
    right above the assignment. pdoc shows the text at the value. ```Meta``` is
-   internal and gets no ```#:```: ```label```, ```config_section``` and
-   ```config_defaults``` carry a plain ```#``` comment, and each key of
-   ```Meta.config_defaults``` has a comment above it:
+   internal and gets no ```#:```. In a handler or an extension ```label```,
+   ```config_section``` and ```config_defaults``` carry a plain ```#```
+   comment, and each key of ```Meta.config_defaults``` has a comment above it;
+   the ```Meta``` of a controller is the contract of cement and needs none:
 
         # Defaults of the config section
         config_defaults = dict(
