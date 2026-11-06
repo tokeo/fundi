@@ -190,11 +190,11 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
         for entry in entries or []:
             config_name, stages = parse_entry(entry)
             value = governors_section.get(config_name) if isinstance(config_name, str) else None
-            # a list value under ai.guards is a chain: import it (a chain
-            # entry carries no stage list of its own; it is a name)
+            # a list value under a governor section is a chain: import it (a
+            # chain entry carries no stage list of its own; it is a name)
             if isinstance(value, list):
                 if stages is not None:
-                    raise TokeoAiError(f'chain {config_name!r} cannot take a stage list; stages belong to its guards')
+                    raise TokeoAiError(f'chain {config_name!r} cannot take a stage list; stages belong to its governors')
                 if config_name in chain_path:
                     raise TokeoAiError(f'guard chain {config_name!r} imports itself (cycle)')
                 walk_entries(value, 'chain', chain_path + [config_name])

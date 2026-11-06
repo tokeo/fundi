@@ -59,9 +59,9 @@ _PROFILE_KEYS = {
     'options',
 }
 _ITEM_KEYS = {'type', 'options'}
-# a guard item also accepts a per-stage on_<stage> block (its own options
+# a governor item also accepts a per-stage on_<stage> block (its own options
 # override for that stage); agents and tools have no stages, so they do not
-_GUARD_ITEM_KEYS = _ITEM_KEYS | set(GOVERNOR_STAGES)
+_GOVERNOR_ITEM_KEYS = _ITEM_KEYS | set(GOVERNOR_STAGES)
 # the three governor sections and, per section, the role base a configured type
 # must derive from, so the linter keeps each section pure (a guard type only
 # in ai.guards, a transformer only in ai.transformers, ...)
@@ -205,11 +205,11 @@ class TokeoAiLinter:
                 self.issues.extend(issues or [])
 
     def _validate_governor_entry(self, section, name, value):
-        # an ai.guards entry is distinguished by the form of its value:
+        # a governor entry is distinguished by the form of its value:
         # a mapping is an item (type, options, the six per-stage blocks); a
         # string is the short form name: module:X (= {type: module:X}); a list
-        # is a chain (a composition, validated as such). guards and chains share
-        # one namespace; a name is one or the other, never both
+        # is a chain (a composition, validated as such). governors and chains
+        # share one namespace; a name is one or the other, never both
         path = f'ai.{section}.{name}'
         if isinstance(value, str):
             # short form: the string is the type; resolve it like an item
@@ -220,7 +220,7 @@ class TokeoAiLinter:
             self._lint_guard_composition(path, value, [name])
         elif isinstance(value, dict):
             # an item: the keys of every item plus the per-stage blocks
-            self._lint_keys(path, value, _GUARD_ITEM_KEYS)
+            self._lint_keys(path, value, _GOVERNOR_ITEM_KEYS)
             self._lint_options(path, value)
             self._lint_type('governor', path, value)
             self._lint_option_keys('governor', f'{path}.options', value.get('type'), value.get('options'))
@@ -339,9 +339,10 @@ class TokeoAiLinter:
             return
         tool_names = set(self._get_value('tools') or {})
         self._lint_names(f'{path}.tools', options.get('tools'), tool_names, 'tool or group')
-        # the guards composition: each entry is a bare name or a one-key
-        # {name: [stages]} mapping; chains (a list value under ai.guards) may be
-        # referenced too. omit is a sibling field, not a list entry
+        # the governors composition: each entry is a bare name or a one-key
+        # {name: [stages]} mapping; chains (a list value under a governor
+        # section) may be referenced too. omit is a sibling field, not a list
+        # entry
         self._lint_guard_composition(f'{path}.governors', options.get('governors'))
         self._lint_guard_omit(f'{path}.omit', options.get('omit'))
         self._lint_max_values(path, options)
@@ -394,7 +395,7 @@ class TokeoAiLinter:
     def _get_class_stages(self, config_name):
         # the stages a governor's class can do, by reflection over the resolved
         # class (its on_* methods vs the base). an alias resolves through its
-        # ai.guards entry type; a class path resolves directly. returns
+        # governor entry type; a class path resolves directly. returns
         # None when the class cannot be resolved (a separate error is reported)
         try:
             if ':' in config_name:
@@ -410,11 +411,11 @@ class TokeoAiLinter:
         return {stage for stage in GOVERNOR_STAGES if getattr(cls, stage) is not getattr(TokeoAiGovernor, stage)}
 
     def _lint_guard_composition(self, path, guards, chain_path=None):
-        # validate a guards composition list: each entry is a bare name
-        # or a one-key {name: [stages]}; a referenced chain (list value under
-        # ai.guards) is walked too. a named stage must be one the guard's class
-        # can do; an unknown alias (not a class path, not configured) is an
-        # error; an empty/null/[] stage list is an error
+        # validate a governors composition list: each entry is a bare name
+        # or a one-key {name: [stages]}; a referenced chain (list value under a
+        # governor section) is walked too. a named stage must be one the
+        # governor's class can do; an unknown alias (not a class path, not
+        # configured) is an error; an empty/null/[] stage list is an error
         known = set(self._merge_governors())
         chain_path = chain_path or []
         for entry in as_list(guards):
@@ -424,11 +425,11 @@ class TokeoAiLinter:
                 self._add_issue(path, str(err))
                 continue
             value = self._merge_governors().get(config_name) if isinstance(config_name, str) else None
-            # a list value under ai.guards is a chain: walk it (a chain entry
-            # carries no stage list of its own)
+            # a list value under a governor section is a chain: walk it (a
+            # chain entry carries no stage list of its own)
             if isinstance(value, list):
                 if stages is not None:
-                    self._add_issue(path, f'chain {config_name!r} cannot take a stage list; stages belong to its guards')
+                    self._add_issue(path, f'chain {config_name!r} cannot take a stage list; stages belong to its governors')
                     continue
                 if config_name in chain_path:
                     self._add_issue(path, f'guard chain {config_name!r} imports itself (cycle)')

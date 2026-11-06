@@ -30,8 +30,8 @@ def _get_class_stages(config_name):
     return ['on_prompt', 'on_call', 'on_return']
 
 
-def _resolve_governors(guards_section, agent_guards, agent_omit=None):
-    return resolve_governors(guards_section, agent_guards, agent_omit or [], _get_class_stages)
+def _resolve_governors(governors_section, agent_governors, agent_omit=None):
+    return resolve_governors(governors_section, agent_governors, agent_omit or [], _get_class_stages)
 
 
 def test_bare_name_runs_all_class_stages():
