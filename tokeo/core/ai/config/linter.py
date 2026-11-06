@@ -298,18 +298,15 @@ class TokeoAiLinter:
             self._lint_names(f'{path}.options.{key}', options.get(key), tool_names, 'tool or group')
 
     def _validate_item_form(self, section, name, item):
-        # the uniform item form shared by agents and guards: a mapping with a
-        # resolvable ```type``` and the component's own settings under
-        # ```options```; settings keys inside options are the component's Meta
-        # keys and stay unchecked here (a custom class declares its own)
+        # the item form of an agent: a mapping with a resolvable ```type``` and
+        # the component's own options under ```options```; the keys inside
+        # options are the component's Meta keys and stay unchecked here (a
+        # custom class sets its own). an agent has no stages, so it keeps the
+        # plain item keys; governors are checked by _validate_governor_entry
         path = f'ai.{section}.{name}'
         if not self._lint_long_form(path, item, 'agent'):
             return
-        # guards additionally accept a per-stage on_<stage> block (its own
-        # ```options``` override for that station, read by the guard's _config);
-        # agents and tools have no stages, so they keep the plain item keys
-        allowed = _GUARD_ITEM_KEYS if section == 'guards' else _ITEM_KEYS
-        self._lint_keys(path, item, allowed)
+        self._lint_keys(path, item, _ITEM_KEYS)
         self._lint_options(path, item)
         # the registry kind is the singular section name (agents -> agent)
         self._lint_type(section.rstrip('s'), path, item)
