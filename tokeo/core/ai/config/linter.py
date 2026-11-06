@@ -179,11 +179,11 @@ class TokeoAiLinter:
     def _run_validators(self, section):
         # run the registered validators over every element of one section; a
         # non-mapping section is reported once instead of being walked
-        elements = self._value(section) or {}
-        if not isinstance(elements, dict):
+        entries = self._value(section) or {}
+        if not isinstance(entries, dict):
             self._add(f'ai.{section}', 'must be a mapping of name to item')
             return
-        for name, value in elements.items():
+        for name, value in entries.items():
             for validator in self._validators.get(section, []):
                 # a raising validator never crashes the lint run: a
                 # TokeoAiError is a deliberate verdict and becomes an error
@@ -227,8 +227,8 @@ class TokeoAiLinter:
                     self._lint_keys(f'{path}.{stage}', block, {'options'})
                     self._lint_options(f'{path}.{stage}', block)
                     self._lint_option_keys('governor', f'{path}.{stage}.options', value.get('type'), block.get('options'))
-                    staged = dict(type=value.get('type'), options=block.get('options'))
-                    self._validate_options_via_class('governor', f'{path}.{stage}', staged)
+                    stage_entry = dict(type=value.get('type'), options=block.get('options'))
+                    self._validate_options_via_class('governor', f'{path}.{stage}', stage_entry)
                 elif block is not None:
                     self._add(f'{path}.{stage}', 'must be a mapping with "options"')
             self._lint_governor_purity(section, path, value.get('type'))
@@ -278,8 +278,8 @@ class TokeoAiLinter:
         if expected is None or not isinstance(cls, type):
             return
         if not issubclass(cls, expected):
-            where = f'{cls.__module__}:{cls.__qualname__}'
-            self._add(path, f'class {where} can not be used as {_GOVERNOR_ROLE_NAME[section]}')
+            class_path = f'{cls.__module__}:{cls.__qualname__}'
+            self._add(path, f'class {class_path} can not be used as {_GOVERNOR_ROLE_NAME[section]}')
 
     def _lint_tool_name_options(self, path, item):
         # a governor class that decides by tool names declares which of its
@@ -392,14 +392,14 @@ class TokeoAiLinter:
     def _guard_class_stages(self, config_name):
         # the stages a governor's class can do, by reflection over the resolved
         # class (its on_* methods vs the base). an alias resolves through its
-        # ai.guards declaration type; a class path resolves directly. returns
+        # ai.guards entry type; a class path resolves directly. returns
         # None when the class cannot be resolved (a separate error is reported)
         try:
             if ':' in config_name:
                 cls = self.app.ai.resolve('governor', config_name)
             else:
-                declaration = self._governors_merged().get(config_name)
-                type_value = declaration.get('type') if isinstance(declaration, dict) else declaration
+                governor_entry = self._governors_merged().get(config_name)
+                type_value = governor_entry.get('type') if isinstance(governor_entry, dict) else governor_entry
                 if not isinstance(type_value, str):
                     return None
                 cls = self.app.ai.resolve('governor', type_value)
@@ -603,14 +603,14 @@ class TokeoAiLinter:
             self._lint_type('tool', path, item)
             self._lint_option_keys('tool', f'{path}.options', item.get('type'), item.get('options'))
         known = set(items) | set(groups)
-        for name, members in groups.items():
+        for name, entries in groups.items():
             path = f'ai.tools.{name}'
-            if not all(isinstance(member, str) for member in members):
+            if not all(isinstance(entry, str) for entry in entries):
                 self._add(path, 'a group must be a list of tool or group names')
                 continue
-            for member in members:
-                if member not in known:
-                    self._add(path, _unknown('tool or group', member, known))
+            for entry in entries:
+                if entry not in known:
+                    self._add(path, _unknown('tool or group', entry, known))
         self._lint_cycles(groups)
 
     def _lint_cycles(self, groups):
@@ -618,8 +618,8 @@ class TokeoAiLinter:
         # cycle would just be silently broken at resolve time. the cycle finding
         # is the shared one (config.tools.find_cycles), so the linter and the
         # handler's expansion agree on what a cycle is
-        for member in sorted(find_cycles(groups)):
-            self._add(f'ai.tools.{member}', 'group has a cyclic membership')
+        for group_name in sorted(find_cycles(groups)):
+            self._add(f'ai.tools.{group_name}', 'group has a cyclic membership')
 
     def _lint_profiles(self, profiles, tools):
         if not isinstance(profiles, dict):

@@ -280,14 +280,14 @@ class TokeoAiGovernor(MetaMixin):
             config_options = stage_config_options[GOVERNOR_STAGE_ANY]
         return config_options.get(key, fallback)
 
-    def _build_stage_config_options(self, declaration):
+    def _build_stage_config_options(self, governor_entry):
         """
-        Build the per-stage settings views from config_defaults and a declaration.
+        Build the per-stage views from config_defaults and a governor entry.
 
         The base (```_any```) is ```Meta.config_defaults``` deep-merged with the
-        declaration's ```options```. For each of the six stages that carries an
-        ```on_<stage>.options``` block in the declaration, a full view is built as
-        the base deep-merged with that override (on a deepcopy of the base each
+        governor entry's ```options```. For each of the six stages that carries an
+        ```on_<stage>.options``` block in the governor entry, a full view is built
+        as the base deep-merged with that override (on a deepcopy of the base each
         time, so the shared base is never mutated). Stages without an override
         are not stored; they fall back to ```_any``` in ```_config```.
 
@@ -300,7 +300,7 @@ class TokeoAiGovernor(MetaMixin):
 
         ### Args
 
-        - **declaration** (dict): The raw registry item (```{}``` for none)
+        - **governor_entry** (dict): The raw registry item (```{}``` for none)
 
         ### Returns
 
@@ -310,13 +310,13 @@ class TokeoAiGovernor(MetaMixin):
         defaults = self._meta.config_defaults or {}
         # the default view: config_defaults deep-merged with the declared options
         # (deepcopy so the class-level config_defaults is never mutated)
-        base = deep_merge(copy.deepcopy(defaults), copy.deepcopy(declaration.get('options') or {}))
+        base = deep_merge(copy.deepcopy(defaults), copy.deepcopy(governor_entry.get('options') or {}))
         configs = {GOVERNOR_STAGE_ANY: base}
-        # a per-stage view only where the declaration carries an on_<stage> block;
+        # a per-stage view only where the governor entry has an on_<stage> block;
         # the override deep-merges onto a copy of the base (lists append, dicts
         # merge, scalars replace: the shared Tokeo config rule)
         for stage in GOVERNOR_STAGES:
-            override = (declaration.get(stage) or {}).get('options')
+            override = (governor_entry.get(stage) or {}).get('options')
             if override:
                 configs[stage] = deep_merge(copy.deepcopy(base), copy.deepcopy(override))
         return configs

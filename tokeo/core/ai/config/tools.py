@@ -74,12 +74,12 @@ def find_cycles(groups):
 
     def walk(name, chain):
         if name in chain:
-            for member in chain[chain.index(name) :]:  # noqa E203
-                cyclic.add(member)
+            for entry in chain[chain.index(name) :]:  # noqa E203
+                cyclic.add(entry)
             return
-        for member in groups.get(name, []):
-            if member in groups:
-                walk(member, chain + [name])
+        for entry in groups.get(name, []):
+            if entry in groups:
+                walk(entry, chain + [name])
 
     for name in groups:
         walk(name, [])
