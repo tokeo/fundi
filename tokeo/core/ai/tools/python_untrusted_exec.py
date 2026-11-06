@@ -50,7 +50,7 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiPythonExecTool):
     wasm_exec_pysnippet = True
 
     class Meta:
-        """Tool meta-data sent to the model."""
+        """Untrusted python-exec tool meta-data."""
 
         # the description of the tool for the model
         description = (

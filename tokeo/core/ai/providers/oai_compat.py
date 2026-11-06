@@ -49,7 +49,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
     """
 
     class Meta:
-        """The connection options of a profile, with their defaults."""
+        """OpenAI-compatible provider meta-data."""
 
         # the keys a profile may set under options, with their defaults
         config_defaults = dict(

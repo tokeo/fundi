@@ -155,7 +155,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
     """
 
     class Meta:
-        """The wasm mechanism's own options (its option keys)."""
+        """Wasm sandbox meta-data."""
 
         # the configurable defaults; the item's options overlay them, read at
         # runtime via _config

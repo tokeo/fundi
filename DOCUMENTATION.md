@@ -197,7 +197,7 @@ lazily.
    ```config_defaults``` carry a plain ```#``` comment, and each key of
    ```Meta.config_defaults``` has a comment above it:
 
-        # the defaults of the config section
+        # Defaults of the config section
         config_defaults = dict(
             # Default timeout for cache operations in seconds
             timeout=60,

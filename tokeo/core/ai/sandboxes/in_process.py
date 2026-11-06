@@ -56,7 +56,7 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
     """
 
     class Meta:
-        """The in-process options: only the limit of the captured output."""
+        """In-process sandbox meta-data."""
 
         # the configurable defaults; the item's options overlay them
         config_defaults = dict(

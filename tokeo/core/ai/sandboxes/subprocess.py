@@ -59,7 +59,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
     """
 
     class Meta:
-        """The subprocess mechanism's own options (its option keys)."""
+        """Subprocess sandbox meta-data."""
 
         # the configurable defaults; the item's options overlay them, read at
         # runtime via _config

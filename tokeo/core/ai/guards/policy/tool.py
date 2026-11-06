@@ -42,7 +42,7 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
     """
 
     class Meta:
-        """Policy rules, overridden per guard by its entry's options."""
+        """Tool policy guard meta-data."""
 
         # the configurable defaults, as one dict; a guard entry's options (and an
         # on_call override) overlay this, read at runtime via _config

@@ -162,9 +162,10 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
     """
 
     class Meta:
-        """The confirm options, overridden per guard by its entry's options."""
+        """Channel confirm guard meta-data."""
 
-        # the configurable defaults, as one dict
+        # the configurable defaults, as one dict; a guard entry's options overlay
+        # this, read at runtime via _config
         config_defaults = dict(
             # the calls asked at the tool stages, None = all
             tools=None,

@@ -26,7 +26,7 @@ class TokeoAiProvider:
     """
 
     class Meta:
-        """Provider meta-data; a provider defines its own option keys."""
+        """Provider meta-data."""
 
         # the keys a profile may set under options, with their defaults
         config_defaults = {}

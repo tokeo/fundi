@@ -88,7 +88,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
     """
 
     class Meta:
-        """The docker mechanism's own options (its option keys)."""
+        """Docker sandbox meta-data."""
 
         # the configurable defaults; the item's options overlay them, read at
         # runtime via _config

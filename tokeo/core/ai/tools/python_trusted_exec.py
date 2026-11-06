@@ -39,7 +39,7 @@ class TokeoAiPythonTrustedExecTool(TokeoAiPythonExecTool):
     """
 
     class Meta:
-        """Tool meta-data sent to the model."""
+        """Trusted python-exec tool meta-data."""
 
         # the description of the tool for the model
         description = (

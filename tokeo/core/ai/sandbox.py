@@ -58,17 +58,15 @@ class TokeoAiSandbox(MetaMixin):
     """
 
     class Meta:
-        """Sandbox meta-data; a sandbox defines its own option keys.
-
-        The base declares an empty ```config_defaults```: which options exist (a
-        timeout, a memory limit, a container name, a scratch mount ...) is the
-        concrete mechanism's business, set in its own ```config_defaults```;
-        the linter reports any other key as an error, values are checked by
-        ```validate_options```. Every built-in sandbox has ```max_output_mb```.
-        """
+        """Sandbox meta-data."""
 
         # the configurable defaults, as one dict; the item's options overlay
-        # this, read at runtime via _config. empty here: the base has no options
+        # this, read at runtime via _config. empty here: the base has no
+        # options. which options exist (a timeout, a memory limit, a container
+        # name, a scratch mount ...) is the concrete mechanism's business, set
+        # in its own config_defaults; the linter reports any other key as an
+        # error, values are checked by validate_options. every built-in sandbox
+        # has max_output_mb
         config_defaults = {}
 
     def __init__(self, app, *args, **kw):

@@ -75,7 +75,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
     """
 
     class Meta:
-        """Redact rules, overridden per guard by its entry's options."""
+        """Regex redact guard meta-data."""
 
         # the default options, as one dict (the '_any' base that per-stage
         # options overlay)

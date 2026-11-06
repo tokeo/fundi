@@ -63,7 +63,7 @@ class TokeoAiTool(MetaMixin):
     """
 
     class Meta:
-        """Tool meta-data sent to the model."""
+        """Tool meta-data."""
 
         # short description the model sees
         description = ''

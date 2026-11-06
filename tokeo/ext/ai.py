@@ -171,15 +171,15 @@ class TokeoAi(MetaMixin):
     FUNDI_LICENSE_NOTICE = 'tokeo-fundi is source-available, not open source. See LICENSE.md, then set ai.license_acknowledged=true.'
 
     class Meta:
-        """Handler meta-data and configuration defaults."""
+        """Extension meta-data."""
 
-        # Unique identifier for this handler
+        # Label of this extension
         label = 'tokeo.ai'
 
-        # Configuration section name in the application config
+        # Name of the config section
         config_section = 'ai'
 
-        # the defaults of the config section
+        # Defaults of the config section
         config_defaults = dict(
             # the app-wide base limits for the loop. they are resolved in three
             # levels, nearest wins: a chat() call argument, then the selected

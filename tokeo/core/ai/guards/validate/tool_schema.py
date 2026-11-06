@@ -74,7 +74,7 @@ class TokeoAiToolSchemaValidator(TokeoAiValidateGuard):
     """
 
     class Meta:
-        """Tool-schema validator defaults, overridden per guard by its options."""
+        """Tool-schema validate guard meta-data."""
 
         # the configurable defaults, as one dict; the guard entry's options (and
         # an on_call override) overlay this, read at runtime via _config
