@@ -912,8 +912,8 @@ class TokeoAi(MetaMixin):
             agent_max_steps = agent_obj._config('max_steps')
             max_steps = agent_max_steps if agent_max_steps is not None else self._config('max_steps', fallback=0)
         if max_loops is None:
-            agent_max_steps = agent_obj._config('max_loops')
-            max_loops = agent_max_steps if agent_max_steps is not None else self._config('max_loops', fallback=3)
+            agent_max_loops = agent_obj._config('max_loops')
+            max_loops = agent_max_loops if agent_max_loops is not None else self._config('max_loops', fallback=3)
         specs = self._tool_specs(requested)
         # guards (selected on the agent) are positioned steps in the loop; each
         # participates at the stations whose method it overrides. partition once
