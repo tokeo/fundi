@@ -137,7 +137,7 @@ def test_the_docker_sandbox_mounts_read_only_and_passes_only_its_env(docker, mon
     assert args[args.index('-e') + 1] == 'GREETING=from host'
 
 
-def test_the_docker_sandbox_takes_its_caps_from_the_options(docker):
+def test_the_docker_sandbox_takes_its_limits_from_the_options(docker):
     """network, read_only, memory_mb, pids and user follow the options."""
     cfg = ai_config(docker, network='bridge', read_only=False, memory_mb=0, pids=0, user='1000:1000', python='python3.13')
     with DockerTest(config_defaults=cfg) as app:

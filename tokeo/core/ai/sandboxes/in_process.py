@@ -137,8 +137,8 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
             output.state.stderr = err_buf.getvalue()
         # the same output limit as behind a wall: a value over output_mb is an
         # error, a stdout or stderr the tool set itself is cut
-        dotted = f'{type(tool).__module__}.{type(tool).__qualname__}'
-        return check_output(output, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'in_process')
+        class_path = f'{type(tool).__module__}.{type(tool).__qualname__}'
+        return check_output(output, output_bytes(output_mb), f'{output_mb:g} MB', class_path, 'in_process')
 
     def _stand_in_streams(self):
         # put the stand-ins in place of sys.stdout and sys.stderr, once; again

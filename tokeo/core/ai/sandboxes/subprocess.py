@@ -106,16 +106,16 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         # WHY canonical path: the child imports by module path. deriving it
         # from the loaded class (not the config string) lets a registry
         # alias cross the boundary too; the parent already resolved it
-        dotted = _importable_path(type(tool), 'tool')
+        class_path = _importable_path(type(tool), 'tool')
         timeout = self._config('timeout')
         memory_mb = self._config('memory_mb')
         output_mb = self._config('output_mb')
         job = json.dumps(
             dict(
-                tool=dotted,
+                tool=class_path,
                 arguments=arguments or {},
                 options=getattr(tool, '_tokeo_parent_instance_options', {}) or {},
-                caps=dict(memory_mb=memory_mb),
+                limits=dict(memory_mb=memory_mb),
                 output_mb=output_mb,
             )
         )
@@ -159,16 +159,16 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
             except subprocess.TimeoutExpired:
                 self._end_group(proc)
                 proc.wait()
-                raise TokeoAiError(f'tool {dotted!r} timed out after {timeout}s in the subprocess sandbox')
+                raise TokeoAiError(f'tool {class_path!r} timed out after {timeout}s in the subprocess sandbox')
             finally:
                 self._end_group(proc)
             # read at most output_mb, so a reply without end cannot fill memory
             out.seek(0)
             err.seek(0)
-            stdout = read_reply(out, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'subprocess')
+            stdout = read_reply(out, output_bytes(output_mb), f'{output_mb:g} MB', class_path, 'subprocess')
             stderr = read_diagnostics(err, output_bytes(output_mb))
-        result = result_from_reply(stdout, stderr, dotted, 'subprocess')
-        return check_output(result, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'subprocess')
+        result = result_from_reply(stdout, stderr, class_path, 'subprocess')
+        return check_output(result, output_bytes(output_mb), f'{output_mb:g} MB', class_path, 'subprocess')
 
     def _end_group(self, proc):
         # kill every process of the call's group; the group may be gone already

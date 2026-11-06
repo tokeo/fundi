@@ -174,13 +174,13 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         image = self._config('image')
         if not image:
             raise TokeoAiError(f'the docker sandbox {self.config_name!r} needs an image')
-        dotted = _importable_path(type(tool), 'tool')
+        class_path = _importable_path(type(tool), 'tool')
         job = json.dumps(
             dict(
-                tool=dotted,
+                tool=class_path,
                 arguments=arguments or {},
                 options=getattr(tool, '_tokeo_parent_instance_options', {}) or {},
-                caps={},
+                limits={},
                 output_mb=self._config('output_mb'),
             )
         )
@@ -191,8 +191,8 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             with self._lock:
                 if self._container is None:
                     name = self._name()
-                    idle = ['--entrypoint', python, image, '-c', 'import signal; signal.pause()']
-                    self._call(self._run_args(name, detach=True) + idle, None, dotted)
+                    idle_cmd = ['--entrypoint', python, image, '-c', 'import signal; signal.pause()']
+                    self._call(self._run_args(name, detach=True) + idle_cmd, None, class_path)
                     self._container = name
                     atexit.register(self.close)
                 name = self._container
@@ -201,7 +201,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             name = self._name()
             args = self._run_args(name, detach=False) + ['--entrypoint', python, image] + runner
         try:
-            out, err = self._call(args, job, dotted)
+            out, err = self._call(args, job, class_path)
         except TokeoAiError:
             # a timed out or broken container goes, reused or not
             self._kill(name)
@@ -210,8 +210,8 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                     self._container = None
             raise
         output_mb = self._config('output_mb')
-        result = result_from_reply(out, err, dotted, 'docker')
-        return check_output(result, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'docker')
+        result = result_from_reply(out, err, class_path, 'docker')
+        return check_output(result, output_bytes(output_mb), f'{output_mb:g} MB', class_path, 'docker')
 
     def close(self):
         """Remove the container of ```reuse```, if one is running."""
@@ -244,7 +244,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             args += ['-e', f'{key}={value}']
         return args
 
-    def _call(self, args, job, dotted):
+    def _call(self, args, job, class_path):
         # run the client, stdin carries the job; a timeout is a failure. stdout
         # and stderr go to files and are read at most output_mb, so a reply
         # without end cannot fill the memory of the host
@@ -259,12 +259,12 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                     timeout=self._config('timeout'),
                 )
             except subprocess.TimeoutExpired:
-                raise TokeoAiError(f'tool {dotted!r} timed out after {self._config("timeout")}s in the docker sandbox')
+                raise TokeoAiError(f'tool {class_path!r} timed out after {self._config("timeout")}s in the docker sandbox')
             except OSError as err:
                 raise TokeoAiError(f'the docker sandbox cannot run {args[0]!r}: {err}')
             out_file.seek(0)
             err_file.seek(0)
-            out = read_reply(out_file, output_bytes(output_mb), f'{output_mb:g} MB', dotted, 'docker')
+            out = read_reply(out_file, output_bytes(output_mb), f'{output_mb:g} MB', class_path, 'docker')
             err = read_diagnostics(err_file, output_bytes(output_mb))
         if job is None and proc.returncode != 0:
             raise TokeoAiError(f'the docker sandbox cannot start its container: {err.strip()[:200]}')
@@ -273,7 +273,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
     def _kill(self, name):
         # remove the container; it may be gone already (--rm)
         try:
-            kill = [self._config('command'), 'kill', name]
-            subprocess.run(kill, capture_output=True, stdin=subprocess.DEVNULL, timeout=_DOCKER_KILL_TIMEOUT)
+            kill_cmd = [self._config('command'), 'kill', name]
+            subprocess.run(kill_cmd, capture_output=True, stdin=subprocess.DEVNULL, timeout=_DOCKER_KILL_TIMEOUT)
         except (OSError, subprocess.TimeoutExpired):
             pass

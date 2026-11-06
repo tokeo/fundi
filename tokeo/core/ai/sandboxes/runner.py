@@ -4,7 +4,7 @@ Generic, tool-agnostic sandbox job runner.
 The subprocess and the docker sandbox run a tool call in a fresh
 interpreter through this module: it is started as ```python -m
 tokeo.core.ai.sandboxes.runner```, reads a single JSON job from stdin, applies the
-resource caps before importing the tool, runs the tool, and writes the
+resource limits before importing the tool, runs the tool, and writes the
 ```ToolResult``` back as JSON on stdout. It never reaches back into the parent;
 the only contract across the boundary is JSON in and JSON out.
 
@@ -14,7 +14,7 @@ The job has the shape::
       "tool": "dotted.path.To.ToolClass",
       "arguments": { ... },          # the parsed call arguments
       "options": { ... },            # the tool item's options, as declared
-      "caps": { "memory_mb": 256 },  # caps to enforce in this process
+      "limits": { "memory_mb": 256 },  # limits to enforce in this process
       "output_mb": 1                 # MB of stdout and stderr kept per stream
     }
 
@@ -52,14 +52,14 @@ import resource
 import contextlib
 
 
-def _set_caps(caps):
+def _set_limits(limits):
     # apply what a child process can truly enforce on itself BEFORE the tool
     # is imported, so even import-time work is bounded. the wall-clock timeout
     # is the parent's job (it kills the child), not something the child sets
-    memory_mb = (caps or {}).get('memory_mb')
+    memory_mb = (limits or {}).get('memory_mb')
     if not memory_mb:
         return
-    limit = int(memory_mb) * 1024 * 1024
+    memory_bytes = int(memory_mb) * 1024 * 1024
     # WHY two mechanisms and retries: linux sets rlimits as asked and
     # enforces them on future allocations. current macos (xnu) delegates
     # RLIMIT_AS/RLIMIT_DATA to mach vm and rejects any limit BELOW the
@@ -77,7 +77,7 @@ def _set_caps(caps):
             _, hard = resource.getrlimit(res)
         except (ValueError, OSError):
             continue
-        pinned = limit if hard == resource.RLIM_INFINITY else min(limit, hard)
+        pinned = memory_bytes if hard == resource.RLIM_INFINITY else min(memory_bytes, hard)
         # WHY two attempts: enforcement happens at the SOFT limit (the kernel
         # fails allocations there); the hard limit is only the ceiling a
         # process may raise its own soft limit back to. pinning both hardens
@@ -96,11 +96,11 @@ def _set_caps(caps):
     raise RuntimeError('memory cap (memory_mb) is not enforceable on this platform')
 
 
-def _load_tool(dotted, options):
+def _load_tool(class_path, options):
     # resolve "module.path.Class" exactly as the handler does (rpartition on
     # the last dot), build with no app (a child has none) and set up with the
     # options as the declaration; the config name does not cross the boundary
-    module_path, _, attr = dotted.rpartition('.')
+    module_path, _, attr = class_path.rpartition('.')
     cls = getattr(importlib.import_module(module_path), attr)
     tool = cls(None)
     tool._setup(None, None, {'options': options or {}})
@@ -119,13 +119,13 @@ def _encode_result(output):
     else:
         value_doc = dict(as_str=value.as_str, as_json=value.as_json)
     state = output.state
-    state_doc = dict(
+    state_dict = dict(
         incomplete=state.incomplete,
         stdout=state.stdout,
         stderr=state.stderr,
         exception=state.exception,
     )
-    return dict(value=value_doc, state=state_doc)
+    return dict(value=value_doc, state=state_dict)
 
 
 def main():
@@ -146,7 +146,7 @@ def main():
 
     try:
         job = json.loads(sys.stdin.read() or '{}')
-        _set_caps(job.get('caps'))
+        _set_limits(job.get('limits'))
         tool = _load_tool(job['tool'], job.get('options'))
     except Exception as err:
         # machinery failure (bad job, unenforceable cap, unimportable tool):

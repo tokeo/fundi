@@ -75,7 +75,7 @@ def expand_env(spec):
     return out
 
 
-def result_from_reply(stdout, stderr, dotted, where):
+def result_from_reply(stdout, stderr, class_path, sandbox_type):
     """
     Build the ```ToolResult``` from the JSON reply of the generic runner.
 
@@ -89,8 +89,8 @@ def result_from_reply(stdout, stderr, dotted, where):
 
     - **stdout** (str): What the runner wrote to stdout
     - **stderr** (str): What it wrote to stderr, for the error message
-    - **dotted** (str): The tool's import path, for the error message
-    - **where** (str): The sandbox, e.g. ```subprocess```, for the message
+    - **class_path** (str): The tool's import path, for the error message
+    - **sandbox_type** (str): The sandbox, e.g. ```subprocess```, for the message
 
     ### Returns
 
@@ -105,21 +105,21 @@ def result_from_reply(stdout, stderr, dotted, where):
     try:
         reply = json.loads(stdout or '')
     except json.JSONDecodeError:
-        detail = (stderr or '').strip()[:200] or 'no output'
-        raise TokeoAiError(f'tool {dotted!r} produced no valid result in the {where} sandbox: {detail}')
+        error = (stderr or '').strip()[:200] or 'no output'
+        raise TokeoAiError(f'tool {class_path!r} produced no valid result in the {sandbox_type} sandbox: {error}')
     if 'error' in reply:
-        raise TokeoAiError(f'tool {dotted!r} failed in the {where} sandbox: {reply["error"]}')
-    value_doc = reply.get('value')
+        raise TokeoAiError(f'tool {class_path!r} failed in the {sandbox_type} sandbox: {reply["error"]}')
+    value_dict = reply.get('value')
     value = None
-    if value_doc is not None:
-        as_json = value_doc.get('as_json', '')
-        value = ToolValue(as_str=value_doc.get('as_str', ''), as_json=as_json, as_data=json.loads(as_json) if as_json else None)
-    state_doc = reply.get('state') or {}
+    if value_dict is not None:
+        as_json = value_dict.get('as_json', '')
+        value = ToolValue(as_str=value_dict.get('as_str', ''), as_json=as_json, as_data=json.loads(as_json) if as_json else None)
+    state_dict = reply.get('state') or {}
     state = ToolStates(
-        incomplete=state_doc.get('incomplete', False),
-        stdout=state_doc.get('stdout'),
-        stderr=state_doc.get('stderr'),
-        exception=state_doc.get('exception'),
+        incomplete=state_dict.get('incomplete', False),
+        stdout=state_dict.get('stdout'),
+        stderr=state_dict.get('stderr'),
+        exception=state_dict.get('exception'),
     )
     return ToolResult(value=value, state=state)
 
@@ -160,7 +160,7 @@ class OutputBuffer(io.StringIO):
         super(OutputBuffer, self).__init__()
         #: (bool) Whether output was dropped
         self.cut = False
-        self._room = max_bytes
+        self._bytes_left = max_bytes
         self._label = label
 
     def write(self, text):
@@ -176,12 +176,12 @@ class OutputBuffer(io.StringIO):
         - **int**: The length of the text, as if it was all written
 
         """
-        if self._room > 0 and text:
+        if self._bytes_left > 0 and text:
             data = text.encode('utf-8', 'replace')
-            if len(data) > self._room:
-                data = data[: self._room]
+            if len(data) > self._bytes_left:
+                data = data[: self._bytes_left]
                 self.cut = True
-            self._room -= len(data)
+            self._bytes_left -= len(data)
             super(OutputBuffer, self).write(data.decode('utf-8', 'ignore'))
         elif text:
             self.cut = True
@@ -220,7 +220,7 @@ def reply_bytes(max_bytes):
     return 8 * max_bytes + 64 * 1024
 
 
-def read_reply(file, max_bytes, label, dotted, where):
+def read_reply(file, max_bytes, label, class_path, sandbox_type):
     """
     Read the raw reply of a tool run from a file, at most ```reply_bytes```.
 
@@ -232,8 +232,8 @@ def read_reply(file, max_bytes, label, dotted, where):
     - **file**: The file in binary mode, at its start
     - **max_bytes** (int): The output limit in bytes
     - **label** (str): How the limit is named in the message, e.g. ```1 MB```
-    - **dotted** (str): The tool's import path, for the message
-    - **where** (str): The sandbox, e.g. ```subprocess```, for the message
+    - **class_path** (str): The tool's import path, for the message
+    - **sandbox_type** (str): The sandbox, e.g. ```subprocess```, for the message
 
     ### Returns
 
@@ -244,14 +244,14 @@ def read_reply(file, max_bytes, label, dotted, where):
     - **TokeoAiError**: On a reply over ```reply_bytes(max_bytes)```
 
     """
-    limit = reply_bytes(max_bytes)
-    data = file.read(limit + 1)
-    if len(data) > limit:
-        raise TokeoAiError(f'tool {dotted!r} delivered more than {label} in the {where} sandbox')
+    max_reply_bytes = reply_bytes(max_bytes)
+    data = file.read(max_reply_bytes + 1)
+    if len(data) > max_reply_bytes:
+        raise TokeoAiError(f'tool {class_path!r} delivered more than {label} in the {sandbox_type} sandbox')
     return data.decode('utf-8', 'replace')
 
 
-def check_output(result, max_bytes, label, dotted, where):
+def check_output(result, max_bytes, label, class_path, sandbox_type):
     """
     Hold a tool result to the output limit, the same in every sandbox.
 
@@ -264,8 +264,8 @@ def check_output(result, max_bytes, label, dotted, where):
     - **result** (ToolResult): The result of the tool run
     - **max_bytes** (int): The output limit in bytes
     - **label** (str): How the limit is named, e.g. ```1 MB```
-    - **dotted** (str): The tool's import path, for the message
-    - **where** (str): The sandbox, e.g. ```in_process```, for the message
+    - **class_path** (str): The tool's import path, for the message
+    - **sandbox_type** (str): The sandbox, e.g. ```in_process```, for the message
 
     ### Returns
 
@@ -280,7 +280,7 @@ def check_output(result, max_bytes, label, dotted, where):
     if value is not None:
         for view in (value.as_str, value.as_json):
             if len((view or '').encode('utf-8', 'replace')) > max_bytes:
-                raise TokeoAiError(f'tool {dotted!r} delivered more than {label} in the {where} sandbox')
+                raise TokeoAiError(f'tool {class_path!r} delivered more than {label} in the {sandbox_type} sandbox')
     for name in ('stdout', 'stderr'):
         text = getattr(result.state, name)
         if text is not None and len(text.encode('utf-8', 'replace')) > max_bytes:
