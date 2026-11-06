@@ -13,7 +13,7 @@ terminal, ```tests.utils.isolation``` runs a test in a pytest of its own.
 
 ```python
 from tests.utils import ROOT_DIR, stresstest, isolated, wait_until, wait_until_async
-from tests.utils import free_port, wait_process_group_ended
+from tests.utils import find_free_port, wait_process_group_ended
 from tests.utils import use_disabled_stdin_capture
 from tests.utils.process import SubProcess
 from tests.utils.tui import Terminal
@@ -103,7 +103,7 @@ def wait_until(check, timeout=5.0, interval=0.02):
     return result
 
 
-def free_port():
+def find_free_port():
     """
     Return a port on localhost that nobody listens on right now.
 

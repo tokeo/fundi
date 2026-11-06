@@ -41,10 +41,10 @@ class SubProcess:
 
     ```python
     def test_serve_ends_on_term():
-        port = free_port()
+        port = find_free_port()
         probe = 'tests.ext.smtpd.smtpd_tests_serve_probe'
         with SubProcess.probe(probe, json.dumps(config)) as process:
-            process.wait_for(lambda: answers(port))
+            process.wait_for(lambda: _has_banner(port))
             process.signal(signal.SIGTERM)
             assert process.wait() == 0
     ```
@@ -53,7 +53,7 @@ class SubProcess:
 
     ```python
     with SubProcess.run(POCKETBASE_BIN, 'serve', '--http', address) as process:
-        process.wait_for(lambda: healthy(url))
+        process.wait_for(lambda: _is_healthy(url))
     ```
 
     """

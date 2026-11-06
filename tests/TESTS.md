@@ -112,7 +112,7 @@ with the same base. Keeping it small lets each subject be read on its own.
 | File | Holds |
 |---|---|
 | ```conftest.py``` | the hook that puts the temporary files into ```tmp/tests/```, the hook that runs a test marked ```isolated``` in a pytest of its own, the fixtures ```tmp```, ```rando```, ```key``` and ```disable_stdin_capture``` |
-| ```utils/__init__.py``` | ```ROOT_DIR```, ```stresstest```, ```isolated```, ```wait_until```, ```wait_until_async```, ```free_port```, ```wait_process_group_ended```, ```use_disabled_stdin_capture``` |
+| ```utils/__init__.py``` | ```ROOT_DIR```, ```stresstest```, ```isolated```, ```wait_until```, ```wait_until_async```, ```find_free_port```, ```wait_process_group_ended```, ```use_disabled_stdin_capture``` |
 | ```utils/process.py``` | ```SubProcess```, runs a program as a process of its own and observes it from outside |
 | ```utils/tui.py``` | ```Terminal```, runs a program in a pseudo terminal |
 | ```utils/isolation.py``` | ```IsolatedPytest```, runs a test in a pytest of its own, in a fresh process |
@@ -569,7 +569,7 @@ with SubProcess.probe('tests.ext.smtpd.smtpd_tests_serve_probe', config, names) 
 
 Another program, e.g. the server of a live test, runs by
 ```SubProcess.run(program, *args)```, a free port for it gives
-```free_port()``` of ```tests.utils```.
+```find_free_port()``` of ```tests.utils```.
 
 ## Stress tests
 

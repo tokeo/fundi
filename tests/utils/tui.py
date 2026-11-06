@@ -116,9 +116,9 @@ class Terminal:
         """The lines of the screen with text."""
         return [line.rstrip() for line in self.screen.display if line.strip()]
 
-    def _read(self, wait):
+    def _read(self, timeout):
         # True on output, None without, False once the program closed the terminal
-        if not select.select([self.master], [], [], wait)[0]:
+        if not select.select([self.master], [], [], timeout)[0]:
             return None
         try:
             data = os.read(self.master, 65536)
