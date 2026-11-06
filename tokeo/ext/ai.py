@@ -436,7 +436,7 @@ class TokeoAi(MetaMixin):
         # instantiate the tool configured under ```ai.tools[config_name]``` once
         # and reuse it; ```type``` (a built-in alias or a class path) resolves
         # to a class, built with the application and set up with its key and
-        # its raw declaration. the same statelessness argument as for providers
+        # its raw item. the same statelessness argument as for providers
         # applies
         obj = self._tool_objs.get(config_name)
         if obj is None:
@@ -508,7 +508,7 @@ class TokeoAi(MetaMixin):
         # build the agent configured under ```ai.agents[config_name]``` once and
         # reuse it; ```type``` (a built-in alias or a class path) resolves to
         # an agent class, built with the application and set up with its key
-        # and its raw declaration
+        # and its raw item
         obj = self._agent_objs.get(config_name)
         if obj is None:
             item = self._agents.get(config_name)
@@ -555,12 +555,12 @@ class TokeoAi(MetaMixin):
         # name) runs with class defaults, not configurable; a declared name is
         # built from its ai.guards item: ```type``` (a built-in alias or a
         # class path) resolves to a class, set up with its key and its raw
-        # declaration
+        # item
         obj = self._governor_objs.get(config_name)
         if obj is None:
             if ':' in config_name:
                 # class path at the point of use: class defaults, no
-                # declaration; the path as written is its config name
+                # item; the path as written is its config name
                 obj = self.resolve('governor', config_name)(self.app)
                 obj._setup(self.app, config_name)
             else:
@@ -609,7 +609,7 @@ class TokeoAi(MetaMixin):
         # build the sandbox configured under ```ai.sandboxes[config_name]``` once
         # and reuse it; ```type``` (a built-in alias or a class path) resolves
         # to a sandbox class, built with the application and set up with its key
-        # and its raw declaration. it carries its key so callers can record
+        # and its raw item. it carries its key so callers can record
         # WHERE a tool ran. like a provider it holds no per-call state, so one
         # cached instance is fine
         obj = self._sandbox_objs.get(config_name)
@@ -758,7 +758,7 @@ class TokeoAi(MetaMixin):
             if invocation.decision != previous_decision and not isinstance(governor, TokeoAiGuard):
                 raise TokeoAiError(f'{self._governor_label(governor)} changed the decision at {stage}, only a guard decides')
             if invocation.decision == Invocation.DENY and not invocation.reason:
-                invocation.reason = f'by {self._governor_label(governor)}'
+                invocation.reason = f'{self._governor_label(governor)} gave no reason'
             return invocation
 
         def on_call(governor, invocation):
@@ -807,7 +807,7 @@ class TokeoAi(MetaMixin):
         # the text fed back to the model for this call; the invocation is
         # returned too, so the loop reads the outcome off the object it has
         if invocation.decision == Invocation.DENY:
-            content = f'denied: {invocation.reason or "by a governor"}'
+            content = f'denied: {invocation.reason or "a governor gave no reason"}'
         elif invocation.error is not None:
             # a sandbox-machinery error (timeout, transport, an exhausted chain)
             content = f'error: {invocation.error}'

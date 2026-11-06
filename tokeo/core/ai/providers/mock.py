@@ -157,7 +157,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
 
     def _tool_params(self, tool):
         # read the declared parameter names and the required ones from an
-        # openai-style function spec; dicts preserve declaration order
+        # openai-style function spec; dicts preserve insertion order
         schema = {}
         if isinstance(tool, dict):
             function = tool.get('function')

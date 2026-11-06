@@ -193,8 +193,8 @@ def test_call_deny_without_reason_is_stamped_with_the_actor():
         call = ToolCall(id='t1', name='calc', arguments={'expr': '1+1'})
         invocation, content = app.ai._exec_governed(call, [governor], [], ctx, None, None)
         assert invocation.decision == Invocation.DENY
-        assert invocation.reason == "by guard 'shredder'"
-        assert content == "denied: by guard 'shredder'"
+        assert invocation.reason == "guard 'shredder' gave no reason"
+        assert content == "denied: guard 'shredder' gave no reason"
         assert invocation.result is None  # the tool never ran
 
 
@@ -233,7 +233,7 @@ def test_governor_config_reads_a_key_honouring_the_stage():
 def test_governor_label_reads_class_character_and_config_name():
     """The label is role + config name, or the class path for one never set up."""
     # the role comes from the class (isinstance); the class path is the
-    # same form a point-of-use declaration writes
+    # same form a point-of-use entry writes
     with AiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'truncate')
@@ -274,7 +274,7 @@ def test_a_no_at_on_call_stays_when_a_guard_at_on_return_allows():
         invocation, content = app.ai._exec_governed(call, [shredder], [lifter], ctx, None, None)
         assert lifter.ran
         assert invocation.decision == Invocation.DENY
-        assert content == "denied: by guard 'shredder'"
+        assert content == "denied: guard 'shredder' gave no reason"
 
 
 def test_a_transformer_that_changes_the_decision_ends_the_run():

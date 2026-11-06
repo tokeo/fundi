@@ -4,7 +4,7 @@ Resolve a governor composition into an ordered, deduplicated participation list.
 This is the composition notation made executable. A composition is what an
 agent's ```governors``` list (or a chain under ```ai.guards```,
 ```ai.transformers``` or ```ai.conductors```) declares: *where and in what order*
-governors run, carrying no config (config lives in the declaration). This
+governors run, carrying no config (config lives in the item). This
 module turns that notation (bare names, ```name: [stages]``` stage lists,
 ```_any```, imported chains, and the agent's ```omit```) into a flat, ordered
 list of ```(config_name, stages)``` entries the handler can build and run.
@@ -147,7 +147,7 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
     ### Args
 
     - **governors_section** (dict): The guards, transformers and conductors
-        merged into one mapping by name (declarations, short forms, and chains
+        merged into one mapping by name (items, short forms, and chains
         share this namespace)
     - **agent_governors** (list): The agent's ```governors``` composition list
     - **agent_omit** (list): The agent's ```omit``` list (config names to drop)

@@ -19,7 +19,8 @@ hard when proceeding would be wrong.
 
 The section-purity check binds section and class at config time: a ```type```
 listed under ```ai.conductors``` must resolve to a ```TokeoAiConductor```
-subclass; the declaration says which character you are writing.
+subclass; the section it is listed under says which character you are
+writing.
 
 ## Shipped types
 

@@ -73,7 +73,7 @@ def ai_config():
             'cwd': dict(type=CWD),
             'env': dict(type=ENV),
             'sleep': dict(type=SLEEP),
-            # a tool with options: the declaration overlays its config_defaults
+            # a tool with options: the item overlays its config_defaults
             'greeter': dict(type=GREET, options=dict(prefix='moin')),
             # the same class without options: it runs on its config_defaults
             'plain_greeter': dict(type=GREET),
@@ -771,7 +771,7 @@ def test_a_tool_without_options_runs_on_its_config_defaults():
         assert app.ai._tool('plain_greeter')._config('prefix') == 'hello'
 
 
-def test_two_declarations_of_one_class_stay_separate():
+def test_two_items_of_one_class_stay_separate():
     """One class under two keys: two objects, names, options; defaults unmutated."""
     with FundiTest(config_defaults=ai_config()) as app:
         greeter, plain = app.ai._tool('greeter'), app.ai._tool('plain_greeter')

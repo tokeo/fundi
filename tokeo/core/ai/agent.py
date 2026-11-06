@@ -26,7 +26,7 @@ class TokeoAiAgent(MetaMixin):
     agent can run against the mock, a local model, or a hosted one. The class
     is resolved from the ```ai.agents``` item ```type``` (a built-in alias or
     a class path) by the ```app.ai``` handler, which sets it up with its config
-    name and its raw declaration; setup reads the composition out of it
+    name and its raw item; setup reads the composition out of it
     once, and ```_config``` serves the merged view.
 
     This base is declarative only: it carries the composition (```Meta```) and
@@ -124,7 +124,7 @@ class TokeoAiAgent(MetaMixin):
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the agent is declared
             under (```assistant```)
-        - **config** (dict, optional): The raw ```ai.agents``` declaration
+        - **config** (dict, optional): The raw ```ai.agents``` item
 
         """
         if config_name:

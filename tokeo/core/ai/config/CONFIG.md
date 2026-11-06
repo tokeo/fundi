@@ -28,7 +28,7 @@ ai:
     agent: null         # no default agent
 
   tools:                # the toolset: items and named groups
-  guards:               # the per-call pipeline: declarations and chains
+  guards:               # the per-call pipeline: items and chains
   sandboxes:            # the execution walls a tool runs behind
   agents:               # the compositions: tools + governors + sandboxes + budgets
   profiles:             # model + agent bundles a run selects
@@ -128,7 +128,7 @@ A profile or an agent then activates a single item or a whole group by name.
 ## 4. The governor pipeline
 
 ```guards```, ```transformers```, and ```conductors``` are three 1:1 sections with
-the same notation (declarations and chains). At load they merge into one governor
+the same notation (items and chains). At load they merge into one governor
 registry, so a name is unique across all three (a collision is a config error). An
 agent composes them by name under ```governors:``` (see 4.3). The three roles share
 the same mechanic; they differ in character (a guard secures, a transformer
@@ -154,16 +154,16 @@ A guard acts at one or more stages of a tool call. The six stages, in order:
 
 ### 4.1 Declaring a guard
 
-A ```guards:``` entry is a declaration (a dict), a short form (a string), or
-a chain (a list).
+A ```guards:``` entry is an item (a dict), its short form (a string), or a
+chain (a list).
 
 ```yaml
 guards:
-  tool_schema_validate:           # declaration with options
+  tool_schema_validate:           # item with options
     type: tool_schema_validate
     options:
       strict: true                # deny a malformed call (default: only flag it)
-  regex_redact:                   # declaration with options
+  regex_redact:                   # item with options
     type: regex_redact
     options:
       patterns: [bearer, sk-key]  # required: no built-in list
@@ -176,7 +176,7 @@ transformers:
 
 ### 4.2 Per-stage options
 
-A declaration may override its ```options``` for one stage, under an
+An item may override its ```options``` for one stage, under an
 ```on_<stage>``` block. The stage block overlays the base ```options```:
 
 ```yaml

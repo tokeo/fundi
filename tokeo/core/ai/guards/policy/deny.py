@@ -38,12 +38,12 @@ class TokeoAiDenyPolicyGuard(TokeoAiPolicyGuard):
     def on_call(self, ctx, invocation):
         """Softly deny the tool call (the loop continues)."""
         invocation.decision = Invocation.DENY
-        invocation.reason = 'denied unconditionally by the deny policy guard'
+        invocation.reason = 'the deny policy guard denies every call'
 
     def on_return(self, ctx, invocation):
         """Softly deny at return as well (the loop continues)."""
         invocation.decision = Invocation.DENY
-        invocation.reason = 'denied unconditionally by the deny policy guard'
+        invocation.reason = 'the deny policy guard denies every call'
 
     def on_begin(self, ctx):
         """Deny at begin. TODO: soft denial here is undefined; hard stop for now."""

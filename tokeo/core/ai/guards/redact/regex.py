@@ -115,7 +115,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
 
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the guard is declared under
-        - **config** (dict, optional): The raw declaration
+        - **config** (dict, optional): The raw item
 
         """
         # super first: builds the stage views the patterns read

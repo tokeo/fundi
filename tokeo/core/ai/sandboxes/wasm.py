@@ -206,7 +206,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the sandbox is declared under
-        - **config** (dict, optional): The raw declaration
+        - **config** (dict, optional): The raw item
 
         """
         # super first: builds the view the _config below reads
@@ -393,7 +393,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         wasi.env = [(key, value) for key, value in env.items()]
         store.set_wasi(wasi)
         module = self._module(wasmtime, engine)
-        # the deadline is set before instantiate, which already runs start code
+        # the epoch deadline comes before instantiate, which already runs start code
         store.set_epoch_deadline(1)
         instance = linker.instantiate(store, module)
         start = instance.exports(store)['_start']

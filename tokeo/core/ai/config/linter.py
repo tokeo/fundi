@@ -201,20 +201,20 @@ class TokeoAiLinter:
 
     def _validate_governor_entry(self, section, name, value):
         # an ai.guards entry is distinguished by the form of its value:
-        # a map is a declaration (type, options, the six per-stage blocks); a
+        # a mapping is an item (type, options, the six per-stage blocks); a
         # string is the short form name: module:X (= {type: module:X}); a list
         # is a chain (a composition, validated as such). guards and chains share
         # one namespace; a name is one or the other, never both
         path = f'ai.{section}.{name}'
         if isinstance(value, str):
-            # short form: the string is the type; resolve it like a declaration
+            # short form: the string is the type; resolve it like an item
             self._lint_type('governor', path, {'type': value})
             self._lint_governor_purity(section, path, value)
         elif isinstance(value, list):
             # a chain: a composition, the same notation as an agent's governors list
             self._lint_guard_composition(path, value, [name])
         elif isinstance(value, dict):
-            # a declaration: the uniform item form plus the per-stage blocks
+            # an item: the keys of every item plus the per-stage blocks
             self._lint_keys(path, value, _GUARD_ITEM_KEYS)
             self._lint_options(path, value)
             self._lint_type('governor', path, value)
@@ -234,7 +234,7 @@ class TokeoAiLinter:
             self._lint_governor_purity(section, path, value.get('type'))
             self._lint_tool_name_options(path, value)
         else:
-            self._add(path, 'must be a declaration (map), a short form (string), or a chain (list)')
+            self._add(path, 'must be an item (mapping), a short form (string), or a chain (list)')
 
     def _governors_merged(self):
         # the one governor registry the handler builds at load: the three

@@ -46,7 +46,7 @@ from tokeo.core.ai.governor import GOVERNOR_STAGE_ON_CALL
 from tokeo.core.ai.guards.validate.base import TokeoAiValidateGuard
 
 
-# the basic json-schema types a tool declaration uses, mapped to their
+# the basic json-schema types a tool's parameters use, mapped to their
 # python counterparts; bool subclasses int, so integer and number exclude
 # it explicitly in the check below
 _SCHEMA_TYPES = {

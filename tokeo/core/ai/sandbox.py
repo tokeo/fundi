@@ -34,7 +34,7 @@ class TokeoAiSandbox(MetaMixin):
     Its class is resolved from the ```ai.sandboxes``` item ```type``` (a built-in
     alias or a class path) and instantiated with the application by the
     ```app.ai``` handler, which then sets it up with its config name and its raw
-    declaration; setup reads the ```options``` out of it once, and
+    item; setup reads the ```options``` out of it once, and
     ```_config``` serves the merged view. Like a provider, it holds no mutable
     per-call state.
 
@@ -106,7 +106,7 @@ class TokeoAiSandbox(MetaMixin):
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the sandbox is declared
             under (```jailed```)
-        - **config** (dict, optional): The raw ```ai.sandboxes``` declaration
+        - **config** (dict, optional): The raw ```ai.sandboxes``` item
 
         """
         if config_name:

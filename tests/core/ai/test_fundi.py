@@ -121,11 +121,11 @@ def test_runner_memory_cap_refuses_a_sham_setting(monkeypatch):
         runner._set_limits({'memory_mb': 64})
 
 
-def test_setup_reads_the_declaration_once_and_is_idempotent():
+def test_setup_reads_the_item_once_and_is_idempotent():
     """
     A second _setup replaces the first: prefix 'eins' becomes 'zwei'.
 
-    The declaration is read once at setup (the extension rule: read the
+    The item is read once at setup (the extension rule: read the
     config once, then work off the attributes); nothing stale survives.
     """
     tool = GreetTool(None)
@@ -153,7 +153,7 @@ def test_an_object_without_setup_is_not_initialized():
 
 def test_a_setup_without_a_config_yields_the_class_defaults():
     """
-    _setup without a declaration yields the class default prefix 'hello'.
+    _setup without an item yields the class default prefix 'hello'.
 
     This is the path of a governor at the point of use and of a unit test.
     The view is a deep copy, so a write into it never bleeds into the

@@ -24,7 +24,7 @@ class TokeoAiTool(MetaMixin):
     A tool's class is resolved from its ```ai.tools``` item ```type``` (a built-in
     alias or a class path) and instantiated with the application by the
     ```app.ai``` handler, which then sets it up with its config name and its raw
-    declaration; setup reads the ```options``` out of it once, and
+    item; setup reads the ```options``` out of it once, and
     ```_config``` serves the merged view. It can use ```app.db```, the vault,
     and hold resources.
     ```Meta``` declares the ```description``` and the JSON-schema ```parameters```
@@ -113,7 +113,7 @@ class TokeoAiTool(MetaMixin):
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the tool is declared
             under (```calc```)
-        - **config** (dict, optional): The raw ```ai.tools``` declaration
+        - **config** (dict, optional): The raw ```ai.tools``` item
 
         """
         if config_name:

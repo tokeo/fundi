@@ -115,8 +115,8 @@ class SubProcess:
             end of its output
 
         """
-        deadline = time.monotonic() + self.timeout
-        while time.monotonic() < deadline:
+        end_time = time.monotonic() + self.timeout
+        while time.monotonic() < end_time:
             result = check()
             if result:
                 return result

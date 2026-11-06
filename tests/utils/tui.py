@@ -73,7 +73,7 @@ class Terminal:
         self.screen = pyte.Screen(self.columns, self.rows)
         self.stream = pyte.ByteStream(self.screen)
         self.raw = b''
-        self.deadline = time.monotonic() + self.timeout
+        self.end_time = time.monotonic() + self.timeout
         return self
 
     def __exit__(self, *exc):
@@ -103,7 +103,7 @@ class Terminal:
 
     def wait_for(self, check):
         """Read until ```check(lines)``` holds, return the lines or None."""
-        while time.monotonic() < self.deadline and self.process.poll() is None:
+        while time.monotonic() < self.end_time and self.process.poll() is None:
             lines = self.lines
             if lines and check(lines):
                 return lines

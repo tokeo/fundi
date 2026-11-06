@@ -99,7 +99,7 @@ def _set_limits(limits):
 def _load_tool(class_path, options):
     # resolve "module.path.Class" exactly as the handler does (rpartition on
     # the last dot), build with no app (a child has none) and set up with the
-    # options as the declaration; the config name does not cross the boundary
+    # options as its item; the config name does not cross the boundary
     module_path, _, attr = class_path.rpartition('.')
     cls = getattr(importlib.import_module(module_path), attr)
     tool = cls(None)
@@ -115,9 +115,9 @@ def _encode_result(output):
     # JSON-able, so the parent reconstructs as_data from as_json instead
     value = output.value
     if value is None:
-        value_doc = None
+        value_dict = None
     else:
-        value_doc = dict(as_str=value.as_str, as_json=value.as_json)
+        value_dict = dict(as_str=value.as_str, as_json=value.as_json)
     state = output.state
     state_dict = dict(
         incomplete=state.incomplete,
@@ -125,7 +125,7 @@ def _encode_result(output):
         stderr=state.stderr,
         exception=state.exception,
     )
-    return dict(value=value_doc, state=state_dict)
+    return dict(value=value_dict, state=state_dict)
 
 
 def main():

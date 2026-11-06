@@ -97,8 +97,8 @@ def wait_until(check, timeout=5.0, interval=0.02):
     ```
 
     """
-    deadline = time.monotonic() + timeout
-    while not (result := check()) and time.monotonic() < deadline:
+    end_time = time.monotonic() + timeout
+    while not (result := check()) and time.monotonic() < end_time:
         time.sleep(interval)
     return result
 
@@ -191,8 +191,8 @@ async def wait_until_async(check, timeout=5.0, interval=0.02):
     ```
 
     """
-    deadline = time.monotonic() + timeout
-    while not (result := check()) and time.monotonic() < deadline:
+    end_time = time.monotonic() + timeout
+    while not (result := check()) and time.monotonic() < end_time:
         await asyncio.sleep(interval)
     return result
 
