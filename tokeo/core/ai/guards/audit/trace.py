@@ -30,7 +30,7 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
     class Meta:
         """Trace audit guard meta-data."""
 
-        # no configurable settings; empty per the config_defaults rule
+        # no configurable options; empty per the config_defaults rule
         config_defaults = {}
 
     def _log(self, message):

@@ -50,8 +50,8 @@ class TokeoAiSandbox(MetaMixin):
     ### Notes
 
     : Honesty over promises. A sandbox only enforces what its mechanism truly
-        can: ```in_process``` isolates nothing, ```subprocess``` is fault/resource
-        isolation (a memory cap and a wall-clock timeout), not a jail. Real
+        can: ```in_process``` isolates nothing, ```subprocess``` is error/resource
+        isolation (a memory limit and a wall-clock timeout), not a jail. Real
         path or network isolation needs the ```docker``` or the wasm sandbox.
 
     """
@@ -60,8 +60,8 @@ class TokeoAiSandbox(MetaMixin):
         """Sandbox meta-data; a sandbox defines its own option keys.
 
         The base declares an empty ```config_defaults```: which options exist (a
-        timeout, a memory cap, a container name, a scratch mount ...) is the
-        concrete mechanism's business, declared in its own ```config_defaults```;
+        timeout, a memory limit, a container name, a scratch mount ...) is the
+        concrete mechanism's business, set in its own ```config_defaults```;
         the linter reports any other key as an error, values are checked by
         ```validate_options```. Every built-in sandbox has ```output_mb```.
         """
@@ -81,12 +81,12 @@ class TokeoAiSandbox(MetaMixin):
         """
         The name this sandbox answers to. Never ```None``` or empty.
 
-        The declared config key once setup handed one in, the class path
+        The configured key once setup handed one in, the class path
         (```module:Class```) until then.
 
         ### Returns
 
-        - **str**: The declared key, or the class path
+        - **str**: The configured key, or the class path
 
         """
         if self._config_name:
@@ -104,7 +104,7 @@ class TokeoAiSandbox(MetaMixin):
         ### Args
 
         - **app**: The Tokeo application instance
-        - **config_name** (str, optional): The key the sandbox is declared
+        - **config_name** (str, optional): The key the sandbox is configured
             under (```jailed```)
         - **config** (dict, optional): The raw ```ai.sandboxes``` item
 
@@ -122,7 +122,7 @@ class TokeoAiSandbox(MetaMixin):
         Return the effective value of an option key.
 
         Reads the view setup built: ```Meta.config_defaults``` with the
-        declared ```options``` laid over.
+        configured ```options``` laid over.
 
         ### Args
 

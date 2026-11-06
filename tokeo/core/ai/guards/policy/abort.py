@@ -25,7 +25,7 @@ class TokeoAiAbortPolicyGuard(TokeoAiPolicyGuard):
     class Meta:
         """Abort policy guard meta-data."""
 
-        # no configurable settings; empty per the config_defaults rule
+        # no configurable options; empty per the config_defaults rule
         config_defaults = {}
 
     def on_begin(self, ctx):

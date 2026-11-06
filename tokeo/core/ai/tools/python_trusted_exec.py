@@ -61,7 +61,7 @@ class TokeoAiPythonTrustedExecTool(TokeoAiPythonExecTool):
             'required': ['code'],
         }
 
-        # no configurable settings of its own; empty per the config_defaults rule
+        # no configurable options of its own; empty per the config_defaults rule
         config_defaults = {}
 
     def exec(self, **arguments):

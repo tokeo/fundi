@@ -189,11 +189,11 @@ class ChatResult:
 @dataclass
 class Invocation:
     """
-    A single tool call as it travels the tool stations of the loop.
+    A single tool call as it travels the tool stages of the loop.
 
     Built by the handler for each requested tool call and tracked onto the run's
     trace at creation, then handed to the guards: an ```on_call``` guard may set
-    ```decision```/```reason``` to block it, the tool runs unless denied, and an
+    ```decision```/```reason``` to deny it, the tool runs unless denied, and an
     ```on_return``` guard sees the ```result``` or ```error```. The object is
     mutable on purpose, so a guard can refine the outcome in place (a later
     redact/truncate guard rewrites ```result```).
@@ -290,7 +290,7 @@ class TokeoAiLoopdata:
     The loop's own live counters for one turn.
 
     Separated from the run's data (the trace and its views) so the bookkeeping
-    that bounds the loop has its own small home. Created fresh for every turn and
+    that limits the loop has its own small home. Created fresh for every turn and
     owned by the loop, never seeded by the caller, so a turn always starts at
     zero and no caller can preset a counter.
 

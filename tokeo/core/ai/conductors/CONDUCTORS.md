@@ -111,7 +111,7 @@ class FactCheckConductor(TokeoAiConductor):
             return
         ctx.turndata['factcheck'] = True
         return add_tool_call(result, 'delegate', get_token_hex(4, 'inj_'),
-                             prompt=f'verify: {result.text}')
+                             prompt=f'check: {result.text}')
 ```
 
 Scan the invocations (no extra state; keyed on the tool name, so two
@@ -125,5 +125,5 @@ class FactCheckConductor(TokeoAiConductor):
         if result.tool_calls or already:
             return
         return add_tool_call(result, 'delegate', get_token_hex(4, 'inj_'),
-                             prompt=f'verify: {result.text}')
+                             prompt=f'check: {result.text}')
 ```

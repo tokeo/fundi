@@ -1,7 +1,7 @@
 """
 Tests for the wasm sandbox itself.
 
-The runtime guarantees (memory cap, timeout, exit status, option validation)
+The runtime guarantees (memory limit, timeout, exit status, option validation)
 and the in-process exec paths, driven directly without an app. Runs through the
 agent chain live in ```tests/ext/ai/test_wasm.py```.
 """
@@ -54,7 +54,7 @@ def _run_wat(wat, memory_mb=None, timeout=None):
     start(store)
 
 
-def test_wasm_memory_cap_is_hard():
+def test_wasm_memory_limit_is_hard():
     """
     An 8 MB store limit makes a growing guest trap, not eat host memory.
 

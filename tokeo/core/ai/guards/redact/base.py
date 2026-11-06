@@ -16,7 +16,7 @@ from tokeo.core.ai import TokeoAiGuard
 
 class TokeoAiRedactGuard(TokeoAiGuard):
     """
-    The redact guard *type*: mask secret-looking content, never block.
+    The redact guard *type*: mask secret-looking content, never deny.
 
     A pass-through base that does nothing by itself. It exists so a guard can be
     *typed* as a redact guard (masking, not deciding) without carrying any
@@ -38,7 +38,7 @@ class TokeoAiRedactGuard(TokeoAiGuard):
     ```on_answer```/```on_close``` a ```ChatResult.text```;
     ```on_begin```/```on_prompt``` the contents in ```ctx.messages```), see the
     stage guide in the ```TokeoAiGovernor``` class documentation, the single
-    reference for building a guard across its stations.
+    reference for building a guard across its stages.
 
     A redact guard normally only masks and never stops the run. If masking is
     *required* and cannot be done (a masking backend it depends on is
@@ -53,5 +53,5 @@ class TokeoAiRedactGuard(TokeoAiGuard):
     class Meta:
         """Redact guard meta-data."""
 
-        # no configurable settings; empty per the config_defaults rule
+        # no configurable options; empty per the config_defaults rule
         config_defaults = {}

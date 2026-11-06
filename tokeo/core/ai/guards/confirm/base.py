@@ -38,7 +38,7 @@ class TokeoAiConfirmGuard(TokeoAiGuard):
     ```on_answer```/```on_close``` a ```ChatResult```, ```on_call```/
     ```on_return``` an ```Invocation```), see the stage guide in the
     ```TokeoAiGovernor``` class documentation, the single reference for building a
-    guard across its stations.
+    guard across its stages.
 
     A confirm guard that declines the run (the human said no and the run must
     not proceed) raises ```TokeoAiRunDeclinedError```: ```chat``` ends the run in
@@ -50,5 +50,5 @@ class TokeoAiConfirmGuard(TokeoAiGuard):
     class Meta:
         """Confirm guard meta-data."""
 
-        # no configurable settings; empty per the config_defaults rule
+        # no configurable options; empty per the config_defaults rule
         config_defaults = {}

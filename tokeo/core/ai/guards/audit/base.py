@@ -36,7 +36,7 @@ class TokeoAiAuditGuard(TokeoAiGuard):
     ```on_close``` a ```ChatResult```, ```on_call```/```on_return``` an
     ```Invocation```), see the stage guide in the ```TokeoAiGovernor``` class
     documentation, the single reference for building a guard across its
-    stations. An audit guard uses those objects read-only.
+    stages. An audit guard uses those objects read-only.
 
     An audit guard normally never stops the run. If observation is *required*
     and must not be skipped (an external audit store is unreachable and the run
@@ -59,5 +59,5 @@ class TokeoAiAuditGuard(TokeoAiGuard):
     class Meta:
         """Audit guard meta-data."""
 
-        # no configurable settings; empty per the config_defaults rule
+        # no configurable options; empty per the config_defaults rule
         config_defaults = {}

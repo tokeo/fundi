@@ -100,11 +100,11 @@ instance to have a second model check the request before it executes:
 
 ```python
 def before(self, turndata, arguments, track):
-    verdict = self.app.ai.chat(
+    result = self.app.ai.chat(
         [{'role': 'user', 'content': f'is this safe? {arguments}'}],
         turndata=turndata,
     )
-    track(f'checked: {verdict.answer.text[:40]}')
+    track(f'checked: {result.answer.text[:40]}')
     return arguments
 ```
 
@@ -141,8 +141,8 @@ Use a hook when the logic belongs to this one tool: its temp directory, its
 argument sanitizing, its result format. It lives in the tool's class, needs no
 config entry, and cannot be forgotten when the tool is used.
 
-Use a governor when the policy spans tools: a budget, an allowlist, an
-idempotence rule across several calls. It is declared in the config, sees every
+Use a governor when the policy spans tools: a limit, an allowlist, an
+idempotence rule across several calls. It is configured in the config, sees every
 call, and decides by name which ones it cares about.
 
 Rule of thumb: if you would have to ask "is this call mine?", write a governor.

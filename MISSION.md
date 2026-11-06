@@ -40,10 +40,10 @@ a *sandbox* contains, and no governor ever runs inside a sandbox.
 
 **Security promises cannot be checked.** Whoever offers ```memory_mb``` and
 cannot enforce it on the target platform sells theatre. On current macOS the
-kernel refuses realistic memory caps for a fresh interpreter; fundi then fails
-the call with "memory cap (memory_mb) is not enforceable on this platform"
-instead of letting it run uncapped. The documentation says it plainly:
-```in_process``` is no isolation, ```subprocess``` separates faults and
+kernel refuses realistic memory limits for a fresh interpreter; fundi then fails
+the call with "memory limit (memory_mb) is not enforceable on this platform"
+instead of letting it run unlimited. The documentation says it plainly:
+```in_process``` is no isolation, ```subprocess``` separates errors and
 resources but is no jail, real isolation needs the docker or the WebAssembly
 sandbox.
 
@@ -54,7 +54,7 @@ sandbox.
 Fundi does not compete with agents you install and talk to. It is the component
 for agents you build into your own service and whose behaviour you must be
 able to show. Where an operated agent exercises control through its product,
-up to a model that judges flagged commands, in fundi the control is declared,
+up to a model that judges flagged commands, in fundi the control is configured,
 deterministic and attributable on the trace.
 
 | Axis | The choice |
@@ -74,7 +74,7 @@ can be answered.
 **Code of the model is a plan like any tool call.** Where generation cannot be
 avoided (CodeAct), fundi itself still generates nothing: the governors see the
 code before it runs, the WebAssembly sandbox runs it behind the hardest wall
-(no network, explicit mounts, hard caps), and the host, not the guest, records
+(no network, explicit mounts, hard limits), and the host, not the guest, records
 what happened.
 
 **The real entry point is programmatic.** The commands ```ai ask``` and
@@ -110,7 +110,7 @@ flowchart TD
     subgraph SB["sandbox chain: ordered, no catch-all"]
         direction LR
         S1["in_process<br/>no isolation"]
-        S2["subprocess<br/>faults and resources"]
+        S2["subprocess<br/>errors and resources"]
         S3["docker<br/>delegated to a container"]
         S4["wasm<br/>no network, explicit mounts"]
     end
@@ -135,13 +135,13 @@ the provider's ```raw``` reply: *inspect, don't trust*.
 ### 4.2 Agents are configuration
 
 An agent is a named composition in YAML: its tools, its governor chain, its
-sandbox chain, its step budget. No code.
+sandbox chain, its step limit. No code.
 
 **Tools only narrow.** The agent is the only source of tools. Nothing can add a
 tool the agent does not carry; a profile and a single call can only take tools
 away. The active set is ```agent.tools − agent.deny − profile.deny − call.deny```.
 There is on purpose no ```tools=``` argument on ```chat```/```ask```, only
-```deny=```. The privilege only falls, and the agent is the upper bound to check.
+```deny=```. The privilege only falls, and the agent is the upper limit to check.
 
 **No catch-all.** A tool runs in the first sandbox of the agent's chain whose
 ```tools``` name it; when no sandbox names it, the call is denied. There is no
@@ -247,7 +247,7 @@ profile, not a refactor.
 | In 2.2.0 | Short horizon | Horizon |
 |---|---|---|
 | typed contracts, registry, one loop in ```app.ai``` | ```delegate```: a sub-run of another agent | gRPC and dramatiq worker sandboxes |
-| six stages, three roles, section purity | skills, declared in the config | MCP and SSH as handing-over sandboxes |
+| six stages, three roles, section purity | skills, configured in the config | MCP and SSH as handing-over sandboxes |
 | guards: audit, policy, redact, validate, confirm | RAG with embeddings and vector navigation | compressor for long histories |
 | tool hooks, turndata, trace notes | ```redact``` at ```on_prompt```, debug mode ```reveal``` | sessions |
 | sandboxes ```in_process```, ```subprocess```, ```docker```, ```wasm``` | soft denial at the stages without a tool | loop variants such as plan-then-act |
@@ -265,21 +265,21 @@ demand.
 - **MCP** is a runtime, not a catalog: tools are described locally (name,
   schema, description) and only executed in a sandbox that talks to the MCP
   server. The model gets no free access to the server, and tools the server
-  has but the config does not declare are unreachable.
+  has but the config does not list are unreachable.
 - **A2A** is treated like MCP: a foreign agent is a runtime behind a
   handing-over sandbox, and its call is governed like any tool.
 - **AGENTS.md** concerns coding agents, not the runtime. A generated project may
   one day carry an ```AGENTS.md``` of its own.
-- **Skills** follow the open Agent Skills format but are declared in the config,
+- **Skills** follow the open Agent Skills format but are configured in the config,
   not discovered (5.2).
 
 ### 5.2 The skills decision as an example of the stance
 
 Skills are taken over, but not the way the ecosystem intends. The discovery
-model (scan a folder and register what is found) is **rejected on purpose**: it
+model (scan a directory and register what is found) is **rejected on purpose**: it
 makes the abilities of an agent depend on the state of a file system instead of
 the configuration, which breaks auditability and deterministic delivery. The
-format is taken over, the settings are reflected in the configuration. The one
+format is taken over, the options are reflected in the configuration. The one
 truth stays the ```ai.yaml```: what a fundi can do is read there, not from a
 directory listing.
 
@@ -305,7 +305,7 @@ condition for idempotence, because ```on_answer``` runs every round.
   tasks of tokeo. **Streaming is left out on purpose**: the guards at
   ```on_answer``` need the whole answer, otherwise a user would see text that a
   guard denies afterwards.
-- **Costs.** Budgets come from ```max_steps``` and ```max_loops```; the latter
+- **Costs.** Limits come from ```max_steps``` and ```max_loops```; the latter
   also stops blind loops of failing calls. A guard of your own at
   ```on_answer``` can read ```usage``` and stop the run; a built-in cost guard
   comes on demand.
@@ -343,7 +343,7 @@ What each sandbox enforces, by platform:
 | Sandbox | Linux | macOS | Windows |
 |---|---|---|---|
 | ```in_process``` | no isolation | no isolation | no isolation |
-| ```subprocess``` | own process group, timeout, end of all child processes, memory cap, scrubbed environment | the same, but a memory cap fails the call (not enforceable) | not supported |
+| ```subprocess``` | own process group, timeout, end of all child processes, memory limit, scrubbed environment | the same, but a memory limit fails the call (not enforceable) | not supported |
 | ```docker``` | what the container enforces: no network, read-only root, no capabilities, memory, processes, time, a user that is not root | the same, through the docker or podman of the platform | the same |
 | ```wasm``` | no network, explicit mounts, memory, time, disk and files | the same | the same |
 
@@ -356,7 +356,7 @@ trust the model, the content of tool results, and code the model writes. The
 chain answers for what it can enforce: which tools run at all, behind which
 wall, with which arguments, and what of a result reaches the trace and the
 model. It does not protect against a hostile developer of the app, against
-faults in tools that run ```in_process```, against side channels, or against
+errors in tools that run ```in_process```, against side channels, or against
 the quality of an answer. Instructions that come in through tool results or
 from outside (prompt injection) can still steer the model's plan; they cannot
 widen what the config allows.
@@ -383,7 +383,7 @@ operated agent products. An example is Hermes (NousResearch/hermes-agent):
 according to the review of 2026-11-01, based on its releases up to v0.21.0 of
 2026-08-31, it ships "Smart Approvals" (since v0.19.0 a model reviews flagged
 commands) and speaks A2A (since v0.20). Such a product exercises control
-through the product; fundi is the component in which the control is declared
+through the product; fundi is the component in which the control is configured
 and shown on the trace. Both can live side by side: an operated agent can call
 governed tools of a fundi application.
 
@@ -451,7 +451,7 @@ tokeo-fundi   72 Python modules, 9,456 lines
 akili         a few hundred thousand parameters, trained by the user
 ```
 
-The way of working is part of the promise: small steps that can be verified on
+The way of working is part of the promise: small steps that can be checked on
 their own, integration tests against real cement applications, generated
 template variants tested as a whole, and decisions recorded so they do not get
 lost in the building. Contributions follow the same stance as the runtime: the

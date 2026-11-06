@@ -77,7 +77,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
     class Meta:
         """Redact rules, overridden per guard by its entry's options."""
 
-        # the default settings, as one dict (the '_any' base that per-stage
+        # the default options, as one dict (the '_any' base that per-stage
         # options overlay). patterns: None by default; there is no built-in
         # list. the project supplies the full list of regex patterns through the
         # patterns option (each pattern matches the secret span itself, so the
@@ -114,7 +114,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         ### Args
 
         - **app**: The Tokeo application instance
-        - **config_name** (str, optional): The key the guard is declared under
+        - **config_name** (str, optional): The key the guard is configured under
         - **config** (dict, optional): The raw item
 
         """
@@ -166,7 +166,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         ### Args
 
         - **text** (str): The text to mask
-        - **stage** (str): The stage whose settings apply
+        - **stage** (str): The stage whose options apply
 
         ### Returns
 
@@ -211,7 +211,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
 
     def on_call(self, ctx, invocation):
         """
-        Mask secret-looking spans in the call's arguments; never blocks.
+        Mask secret-looking spans in the call's arguments; never denies.
 
         Runs at the tool-call stage, before exec. Every string in
         ```invocation.arguments``` is masked, also inside nested dicts and
@@ -260,7 +260,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
 
     def on_return(self, ctx, invocation):
         """
-        Mask secret-looking spans in the result and its errors; never blocks.
+        Mask secret-looking spans in the result and its errors; never denies.
 
         Runs at the tool-return stage, after the tool ran. ```ctx``` is the
         running state (unused here). The model-facing ```value.as_str``` is

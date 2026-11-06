@@ -23,7 +23,7 @@ itself, never the framework, the app or its config.
 
     This tool executes arbitrary, model-generated code. It must
     only be configured to run inside the ```wasm``` sandbox (no network, only
-    the stdlib, hard memory cap) or a hardened, throwaway ```docker```
+    the stdlib, hard memory limit) or a hardened, throwaway ```docker```
     container. Running it ```in_process``` or in the plain ```subprocess```
     sandbox gives generated code full host access (file reads, network,
     process spawn), which a prompt-injection can turn into data exfiltration
@@ -72,7 +72,7 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiPythonExecTool):
             'required': ['code'],
         }
 
-        # no configurable settings of its own; empty per the config_defaults rule
+        # no configurable options of its own; empty per the config_defaults rule
         config_defaults = {}
 
     def exec(self, **arguments):

@@ -12,7 +12,7 @@ It is sync on purpose: the agent loop is synchronous and
 needs the whole result before it can run the next tool round. Streaming, if it
 ever lands, is an additive path for the final text turn, not a change here.
 
-Connection settings come from the profile like any other component, so the
+Connection options come from the profile like any other component, so the
 ```key``` benefits from the normal config resolution (plain text, ```${ENV}```
 expansion, or the encrypted vault) without anything special here.
 """
@@ -30,7 +30,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
     Provider for any OpenAI-compatible chat-completions endpoint.
 
     Resolved from a profile whose ```type``` is ```oai_compat```. The profile
-    options carry the connection settings; a fresh ```httpx.Client``` is built
+    options carry the connection options; a fresh ```httpx.Client``` is built
     per call, so the provider keeps no per-call state and is safe to reuse.
 
     ### Notes
@@ -80,7 +80,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
 
         ### Raises
 
-        - **TokeoAiError**: On missing settings, an unreachable endpoint, a
+        - **TokeoAiError**: On missing options, an unreachable endpoint, a
             timeout, or a non-2xx response
 
         """

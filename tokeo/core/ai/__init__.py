@@ -12,7 +12,7 @@ The Tokeo ai agent framework.
 This package runs an agent loop: a request goes to a chat-completion model, the
 model may call tools, the tools run, and their results go back to the model
 until it has a final answer. Around that loop sit the pieces that make it safe
-and observable: guards that allow, deny, mask, cap or check each tool call,
+and observable: guards that allow, deny, mask, limit or check each tool call,
 sandboxes that wall off where a tool actually runs, and a trace that records
 every step. The whole assembly is described in the ```ai``` configuration
 section and reached through one handler, ```app.ai```.
@@ -27,7 +27,7 @@ The building blocks, each a class you configure or derive from:
     schema.
 - an agent (```TokeoAiAgent```; ```TokeoAiFundiAgent``` is the standard one)
     is the composition root: it owns the tools, the guard pipeline, the sandbox
-    chain, and the loop budgets.
+    chain, and the loop limits.
 - a guard (```TokeoAiGuard```) acts at the stages of a tool call; it can
     deny a call before it runs, observe its result after, or shape what the
     model sees.

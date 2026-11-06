@@ -1,15 +1,15 @@
 """
-The subprocess sandbox: fault and resource isolation, not a jail.
+The subprocess sandbox: error and resource isolation, not a jail.
 
 It runs a tool call in a fresh interpreter through the generic runner
 (```python -m tokeo.core.ai.sandboxes.runner```), feeding the job as JSON on
 stdin and reading the ```ToolResult``` as JSON on stdout. The child gets its
 own interpreter in a process group of its own, a wall-clock timeout (then
 SIGKILL), the end of every process it started when the call ends, an enforced
-memory cap
-(RLIMIT_AS, with RLIMIT_DATA as fallback; current macos rejects caps below
+memory limit
+(RLIMIT_AS, with RLIMIT_DATA as fallback; current macos rejects limits below
 the already-mapped virtual size (gigabytes at interpreter start), so a
-realistic cap errors the call there instead of silently running uncapped),
+realistic limit errors the call there instead of silently running unlimited),
 a working directory, and a scrubbed environment. A crashing or run-away tool
 is contained from the parent, but this is not a jail against hostile code:
 it cannot stop the tool from reading files or reaching the network. Real path
@@ -50,16 +50,16 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
     """
     Run a tool call in a fresh interpreter via the generic runner.
 
-    Enforced caps: ```timeout``` (wall-clock, then SIGKILL), ```memory_mb```
+    Enforced limits: ```timeout``` (wall-clock, then SIGKILL), ```memory_mb```
     (the child's address-space rlimit) and ```output_mb``` (the captured
     output is cut, a larger reply is an error). ```cwd``` steers relative
     paths (advisory). ```env``` is scrubbed and ```${NAME}```-expanded. Path,
-    network and disk caps are intentionally absent; they cannot be promised
+    network and disk limits are intentionally absent; they cannot be promised
     here.
     """
 
     class Meta:
-        """The subprocess mechanism's own settings (its option keys)."""
+        """The subprocess mechanism's own options (its option keys)."""
 
         # the configurable defaults; the item's options overlay them, read at
         # runtime via _config
@@ -67,7 +67,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
             # wall-clock seconds, then the process group is killed; None = no limit
             timeout=None,
             # MB of memory via rlimit (RLIMIT_AS, else RLIMIT_DATA); a refused
-            # cap errors the call (macos rejects small caps); None = no limit
+            # limit errors the call (macos rejects small limits); None = no limit
             memory_mb=None,
             # working dir, created on demand; steers relative paths, no wall
             cwd=None,

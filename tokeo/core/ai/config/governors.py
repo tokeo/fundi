@@ -3,7 +3,7 @@ Resolve a governor composition into an ordered, deduplicated participation list.
 
 This is the composition notation made executable. A composition is what an
 agent's ```governors``` list (or a chain under ```ai.guards```,
-```ai.transformers``` or ```ai.conductors```) declares: *where and in what order*
+```ai.transformers``` or ```ai.conductors```) sets: *where and in what order*
 governors run, carrying no config (config lives in the item). This
 module turns that notation (bare names, ```name: [stages]``` stage lists,
 ```_any```, imported chains, and the agent's ```omit```) into a flat, ordered
@@ -24,8 +24,8 @@ The grammar:
 - a class path as the config name (```module:Class```): used at the
   point of use without registration; not configurable, runs with class defaults
 
-The config name is the name as written: a declared name and a class
-path are different config names even for the same class, and two declared
+The config name is the name as written: a configured name and a class
+path are different config names even for the same class, and two configured
 names for one class are two config names (two instances). The same config name
 appearing more than once is deduplicated; its stages are the union across its
 appearances, with nearest-wins (chain brought in vs. agent direct) deciding a
@@ -42,14 +42,14 @@ class GovernorConfigEntry:
     One resolved governor participation: a config name and its stages.
 
     The product of resolving a composition. ```config_name``` is the name as
-    written (a declared name or a class path); ```stages``` is the frozen
+    written (a configured name or a class path); ```stages``` is the frozen
     set of stage names it participates at, already intersected with what the
     class can do. ```source``` records where the entry came from (an agent entry
     or a chain), used to resolve a contradiction (agent wins over chain).
 
     ### Args
 
-    - **config_name** (str): The name as written (a declared name or a class
+    - **config_name** (str): The name as written (a configured name or a class
         path); a class path is what the config named it there, so it is its
         config name too
     - **stages** (frozenset): The stages this entry runs at
@@ -113,7 +113,7 @@ def _resolve_stages(config_name, stages, stages_of):
     # intersected with what the class can do. None or [_any] means all class
     # stages; an explicit list is taken as named (a named stage the class does
     # not implement is dropped here and flagged by the linter, not raised, so a
-    # run is not blocked by a stale stage name)
+    # run does not fail on a stale stage name)
     class_stages = frozenset(stages_of(config_name))
     if stages is None or list(stages) == [GOVERNOR_STAGE_ANY]:
         return class_stages

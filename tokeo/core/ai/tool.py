@@ -28,7 +28,7 @@ class TokeoAiTool(MetaMixin):
     ```_config``` serves the merged view. It can use ```app.db```, the vault,
     and hold resources.
     ```Meta``` declares the ```description``` and the JSON-schema ```parameters```
-    sent to the model, plus any setting of the tool's own (overridden per
+    sent to the model, plus any option of the tool's own (overridden per
     item by its ```options```); a subclass overrides those keys and ```exec```
     does the work. The handler reads them from ```_meta```.
 
@@ -73,7 +73,7 @@ class TokeoAiTool(MetaMixin):
 
         # the configurable defaults, as one dict; empty here: a tool's
         # description and parameters above are the model interface, not config
-        # settings. a derivation that has its own configurable settings fills
+        # options. a derivation that has its own configurable options fills
         # this (the config_defaults rule: every Meta carries the dict)
         config_defaults = {}
 
@@ -88,12 +88,12 @@ class TokeoAiTool(MetaMixin):
         """
         The name this tool answers to. Never ```None``` or empty.
 
-        The declared config key once setup handed one in, the class path
+        The configured key once setup handed one in, the class path
         (```module:Class```) until then.
 
         ### Returns
 
-        - **str**: The declared key, or the class path
+        - **str**: The configured key, or the class path
 
         """
         if self._config_name:
@@ -111,7 +111,7 @@ class TokeoAiTool(MetaMixin):
         ### Args
 
         - **app**: The Tokeo application instance
-        - **config_name** (str, optional): The key the tool is declared
+        - **config_name** (str, optional): The key the tool is configured
             under (```calc```)
         - **config** (dict, optional): The raw ```ai.tools``` item
 
@@ -129,7 +129,7 @@ class TokeoAiTool(MetaMixin):
         Return the effective value of an option key.
 
         Reads the view setup built: ```Meta.config_defaults``` with the
-        declared ```options``` laid over.
+        configured ```options``` laid over.
 
         ### Args
 

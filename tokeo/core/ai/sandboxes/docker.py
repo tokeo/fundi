@@ -19,7 +19,7 @@ itself is the simplest choice.
 Always set, not configurable: ```--rm```, ```--cap-drop ALL```,
 ```--security-opt no-new-privileges```, never ```--privileged```, and every
 mount read-only. Configurable with safe defaults: no network, a read-only root
-file system with a ```/tmp``` of ```disk_mb```, a memory and a process cap, a
+file system with a ```/tmp``` of ```disk_mb```, a memory and a process limit, a
 timeout, a user that is not root, and ```output_mb``` for the output the host
 reads.
 
@@ -88,7 +88,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
     """
 
     class Meta:
-        """The docker mechanism's own settings (its option keys)."""
+        """The docker mechanism's own options (its option keys)."""
 
         # the configurable defaults; the item's options overlay them, read at
         # runtime via _config
@@ -226,7 +226,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         return f'tokeo-ai-{label}-{os.getpid()}-{uuid.uuid4().hex[:8]}'
 
     def _run_args(self, name, detach):
-        # the hardening: fixed flags first, then the configured caps
+        # the hardening: fixed flags first, then the configured limits
         args = [self._config('command'), 'run', '--rm', '-d' if detach else '-i', '--name', name]
         args += ['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges']
         args += ['--network', str(self._config('network'))]

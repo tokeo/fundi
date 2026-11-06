@@ -12,7 +12,7 @@ only what is specific to the transformer role.
 The three roles describe characters in thought: a transformer
 *reshapes*, a guard *secures*, a conductor *directs*. Only a guard
 decides: when a transformer or conductor changes ```invocation.decision```, the
-loop ends the run with a ```TokeoAiError``` that names it, a fault of the app.
+loop ends the run with a ```TokeoAiError``` that names it, an error of the app.
 When a guard denies without naming a reason, the loop stamps role and name of
 the actor into the reason, so trace and feedback always show who decided.
 
@@ -39,9 +39,9 @@ and let the run continue.
 
 ## The shipped type
 
-- truncate (```TokeoAiTruncateTransformer```): caps over-long text so a large
-  payload cannot blow the context budget or flood the trace. No ready-to-use
-  implementation ships in the core; a generated project carries an editable
+- truncate (```TokeoAiTruncateTransformer```): shortens over-long text so a
+  large payload cannot blow the context window or flood the trace. No
+  ready-to-use implementation ships in the core; a generated project carries an editable
   example in its own ```core/ai/transformers/truncate.py```, named by its class
   path (```module:Class```) in the config.
 

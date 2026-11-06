@@ -3,14 +3,14 @@
 The wasm sandbox runs a tool call inside a WebAssembly guest under
 [Wasmtime](https://wasmtime.dev/). Next to the docker sandbox it is the one
 that gives real isolation against untrusted code rather than mere
-fault-and-resource cleanup, and the only one that needs no container service:
+error-and-resource cleanup, and the only one that needs no container service:
 the guest has no network at all, sees no host file outside the paths
-you explicitly mount, runs under a hard memory cap that holds on every
+you explicitly mount, runs under a hard memory limit that holds on every
 platform, and is interrupted by an epoch timeout. It is opt-in, needs the
 ```wasmtime``` package (48 or later) and a user-supplied CPython-WASI build.
 
 This document covers when to use it, the two ```python-exec``` tools, how
-to install a WASI Python build into a project's ```./wasm``` folder, every option,
+to install a WASI Python build into a project's ```./wasm``` directory, every option,
 the file-bridge mechanics, the two trust models, what the guest receives, the
 WASI standard-library shim, and troubleshooting.
 
@@ -97,7 +97,7 @@ and is not shipped with tokeo; you download a build once per machine and
 point the sandbox options at it. The recommended source is Brett Cannon's
 prebuilt WASI releases, which the Python core developers point to.
 
-The examples below install the build into a ```./wasm``` folder at your project
+The examples below install the build into a ```./wasm``` directory at your project
 root, the paths the examples and the ramani template use
 (```./wasm/python.wasm``` and ```./wasm/lib/python3.13```). The options
 ```runtime``` and ```stdlib``` have no default; a call without them fails.
@@ -133,7 +133,7 @@ rm python-3.13.0-wasi_sdk-24.zip
 cd ..
 ```
 
-After unpacking, the ```./wasm``` folder holds the interpreter next to a ```lib```
+After unpacking, the ```./wasm``` directory holds the interpreter next to a ```lib```
 directory with the standard library:
 
 ```
@@ -307,7 +307,7 @@ There is no stdin runner here. For each call the sandbox:
 3. Mounts the stdlib read-only at ```/lib``` and the requested ```mounts```
    read-only at their guest paths.
 4. Runs the interpreter on the entry script with a scrubbed environment, a hard
-   memory cap, and an epoch deadline. The guest's stdout and stderr go to files
+   memory limit, and an epoch deadline. The guest's stdout and stderr go to files
    the host keeps outside ```/io```, out of the guest's reach; they count for
    ```disk_mb``` and are cut at ```output_mb```.
 5. The guest entry either runs the ```code``` argument directly (untrusted,
@@ -601,7 +601,7 @@ The guest cannot:
 
 - Open a socket; the syscalls do not exist in its world.
 - Read a host file outside the explicit mounts.
-- Exceed the memory cap (a runaway allocation traps).
+- Exceed the memory limit (a runaway allocation traps).
 - Outrun the timeout, or write more than ```disk_mb``` or ```max_files``` into
   ```/io``` and ```/work```.
 

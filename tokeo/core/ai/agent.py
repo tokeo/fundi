@@ -1,6 +1,6 @@
 """
 The agent base class and the standard fundi agent. An agent is the
-composition root (tools, guards, sandboxes, deny, budgets); the loop
+composition root (tools, guards, sandboxes, deny, limits); the loop
 itself lives in the app.ai handler.
 """
 
@@ -71,8 +71,8 @@ class TokeoAiAgent(MetaMixin):
         # omit: governor config names to drop from this agent's composition (a
         # local leaving-out, e.g. one a chain brought in), next to governors so
         # it never collides with a governor or chain name.
-        # max_steps: per-agent cap on tool rounds (0 = unlimited). max_loops:
-        # per-agent cap on consecutive rounds without one successful call
+        # max_steps: per-agent max of tool rounds (0 = unlimited). max_loops:
+        # per-agent max of consecutive rounds without one successful call
         # (0 = unlimited). both resolve in three levels, nearest wins: a chat()
         # call argument, then this agent option, then the ai-section base
         # (ai.max_steps / ai.max_loops). None here means "this agent sets none":
@@ -99,12 +99,12 @@ class TokeoAiAgent(MetaMixin):
         """
         The name this agent answers to. Never ```None``` or empty.
 
-        The declared config key once setup handed one in, the class path
+        The configured key once setup handed one in, the class path
         (```module:Class```) until then.
 
         ### Returns
 
-        - **str**: The declared key, or the class path
+        - **str**: The configured key, or the class path
 
         """
         if self._config_name:
@@ -122,7 +122,7 @@ class TokeoAiAgent(MetaMixin):
         ### Args
 
         - **app**: The Tokeo application instance
-        - **config_name** (str, optional): The key the agent is declared
+        - **config_name** (str, optional): The key the agent is configured
             under (```assistant```)
         - **config** (dict, optional): The raw ```ai.agents``` item
 
@@ -140,7 +140,7 @@ class TokeoAiAgent(MetaMixin):
         Return the effective value of a composition key.
 
         Reads the view setup built: ```Meta.config_defaults``` with the
-        declared ```options``` laid over.
+        configured ```options``` laid over.
 
         ### Args
 

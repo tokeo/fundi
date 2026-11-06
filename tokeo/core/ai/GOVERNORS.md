@@ -10,7 +10,7 @@ note. What is specific to a *role* (the guard's denial, the transformer's
 reshape-only rule, the conductor's steering) is in that role's own documentation
 (```TokeoAiGuard```, ```TokeoAiTransformer```, ```TokeoAiConductor```).
 
-A governor is a positioned, state-refining step. It is declared on an agent, the
+A governor is a positioned, state-refining step. It is configured on an agent, the
 loop runs it at the stages it overrides, and every run of it is recorded on the
 trace, so a governor is both an actor (it may reshape the state) and a matter of
 record (what it did is attributable).
@@ -26,7 +26,7 @@ record (what it did is attributable).
 - a **conductor** directs: it steers the course of the run, for example by adding
   or dropping tool calls.
 
-The role shows in the section of the config a governor is declared in
+The role shows in the section of the config a governor is configured in
 (```ai.guards```, ```ai.transformers```, ```ai.conductors```), and the linter
 checks that the class fits the section. An agent lists all of its governors, in
 order, under one key: ```governors```.
@@ -117,7 +117,7 @@ failure from a tool that raised), logs, and returns ```None```; it changes
 nothing.
 
 A result-changing governor (a redact guard that masks secrets, a truncate
-transformer that caps length) changes the result. Those are what the write
+transformer that shortens) changes the result. Those are what the write
 contract below is about.
 
 ## The write contract
@@ -187,7 +187,7 @@ Two ways to write the change:
 
 Whether the views must stay coherent depends on the governor's purpose, so the
 framework does not force it. A redact guard should keep them coherent (a leak in an
-unmasked view is a real leak); a truncate transformer usually only caps ```as_str```
+unmasked view is a real leak); a truncate transformer usually only shortens ```as_str```
 for the model and lets the trace keep the full views. Both are valid; the author
 decides.
 
@@ -245,11 +245,11 @@ A governor class derives from its role class (```TokeoAiGuard```,
 the base class only the mechanics.
 
 The config sections ```guards```, ```transformers```, and
-```conductors``` declare governors in one shared namespace (a name may
-appear in only one of them). The section names the declared role,
+```conductors``` configure governors in one shared namespace (a name may
+appear in only one of them). The section names the configured role,
 a guard *secures*, a transformer *reshapes*, a conductor *directs*. The
 author of the agent list is the composition root and orders it
-deliberately. The linter checks section purity: a ```type``` declared in a
+deliberately. The linter checks section purity: a ```type``` set in a
 section must resolve to that role class. The loop checks the behaviour: only a
 guard decides, and a transformer or conductor that changes the decision of a
 call ends the run with a ```TokeoAiError``` that names it. When a guard denies

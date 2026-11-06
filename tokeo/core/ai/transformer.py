@@ -8,7 +8,7 @@ reshaping: it inspects and refines the running state at its stages (mask,
 rewrite, enrich, replace an object with a fresh one of the same kind). Securing
 is the guard's character, directing the conductor's. Only a guard decides: a
 transformer that changes the decision ends the run with a ```TokeoAiError```,
-a fault of the app.
+an error of the app.
 
 ## Do not derive from this class directly
 

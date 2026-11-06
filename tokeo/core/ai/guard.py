@@ -23,7 +23,7 @@ A guard may refuse a single tool call at ```on_call``` by setting
 *that one* call; the loop continues, the remaining governors and stages still
 run, and the model is told the call was denied so it can react. This soft denial
 is the guard's role, and only a guard decides: a transformer or conductor that
-changes the decision ends the run with a ```TokeoAiError```, a fault of the app.
+changes the decision ends the run with a ```TokeoAiError```, an error of the app.
 For stopping the whole run, any governor may ```raise``` a
 ```TokeoAiGuardError``` (the hard abort described on ```TokeoAiGovernor```); use
 the typed error of the guard's family so a caller can catch one kind specifically.

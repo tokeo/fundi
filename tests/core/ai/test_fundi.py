@@ -1,7 +1,7 @@
 """
 Tests for the sandbox helpers that need no app.
 
-Environment scrubbing, the runner's memory cap fallbacks, and the shared
+Environment scrubbing, the runner's memory limit fallbacks, and the shared
 ```_setup``` contract of the ai classes, all driven directly. Everything that
 goes through the agent chain lives in ```tests/ext/ai/test_ai.py```.
 """
@@ -57,8 +57,8 @@ def test_expand_env_scrubs_and_expands(monkeypatch):
 # ---- linter coverage of the new section and fields --------------------------
 
 
-def test_runner_memory_cap_falls_back_per_platform(monkeypatch):
-    """With RLIMIT_AS refused (macos-style) a 64 MB cap goes to RLIMIT_DATA."""
+def test_runner_memory_limit_falls_back_per_platform(monkeypatch):
+    """With RLIMIT_AS refused (macos-style) a 64 MB limit goes to RLIMIT_DATA."""
     import resource as res_mod
     from tokeo.core.ai.sandboxes import runner
 
@@ -80,8 +80,8 @@ def test_runner_memory_cap_falls_back_per_platform(monkeypatch):
     assert res_mod.RLIMIT_DATA in attempts
 
 
-def test_runner_memory_cap_soft_only_when_hard_is_refused(monkeypatch):
-    """A refused hard limit turns the pinned pair (cap, cap) into soft-only."""
+def test_runner_memory_limit_soft_only_when_hard_is_refused(monkeypatch):
+    """A refused hard limit turns the pinned pair (max, max) into soft-only."""
     import resource as res_mod
     from tokeo.core.ai.sandboxes import runner
 
@@ -101,13 +101,13 @@ def test_runner_memory_cap_soft_only_when_hard_is_refused(monkeypatch):
     monkeypatch.setattr(res_mod, 'getrlimit', fake_getrlimit)
     monkeypatch.setattr(res_mod, 'setrlimit', fake_setrlimit)
     runner._set_limits({'memory_mb': 64})
-    cap = 64 * 1024 * 1024
+    memory_bytes = 64 * 1024 * 1024
     # first the pinned pair, then the accepted soft-only fallback
-    assert calls == [(cap, cap), (cap, res_mod.RLIM_INFINITY)]
+    assert calls == [(memory_bytes, memory_bytes), (memory_bytes, res_mod.RLIM_INFINITY)]
 
 
-def test_runner_memory_cap_refuses_a_sham_setting(monkeypatch):
-    """A 64 MB cap that no mechanism accepts raises 'not enforceable'."""
+def test_runner_memory_limit_refuses_a_sham_limit(monkeypatch):
+    """A 64 MB limit that no mechanism accepts raises 'not enforceable'."""
     import resource as res_mod
     from tokeo.core.ai.sandboxes import runner
 
@@ -116,7 +116,7 @@ def test_runner_memory_cap_refuses_a_sham_setting(monkeypatch):
         raise ValueError('current limit exceeds maximum limit')
 
     monkeypatch.setattr(res_mod, 'setrlimit', fake_setrlimit)
-    # a configured cap that cannot be kept must error, not silently skip
+    # a configured limit that cannot be kept must error, not silently skip
     with pytest.raises(RuntimeError, match='not enforceable'):
         runner._set_limits({'memory_mb': 64})
 
@@ -140,7 +140,7 @@ def test_an_object_without_setup_is_not_initialized():
     Without _setup the first _config read raises a named TokeoAiError.
 
     Construction alone is not a lifecycle, setup is the initialization, so
-    nothing runs on guessed settings. config_name has no setter; only
+    nothing runs on guessed options. config_name has no setter; only
     _setup can hand one in.
     """
     tool = GreetTool(None)

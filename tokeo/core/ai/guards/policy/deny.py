@@ -32,7 +32,7 @@ class TokeoAiDenyPolicyGuard(TokeoAiPolicyGuard):
     class Meta:
         """Deny policy guard meta-data."""
 
-        # no configurable settings; empty per the config_defaults rule
+        # no configurable options; empty per the config_defaults rule
         config_defaults = {}
 
     def on_call(self, ctx, invocation):

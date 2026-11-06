@@ -15,7 +15,7 @@ from tokeo.core.ai.exc import TokeoAiError
 
 def provider_type_of(name, profile):
     """
-    Return the provider ```type``` declared on a profile.
+    Return the provider ```type``` set on a profile.
 
     ### Args
 

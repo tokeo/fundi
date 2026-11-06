@@ -99,7 +99,7 @@ def result_from_reply(stdout, stderr, class_path, sandbox_type):
     ### Raises
 
     - **TokeoAiError**: On no valid JSON or an ```error``` reply, a failure of
-        the sandbox machinery (a bad job, a cap, an unimportable tool)
+        the sandbox machinery (a bad job, a limit, an unimportable tool)
 
     """
     try:

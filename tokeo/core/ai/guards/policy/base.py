@@ -38,7 +38,7 @@ class TokeoAiPolicyGuard(TokeoAiGuard):
     ```decision```/```reason```; ```on_begin```/```on_prompt``` see
     ```ctx.messages```; ```on_answer```/```on_close``` a ```ChatResult```), see
     the stage guide in the ```TokeoAiGovernor``` class documentation, the single
-    reference for building a guard across its stations.
+    reference for building a guard across its stages.
 
     The two levels of refusal matter most for a policy guard:
 
@@ -63,5 +63,5 @@ class TokeoAiPolicyGuard(TokeoAiGuard):
     class Meta:
         """Policy guard meta-data."""
 
-        # no configurable settings; empty per the config_defaults rule
+        # no configurable options; empty per the config_defaults rule
         config_defaults = {}

@@ -7,7 +7,7 @@ call the host writes the task, a small entry script and copies of the
 stdlib-only ```WASM_GUEST_MODULE_COPIES``` into a fresh scratch dir mounted
 read-write at ```/io```. The guest has no network (the syscalls do not exist
 in its world), sees no host file outside the explicit ```mounts```, and runs
-under a hard memory cap (Wasmtime store limits, the same on every platform)
+under a hard memory limit (Wasmtime store limits, the same on every platform)
 and an epoch timeout. This is deny-by-default: a tool that needs a path or the
 network must be granted it explicitly, or run in a different sandbox.
 
@@ -139,7 +139,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
     Run a tool call inside a Wasmtime WebAssembly guest.
 
     Deny-by-default isolation: no network at all, only the explicitly mounted
-    host paths are visible, a hard memory cap and an epoch timeout. The guest
+    host paths are visible, a hard memory limit and an epoch timeout. The guest
     is a user-supplied CPython-WASI build named by the ```runtime```/```stdlib```
     options; the tool runs across a file bridge in a private scratch dir.
 
@@ -155,7 +155,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
     """
 
     class Meta:
-        """The wasm mechanism's own settings (its option keys)."""
+        """The wasm mechanism's own options (its option keys)."""
 
         # the configurable defaults; the item's options overlay them, read at
         # runtime via _config
@@ -172,7 +172,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             env=None,
             # wall-clock seconds, then a timer stops the guest; None = no limit
             timeout=None,
-            # MB of memory, a hard cap by the store limits; None = no limit
+            # MB of memory, a hard limit by the store limits; None = no limit
             memory_mb=None,
             # MB the guest may add to /io, /work and its stdout and stderr
             disk_mb=64,
@@ -205,7 +205,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         ### Args
 
         - **app**: The Tokeo application instance
-        - **config_name** (str, optional): The key the sandbox is declared under
+        - **config_name** (str, optional): The key the sandbox is configured under
         - **config** (dict, optional): The raw item
 
         """
@@ -324,7 +324,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             if code == _GUEST_EXIT_MACHINERY:
                 raise TokeoAiError(f'tool {class_path!r} failed in the wasm sandbox: {stderr.strip()[-400:]}')
             # the raw value.json frames two views of the value, read with the
-            # cap of a raw reply; the views are held to output_mb below
+            # max of a raw reply; the views are held to output_mb below
             data = read(os.path.join(io_dir, 'value.json'), reply_bytes(max_bytes)) if code == 0 else b''
         if len(data) > reply_bytes(max_bytes):
             raise TokeoAiError(f'tool {class_path!r} delivered more than {output_mb:g} MB in the wasm sandbox')
@@ -344,7 +344,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         return check_output(ToolResult(value=value, state=state), max_bytes, f'{output_mb:g} MB', class_path, 'wasm')
 
     def _run_guest(self, wasmtime, io_dir, capture_dir, class_path, shims):
-        # assemble the wasmtime store with the cap, the mounts and the scrubbed
+        # assemble the wasmtime store with the limit, the mounts and the scrubbed
         # env, run the guest entry under the watcher, return its exit code.
         # epoch interruption is always on: it is the only way to stop a guest
         config = wasmtime.Config()
@@ -353,7 +353,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         store = wasmtime.Store(engine)
         memory_mb = self._config('memory_mb')
         if memory_mb:
-            # store limits make the guest refuse growth past the bound: a
+            # store limits make the guest refuse growth past the limit: a
             # runaway allocation traps, platform-independent unlike rlimit
             store.set_limits(memory_size=memory_mb * 1024 * 1024)
         linker = wasmtime.Linker(engine)

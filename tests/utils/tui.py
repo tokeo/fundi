@@ -49,7 +49,7 @@ class Terminal:
     An app of the tests runs as a probe of its subject, started as module:
 
     ```python
-    args = [sys.executable, '-m', 'tests.<folder>.<subject>_tests_<part>_probe']
+    args = [sys.executable, '-m', 'tests.<dir>.<subject>_tests_<part>_probe']
     ```
 
     """

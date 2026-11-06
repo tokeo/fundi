@@ -31,7 +31,7 @@ from tokeo.core.ai.config.tools import find_cycles
 # an error instead of being silently ignored. tools, agents, and guards share
 # the uniform item form ({type, options}); the ```defaults``` block is checked
 # here, agent option contents by the built-in element validators below.
-# max_steps/max_loops are the handler's base loop budgets (config_defaults),
+# max_steps/max_loops are the handler's base loop limits (config_defaults),
 # settable at the ai section level; trace toggles recording the step history
 _AI_KEYS = {
     'license_acknowledged',
@@ -60,9 +60,9 @@ _PROFILE_KEYS = {
 }
 _ITEM_KEYS = {'type', 'options'}
 # a guard item also accepts a per-stage on_<stage> block (its own options
-# override for that station); agents and tools have no stages, so they do not
+# override for that stage); agents and tools have no stages, so they do not
 _GUARD_ITEM_KEYS = _ITEM_KEYS | set(GOVERNOR_STAGES)
-# the three governor sections and, per section, the role base a declared type
+# the three governor sections and, per section, the role base a configured type
 # must derive from, so the linter keeps each section pure (a guard type only
 # in ai.guards, a transformer only in ai.transformers, ...)
 _GOVERNOR_SECTIONS = ('guards', 'transformers', 'conductors')
@@ -161,7 +161,7 @@ class TokeoAiLinter:
         defaults = self._value('defaults')
         agents = self._value('agents') or {}
         self._lint_keys('ai', self._section_keys(), _AI_KEYS)
-        self._lint_budgets('ai', {key: self._value(key) for key in ('max_steps', 'max_loops')})
+        self._lint_max_values('ai', {key: self._value(key) for key in ('max_steps', 'max_loops')})
         trace = self._value('trace')
         if trace is not None and not isinstance(trace, bool):
             self._add('ai.trace', 'must be true or false')
@@ -186,8 +186,8 @@ class TokeoAiLinter:
         for name, value in entries.items():
             for validator in self._validators.get(section, []):
                 # a raising validator never crashes the lint run: a
-                # TokeoAiError is a deliberate verdict and becomes an error
-                # issue with its message, any other exception is a fault in
+                # TokeoAiError is a deliberate decision and becomes an error
+                # issue with its message, any other exception is an error in
                 # the validator itself and is reported as such
                 try:
                     issues = validator(section, name, value)
@@ -258,7 +258,7 @@ class TokeoAiLinter:
                 where = ', '.join(sections)
                 self._add(
                     f'ai.{sections[-1]}.{name}',
-                    f'governor name {name!r} is declared in more than one section ({where}); '
+                    f'governor name {name!r} is configured in more than one section ({where}); '
                     'names are unique across guards/transformers/conductors',
                 )
 
@@ -339,7 +339,7 @@ class TokeoAiLinter:
         # referenced too. omit is a sibling field, not a list entry
         self._lint_guard_composition(f'{path}.governors', options.get('governors'))
         self._lint_guard_omit(f'{path}.omit', options.get('omit'))
-        self._lint_budgets(path, options)
+        self._lint_max_values(path, options)
         self._lint_names(f'{path}.sandboxes', options.get('sandboxes'), set(self._value('sandboxes') or {}), 'sandbox')
         self._lint_names(f'{path}.deny', options.get('deny'), tool_names, 'tool or group')
         # union/conflict: run the one resolver so the linter reports exactly
@@ -348,7 +348,7 @@ class TokeoAiLinter:
         # logs a note via this adapter
         self._lint_guard_resolution(path, options)
 
-    def _lint_budgets(self, path, values):
+    def _lint_max_values(self, path, values):
         # at ai level or on an agent
         for key in ('max_steps', 'max_loops'):
             value = values.get(key)
@@ -408,7 +408,7 @@ class TokeoAiLinter:
         # validate a guards composition list: each entry is a bare name
         # or a one-key {name: [stages]}; a referenced chain (list value under
         # ai.guards) is walked too. a named stage must be one the guard's class
-        # can do; an unknown alias (not a class path, not declared) is an
+        # can do; an unknown alias (not a class path, not configured) is an
         # error; an empty/null/[] stage list is an error
         known = set(self._governors_merged())
         chain_path = chain_path or []
@@ -430,7 +430,7 @@ class TokeoAiLinter:
                     continue
                 self._lint_guard_composition(path, value, chain_path + [config_name])
                 continue
-            # a config name must be a declared name or a class path
+            # a config name must be a configured name or a class path
             if '.' not in config_name and config_name not in known:
                 self._add(path, _unknown('governor', config_name, known))
                 continue

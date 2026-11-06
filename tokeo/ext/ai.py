@@ -17,7 +17,7 @@ the ```tokeo.core.ai``` package, and the ```ai``` config section).
 
 Every configured component is an item in the uniform form ```{type, options}```:
 ```type``` names the class (a built-in alias or a class path), ```options```
-carries the component's own settings. Profiles add their documented top-level
+carries the component's own options. Profiles add their documented top-level
 params (purpose, agent, deny, enabled, model, model_params) around that form.
 
 ```yaml
@@ -180,12 +180,12 @@ class TokeoAi(MetaMixin):
 
         # Default configuration settings
         config_defaults = dict(
-            # the app-wide base budgets for the loop. they are resolved in three
+            # the app-wide base limits for the loop. they are resolved in three
             # levels, nearest wins: a chat() call argument, then the selected
             # agent's option, then this ai-section base. an agent leaves its
-            # budget None to fall through to here, so this is the single home of
-            # the default numbers. max_steps caps the tool rounds of one request
-            # (0 = unlimited); max_loops caps the consecutive rounds without one
+            # limit None to fall through to here, so this is the single home of
+            # the default numbers. max_steps limits the tool rounds of one request
+            # (0 = unlimited); max_loops limits the consecutive rounds without one
             # successful call (0 = unlimited), so a model stuck on denied or
             # failing calls is stopped. set either at ai.max_steps / ai.max_loops
             max_steps=0,
@@ -270,7 +270,7 @@ class TokeoAi(MetaMixin):
         for section in ('guards', 'transformers', 'conductors'):
             for name, item in (self._config(section, fallback={}) or {}).items():
                 if name in self._governors:
-                    raise TokeoAiError(f'ai governor {name!r} is declared more than once across guards, transformers and conductors')
+                    raise TokeoAiError(f'ai governor {name!r} is configured more than once across guards, transformers and conductors')
                 self._governors[name] = dict(type=item) if isinstance(item, str) else item
         # whether runs record their trace; read once, passed to each context
         self._trace_enabled = bool(self._config('trace', fallback=True))
@@ -552,7 +552,7 @@ class TokeoAi(MetaMixin):
         # build the governor for a config name (the name as written) once and
         # reuse it; governors hold no per-call state, so one cached instance is
         # fine. two forms: a class path at the point of use (a ':' in the
-        # name) runs with class defaults, not configurable; a declared name is
+        # name) runs with class defaults, not configurable; a configured name is
         # built from its ai.guards item: ```type``` (a built-in alias or a
         # class path) resolves to a class, set up with its key and its raw
         # item
@@ -575,7 +575,7 @@ class TokeoAi(MetaMixin):
     def _stages_of(self, config_name):
         # the stages a governor's class can do, by reflection (the governor's
         # own has_stage over its on_* methods). used by the composition resolver
-        # to intersect a declared stage list with what the class implements
+        # to intersect a configured stage list with what the class implements
         governor = self._governor(config_name)
         return [stage for stage in GOVERNOR_STAGES if governor.has_stage(stage)]
 
@@ -594,7 +594,7 @@ class TokeoAi(MetaMixin):
         # build the per-stage running order: one ordered guard list per stage.
         # the stage is the fixed band; within a stage the guards run in agent
         # list order. each resolved entry (GovernorConfigEntry) carries the stages
-        # it runs at (the intersection of its declared composition stages
+        # it runs at (the intersection of its configured composition stages
         # and what its class implements), so a guard runs at a stage only
         # when both the composition AND the class include it. with no guards
         # every list is empty and the loop runs as before.
@@ -721,7 +721,7 @@ class TokeoAi(MetaMixin):
     def _govern(self, governors, step, subject):
         # run the governors of a stage over the subject, step(governor,
         # subject) -> subject. a no_retry in a confirm starts the stage again,
-        # its guards judge anew with the notes; the confirm bounds the retries
+        # its guards judge anew with the notes; the confirm limits the retries
         while True:
             try:
                 for governor in governors:
@@ -754,7 +754,7 @@ class TokeoAi(MetaMixin):
 
         def check_decision(governor, previous_decision, invocation, stage):
             # only a guard decides: a transformer or conductor that changes the
-            # decision breaks its role, a fault of the app that ends the run
+            # decision breaks its role, an error of the app that ends the run
             if invocation.decision != previous_decision and not isinstance(governor, TokeoAiGuard):
                 raise TokeoAiError(f'{self._governor_label(governor)} changed the decision at {stage}, only a guard decides')
             if invocation.decision == Invocation.DENY and not invocation.reason:
@@ -838,14 +838,14 @@ class TokeoAi(MetaMixin):
 
         Resolves a profile (the model), then calls the provider. The active
         tools come from the agent (the composition root, which also sets the
-        budgets); the call cannot add tools, only narrow them. While the model
+        limits); the call cannot add tools, only narrow them. While the model
         asks for tool calls, the activated tools are executed and their results
         are fed back, until the model answers. With no activated tool the loop
         degrades to a single, plain call.
 
-        Two budgets bound the loop and abort it with an error when reached:
-        ```max_steps``` caps the tool rounds of one request, ```max_loops``` caps
-        the consecutive rounds without one successful call (a model stuck on
+        Two limits hold the loop and abort it with an error when reached:
+        ```max_steps``` limits the tool rounds of one request, ```max_loops```
+        limits the consecutive rounds without one successful call (a model stuck on
         denied or failing calls). ```0``` means unlimited.
 
         ### Args
@@ -865,9 +865,9 @@ class TokeoAi(MetaMixin):
             profile's ```agent``` (```null``` is none), then
             ```ai.defaults.agent```, then the implicit agent without tools
         - **max_steps** (int|None): Maximum tool rounds, 0 for unlimited;
-            defaults to the agent's budget, otherwise the framework default
+            defaults to the agent's limit, otherwise the framework default
         - **max_loops** (int|None): Maximum consecutive rounds without one
-            successful call, 0 for unlimited; defaults to the agent's budget,
+            successful call, 0 for unlimited; defaults to the agent's limit,
             otherwise the framework default
         - **turndata** (dict|None): Starting values for the run's
             ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
@@ -889,7 +889,7 @@ class TokeoAi(MetaMixin):
         - **TokeoAiRunDeclinedError**: When a governor declined the run; its
             ```result``` holds the run so far, without the declined answer
         - **TokeoAiError**: If no profile resolves or it carries no ```type```,
-            or when a budget aborts the execution
+            or when a limit aborts the execution
 
         """
         self._license_notice()
@@ -898,7 +898,7 @@ class TokeoAi(MetaMixin):
         provider_type = provider_type_of(name, profile)
         provider = self._provider(provider_type)
         # the agent is the composition root: it supplies the tools and the
-        # guards and sets the budgets and the sandbox chain, while the profile
+        # guards and sets the limits and the sandbox chain, while the profile
         # selects only the model. the active tools are the agent's tools, minus
         # the agent's deny, minus the profile's deny, minus this call's deny;
         # a call can only narrow the set, never extend it. so several profiles
@@ -907,7 +907,7 @@ class TokeoAi(MetaMixin):
         agent_obj = self._agent_or_default(agent, profile)
         requested = self._tools_minus_deny(agent_obj, profile, deny)
         if max_steps is None:
-            # the agent's own budgets win; without one (None) the handler's
+            # the agent's own limits win; without one (None) the handler's
             # base defaults (config_defaults max_steps / max_loops) apply
             agent_max_steps = agent_obj._config('max_steps')
             max_steps = agent_max_steps if agent_max_steps is not None else self._config('max_steps', fallback=0)
@@ -916,7 +916,7 @@ class TokeoAi(MetaMixin):
             max_loops = agent_max_loops if agent_max_loops is not None else self._config('max_loops', fallback=3)
         specs = self._tool_specs(requested)
         # guards (selected on the agent) are positioned steps in the loop; each
-        # participates at the stations whose method it overrides. partition once
+        # participates at the stages whose method it overrides. partition once
         # the per-stage running order: each stage's ordered guard list. the loop
         # asks each stage for its list and runs the guards in that order
         by_stage = self._governors_by_stage(agent_obj)
@@ -967,7 +967,7 @@ class TokeoAi(MetaMixin):
             # the handed-in work object, so the step is recorded through supersede
             result = self._govern(at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
             while result.tool_calls:
-                # max_steps caps the tool rounds of one request; 0 is unlimited.
+                # max_steps limits the tool rounds of one request; 0 is unlimited.
                 # reaching it aborts loudly: a silent empty answer hides the cause
                 if max_steps and ctx.loopdata.steps >= max_steps:
                     raise TokeoAiError(f'ai max_steps ({max_steps}) reached, execution aborted')
@@ -1019,7 +1019,7 @@ class TokeoAi(MetaMixin):
                     succeeded = succeeded or is_successful
                     ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
                 ctx.loopdata.steps += 1
-                # max_loops caps the consecutive rounds without one successful
+                # max_loops limits the consecutive rounds without one successful
                 # call (every call denied or failing); 0 is unlimited. this stops
                 # a model stuck repeating broken calls, while any successful call
                 # resets the counter and lets honest work continue
@@ -1548,7 +1548,7 @@ def ai_extend_app(app):
     # ```ai.agents``` and selects one per call, via a profile, or defaults.agent
     app.ai.register('agent', 'fundi', TokeoAiFundiAgent)
     # built-in sandboxes: in_process (zero isolation, for trusted and quick
-    # tools) and subprocess (fault/resource isolation via the worker)
+    # tools) and subprocess (error/resource isolation via the worker)
     app.ai.register('sandbox', 'in_process', TokeoAiInProcessSandbox)
     app.ai.register('sandbox', 'subprocess', TokeoAiSubprocessSandbox)
     # docker: a hardened, throwaway container of the configured image

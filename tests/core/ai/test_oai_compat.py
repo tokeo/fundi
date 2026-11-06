@@ -18,7 +18,7 @@ import pytest
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.providers.oai_compat import TokeoAiOaiCompatProvider
 
-# a profile in the uniform form: connection settings under ```options```
+# a profile in the uniform form: connection options under ```options```
 _PROFILE = {'type': 'oai_compat', 'model': 'qwen2.5', 'options': {'base_url': 'http://localhost:11434/v1'}}
 
 

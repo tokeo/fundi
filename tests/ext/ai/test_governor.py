@@ -278,7 +278,7 @@ def test_a_no_at_on_call_stays_when_a_guard_at_on_return_allows():
 
 
 def test_a_transformer_that_changes_the_decision_ends_the_run():
-    """A transformer setting deny at on_call is a fault: TokeoAiError, no call."""
+    """A transformer setting deny at on_call is an error: TokeoAiError, no call."""
     with AiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'shredder')
@@ -289,7 +289,7 @@ def test_a_transformer_that_changes_the_decision_ends_the_run():
 
 
 def test_a_conductor_that_changes_the_decision_ends_the_run():
-    """A conductor setting deny at on_return is a fault: TokeoAiError."""
+    """A conductor setting deny at on_return is an error: TokeoAiError."""
     with AiTest() as app:
         governor = DenyingOnReturn(app)
         governor._setup(app, 'rejector')

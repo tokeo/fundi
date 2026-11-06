@@ -12,14 +12,14 @@ path with dots only (```module.Class```) is refused with a hint to the ```:```.
 Every key that takes a list (```tools```, ```governors```, ```sandboxes```,
 ```deny```, ```omit```, ```except```, a stage list) also takes a single value,
 read as a list of one. A key the section does not know, and an option the class
-does not declare in its ```config_defaults```, is an error.
+does not set in its ```config_defaults```, is an error.
 
 ## 1. The shape of ```ai:```
 
 ```yaml
 ai:
   license_acknowledged: true  # read LICENSE.md first and set true to prevent notice
-  max_steps: 8          # base loop budget (tool rounds), 0 = unlimited
+  max_steps: 8          # base loop limit (tool rounds), 0 = unlimited
   max_loops: 3          # consecutive rounds without a successful call, 0 = unlimited
   trace: true           # record the step history (the trace)
 
@@ -30,7 +30,7 @@ ai:
   tools:                # the toolset: items and named groups
   guards:               # the per-call pipeline: items and chains
   sandboxes:            # the execution walls a tool runs behind
-  agents:               # the compositions: tools + governors + sandboxes + budgets
+  agents:               # the compositions: tools + governors + sandboxes + limits
   profiles:             # model + agent bundles a run selects
 ```
 
@@ -44,9 +44,9 @@ call flows through them.
 flowchart TD
     Call["ask() / chat()<br/>or: ai ask / ai chat"] --> Profile
     Profile["profile<br/>(picks the provider = model<br/>and binds an agent)"] --> Agent
-    Agent["agent<br/>(the composition:<br/>tools + governors + sandboxes + budgets)"] --> Loop
+    Agent["agent<br/>(the composition:<br/>tools + governors + sandboxes + limits)"] --> Loop
     Loop["the agent loop"] -->|each tool call| Guards
-    Guards["governors<br/>(allow / deny / mask / cap / check)"] -->|allowed| Sandbox
+    Guards["governors<br/>(allow / deny / mask / limit / check)"] -->|allowed| Sandbox
     Sandbox["sandbox<br/>(the wall the tool runs behind)"] --> Result
     Guards -->|denied| Result
     Result["TokeoAiResult"]
@@ -56,8 +56,8 @@ flowchart TD
 
     The profile chooses the model and binds one agent. The agent is
     the composition root: it owns the tools, the governors, the sandbox
-    chain, and the budgets. A call can *narrow* what the agent offers (deny tools,
-    lower budgets) but never *add* to it.
+    chain, and the limits. A call can *narrow* what the agent offers (deny tools,
+    lower limits) but never *add* to it.
 
 ## 2. The uniform item form
 
@@ -69,8 +69,8 @@ item:
 some_name:
   type: alias                   # a built-in, OR
   type: module.path:SomeClass   # a class path, module and class apart by ':'
-  options:                      # the class's own settings (its config_defaults)
-    some_setting: value
+  options:                      # the class's own options (its config_defaults)
+    some_option: value
 ```
 
 In ```tools```, ```guards```, ```transformers``` and ```conductors``` a bare
@@ -89,7 +89,7 @@ form as a hint.
 
     ```type``` resolves a class; the keys under ```options``` are the class's
     ```Meta.config_defaults```, any other key is an error. The linter checks the
-    *shape* and the keys, the class checks the *values* of its settings.
+    *shape* and the keys, the class checks the *values* of its options.
     ```options``` may be omitted or written as ```{}```, both give an empty
     block that the linter checks; ```options: null``` is an error.
 
@@ -152,7 +152,7 @@ A guard acts at one or more stages of a tool call. The six stages, in order:
 | ```on_return``` | after a tool ran | the completed ```Invocation``` (result/error) |
 | ```on_close``` | run end | the final ```ChatResult``` |
 
-### 4.1 Declaring a guard
+### 4.1 Configuring a guard
 
 A ```guards:``` entry is an item (a dict), its short form (a string), or a
 chain (a list).
@@ -187,7 +187,7 @@ transformers:
       limit: 2000           # the default for every stage
     on_close:
       options:
-        limit: 200          # but cap the final answer harder
+        limit: 200          # but shorten the final answer harder
 ```
 
 ### 4.3 Composing governors on an agent
@@ -420,7 +420,7 @@ around it.
 | Limit | ```in_process``` | ```subprocess``` | ```docker``` | wasm |
 |---|---|---|---|---|
 | run time (```timeout```) | no | yes, SIGKILL to the group | yes, the container is killed | yes, a timer stops the guest |
-| memory (```memory_mb```) | no | yes, rlimit (macos rejects small caps) | yes, cgroup | yes, store limits |
+| memory (```memory_mb```) | no | yes, rlimit (macos rejects small limits) | yes, cgroup | yes, store limits |
 | processes (```pids```) | no | no, all end with the call | yes | no processes |
 | disk (```disk_mb```) | no | no | yes, the tmpfs ```/tmp``` with ```read_only``` | yes, ```/io```, ```/work```, stdout and stderr |
 | files (```max_files```) | no | no | no | yes |
@@ -470,7 +470,7 @@ runaway, it is no jail: the tool can read files and reach the network.
 | Option | Default | Values | Enforced by |
 |---|---|---|---|
 | ```timeout``` | ```null``` | seconds, ```null``` = no limit | the host, SIGKILL to the group |
-| ```memory_mb``` | ```null``` | MB, ```null``` = no limit | the kernel, rlimit (RLIMIT_AS, else RLIMIT_DATA); macos rejects small caps, the call then fails |
+| ```memory_mb``` | ```null``` | MB, ```null``` = no limit | the kernel, rlimit (RLIMIT_AS, else RLIMIT_DATA); macos rejects small limits, the call then fails |
 | ```cwd``` | ```null``` | a directory, created on demand | nothing, it steers relative paths |
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | the host, nothing else is set |
 | ```output_mb``` | ```1``` | a number above 0 | the runner (capture), the host (reply) |
@@ -482,7 +482,7 @@ sandboxes:
     tools: [mathematics]
     options:
       timeout: 10               # seconds, then the group is killed
-      memory_mb: 256            # rlimit (linux; macos rejects small caps)
+      memory_mb: 256            # rlimit (linux; macos rejects small limits)
       cwd: tmp/sandbox          # working dir for relative paths
       env:                      # only these variables, ${NAME} expands
         TZ: ${TZ}
@@ -525,8 +525,8 @@ sandboxes:
       network: none             # a docker network, none = no network
       read_only: true           # read-only root, a tmpfs /tmp
       disk_mb: 64               # size of /tmp
-      memory_mb: 512            # memory cap, 0 = none
-      pids: 128                 # process cap, 0 = none
+      memory_mb: 512            # memory limit, 0 = none
+      pids: 128                 # process limit, 0 = none
       user: '65534:65534'       # never root
       mounts:                   # guest path: host path, read-only
         /data: ./data
@@ -578,7 +578,7 @@ sandboxes:
     options:
       runtime: ./wasm/python.wasm
       stdlib: ./wasm/lib/python3.13
-      memory_mb: 256            # hard cap, the same on every platform
+      memory_mb: 256            # hard limit, the same on every platform
       timeout: 10               # seconds
       disk_mb: 64               # what the guest may write
       max_files: 1000           # what the guest may create
@@ -590,7 +590,7 @@ sandboxes:
 
 An agent is the composition root a profile binds. It is an item (```type: fundi```
 is the standard agent) whose ```options``` assemble the run: which tools, which
-guard pipeline, which sandbox chain, and the budgets.
+guard pipeline, which sandbox chain, and the limits.
 
 ```yaml
 agents:
@@ -610,7 +610,7 @@ agents:
         - append_file
       omit:                     # drop a guard the chain brought in (see chains)
         - regex_redact
-      max_steps: 8              # per-agent budget override (nearest wins)
+      max_steps: 8              # per-agent limit override (nearest wins)
       max_loops: 3
 ```
 
@@ -621,7 +621,7 @@ agents:
 | ```sandboxes``` | the ordered sandbox chain (the sandboxes section) |
 | ```deny``` | tools/groups forbidden outright, before any sandbox lookup |
 | ```omit``` | governor config names to drop from the composition (chains) |
-| ```max_steps``` / ```max_loops``` | per-agent budget overrides (nearest wins) |
+| ```max_steps``` / ```max_loops``` | per-agent limit overrides (nearest wins) |
 
 .. note::
 
@@ -650,7 +650,7 @@ profiles:
       # key: ${OPENAI_API_KEY}  # via config resolution, not clear text
 ```
 
-Every setting has exactly one place:
+Every key has exactly one place:
 
 | Key | Place | Meaning |
 |-----|-------|---------|
@@ -664,7 +664,7 @@ Every setting has exactly one place:
 | ```base_url```, ```key```, ```timeout``` | ```options``` | the connection of ```oai_compat``` |
 
 The keys under ```options``` are the provider's ```Meta.config_defaults```; a
-provider of your own declares its own there. Any other key, at the top or under
+provider of your own sets its own there. Any other key, at the top or under
 ```options```, is an error.
 
 .. important::
@@ -677,7 +677,7 @@ provider of your own declares its own there. Any other key, at the top or under
 
     There is always an agent: where none results, the run gets the implicit
     agent ```__implicit```: no tools, no sandboxes, no governors, the ai-level
-    budgets. It exists only for a quick ```ask``` or ```chat``` without any
+    limits. It exists only for a quick ```ask``` or ```chat``` without any
     agent; it shows in the trace, but no call, command or config can name it.
     Names starting with ```__``` are reserved for the framework.
 
@@ -714,7 +714,7 @@ profiles:
     model_params:
       temperature: 0.2          # randomness, ~0.0-2.0 (lower = more focused)
       top_p: 0.9                # nucleus sampling cutoff, 0.0-1.0
-      max_tokens: 1024          # cap on the answer length
+      max_tokens: 1024          # limit of the answer length
       frequency_penalty: 0.0    # damp repetition, ~-2.0-2.0
       presence_penalty: 0.0
       stop: ["\n\n"]            # string or list that ends generation
@@ -729,7 +729,7 @@ Common keys and what they do:
 |-----|--------|
 | ```temperature``` | randomness / creativity (lower = more focused, deterministic) |
 | ```top_p``` | nucleus sampling cutoff |
-| ```max_tokens``` | hard cap on the generated answer length |
+| ```max_tokens``` | hard limit of the generated answer length |
 | ```frequency_penalty``` / ```presence_penalty``` | damp repetition |
 | ```stop``` | string or list that ends generation |
 | ```seed``` | fixed value for (mostly) reproducible output |
@@ -789,7 +789,7 @@ result = app.ai.chat(
     agent='guarded',
     model_params={'temperature': 0.2, 'max_tokens': 512},
     deny=['append_file'],
-    max_steps=4,                # lower the budget for this call
+    max_steps=4,                # lower the limit for this call
     max_loops=2,
     userdata={'tenant': 'acme'},
 )
@@ -818,15 +818,15 @@ The call arguments and where each is resolved:
 | ```agent``` | select the composition | the arg, else profile's agent, else ```ai.defaults.agent``` |
 | ```model_params``` | per-call model tuning | overlays the profile's ```model_params``` |
 | ```deny``` | narrow the toolset | added to agent + profile deny |
-| ```max_steps``` / ```max_loops``` | per-call budgets | nearest wins: call → agent → ```ai:``` base |
+| ```max_steps``` / ```max_loops``` | per-call limits | nearest wins: call → agent → ```ai:``` base |
 | ```userdata``` | your own context, carried through | untouched by the framework |
 | ```notes``` | notes of confirm answers from earlier runs | read by the guards as ```ctx.notes``` |
 
-### 9.3 Budgets resolve nearest-wins
+### 9.3 Limits resolve nearest-wins
 
 ```mermaid
 flowchart LR
-    A["call argument<br/>(max_steps=4)"] -->|wins if set| R["effective budget"]
+    A["call argument<br/>(max_steps=4)"] -->|wins if set| R["effective limit"]
     B["agent option<br/>(max_steps: 8)"] -->|else| R
     C["ai: base<br/>(max_steps: 8)"] -->|else| R
 ```
@@ -873,7 +873,7 @@ myapp ai lint              # reports errors, warnings, and notes
 myapp ai lint --strict     # treat warnings as failures too
 ```
 
-| Level | Meaning | Blocks a run? |
+| Level | Meaning | Stops a run? |
 |-------|---------|---------------|
 | ```error``` | the config cannot resolve as written, or holds a key nobody reads | yes |
 | ```warning``` | a gap worth closing (no defaults) | no; ```ai lint --strict``` fails on it |

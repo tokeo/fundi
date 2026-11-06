@@ -3,7 +3,7 @@ Tests for the ai extension's sandbox seam.
 
 Driven through ```app.ai._agent``` and ```app.ai._exec_in_sandbox```: which
 sandbox a chain picks, how deny narrows the tool set at every level, how a tool
-reads its declared options, and what the invocation records about where it ran.
+reads its configured options, and what the invocation records about where it ran.
 The app-free helpers are tested in ```tests/core/ai/test_fundi.py```.
 """
 
@@ -29,9 +29,9 @@ CWD = 'tests.ext.ai.lib.ai_tests_helper:CwdTool'
 GREET = 'tests.ext.ai.lib.ai_tests_helper:GreetTool'
 ENV = 'tests.ext.ai.lib.ai_tests_helper:EnvTool'
 
-# the jailed options every platform can enforce; the memory cap is added on
+# the jailed options every platform can enforce; the memory limit is added on
 # linux only: macos cannot bind RLIMIT_AS/DATA below the already mapped
-# address space and the runner refuses sham caps by design
+# address space and the runner refuses sham limits by design
 JAILED_OPTIONS = dict(timeout=5)
 if sys.platform == 'linux':
     JAILED_OPTIONS['memory_mb'] = 256
@@ -474,7 +474,7 @@ def test_linter_flags_a_short_form_where_the_long_form_is_required(section, name
     ],
     ids=['base_url_on_top', 'model_in_options', 'native_tools_call', 'model_params_no_mapping'],
 )
-def test_linter_holds_each_profile_setting_to_its_one_place(profile, path):
+def test_linter_holds_each_profile_key_to_its_one_place(profile, path):
     """base_url on top, model in options, a dropped key, a str model_params fail."""
     cfg = ai_config()
     cfg['ai']['profiles']['p'] = profile
@@ -572,7 +572,7 @@ def test_linter_accepts_a_sound_sandbox_config():
 
 
 def test_linter_flags_unknown_sandbox_in_chain():
-    """A chain naming the undeclared sandbox 'ghost' is a linter error."""
+    """A chain naming the unconfigured sandbox 'ghost' is a linter error."""
     cfg = ai_config()
     cfg['ai']['agents']['plain']['options']['sandboxes'] = ['ghost']
     with FundiTest(argv=LINT, config_defaults=cfg) as app:
@@ -755,7 +755,7 @@ def test_setup_is_one_form_across_the_ai_classes():
         assert params == ['self', 'app', 'config_name', 'config'], cls.__name__
 
 
-def test_a_tool_reads_its_declared_options_through_config():
+def test_a_tool_reads_its_configured_options_through_config():
     """Option prefix='moin' overlays config_defaults, read lazily by _config."""
     with FundiTest(config_defaults=ai_config()) as app:
         assert run(app, 'greeter', 'plain', name='ada') == 'moin ada'
@@ -765,7 +765,7 @@ def test_a_tool_reads_its_declared_options_through_config():
 
 
 def test_a_tool_without_options_runs_on_its_config_defaults():
-    """No options declared: the Meta default 'hello' stands, no None leaks in."""
+    """No options configured: the Meta default 'hello' stands, no None leaks in."""
     with FundiTest(config_defaults=ai_config()) as app:
         assert run(app, 'plain_greeter', 'plain', name='ada') == 'hello ada'
         assert app.ai._tool('plain_greeter')._config('prefix') == 'hello'

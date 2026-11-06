@@ -28,7 +28,7 @@ from tokeo.core.ai.guards.policy.base import TokeoAiPolicyGuard
 
 class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
     """
-    An ```on_call``` policy guard that permits or blocks tool calls by name.
+    An ```on_call``` policy guard that allows or denies tool calls by name.
 
     The rules are read through ```_config``` from the guard entry's
     ```options``` (and an ```on_call``` override): ```deny``` is a denylist and

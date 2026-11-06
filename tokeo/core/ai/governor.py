@@ -12,7 +12,7 @@ The three roles built on it share this whole mechanic and differ in their
 character: a ```guard``` secures by checking, a ```transformer``` reshapes,
 a ```conductor``` directs the run. Only a guard decides: when a transformer
 or conductor changes the decision of a call, the loop ends the run with a
-```TokeoAiError``` that names it, a fault of the app; the trace and the
+```TokeoAiError``` that names it, an error of the app; the trace and the
 feedback name the guard that decided.
 
 A governor participates at a stage by overriding that stage's method; the
@@ -194,7 +194,7 @@ class TokeoAiGovernor(MetaMixin):
 
         # the configurable defaults, as one dict; per-item options (and per-stage
         # overrides) overlay this, read at runtime via _config. empty here: the
-        # base governor has no settings of its own
+        # base governor has no options of its own
         config_defaults = {}
 
     def __init__(self, app, *args, **kw):
@@ -211,13 +211,13 @@ class TokeoAiGovernor(MetaMixin):
         """
         The name this governor answers to. Never ```None``` or empty.
 
-        The declared config key (or the class path as written at the
+        The configured key (or the class path as written at the
         point of use) once setup handed one in, the class path
         (```module:Class```) until then.
 
         ### Returns
 
-        - **str**: The declared key, or the class path
+        - **str**: The configured key, or the class path
 
         """
         if self._config_name:
@@ -235,7 +235,7 @@ class TokeoAiGovernor(MetaMixin):
         ### Args
 
         - **app**: The Tokeo application instance
-        - **config_name** (str, optional): The key the governor is declared
+        - **config_name** (str, optional): The key the governor is configured
             under (```shredder```), or the class path at the point of use
         - **config** (dict, optional): The raw registry item
 
@@ -291,7 +291,7 @@ class TokeoAiGovernor(MetaMixin):
         time, so the shared base is never mutated). Stages without an override
         are not stored; they fall back to ```_any``` in ```_config```.
 
-        List settings are merged, not replaced. Deep merge appends lists
+        List options are merged, not replaced. Deep merge appends lists
         (the Tokeo config rule, same as the yaml config handler): a ```patterns```
         list in ```options``` extends the ```config_defaults``` list, and a
         ```patterns``` list in an ```on_<stage>``` override extends the ```_any```
@@ -308,7 +308,7 @@ class TokeoAiGovernor(MetaMixin):
 
         """
         defaults = self._meta.config_defaults or {}
-        # the default view: config_defaults deep-merged with the declared options
+        # the default view: config_defaults deep-merged with the configured options
         # (deepcopy so the class-level config_defaults is never mutated)
         base = deep_merge(copy.deepcopy(defaults), copy.deepcopy(governor_item.get('options') or {}))
         configs = {GOVERNOR_STAGE_ANY: base}
@@ -367,7 +367,7 @@ class TokeoAiGovernor(MetaMixin):
         - **ctx** (TokeoAiContext): The running state
         - **invocation** (Invocation): The tool call about to run, already
             tracked, a reference to the object on the trace; a guard may set
-            ```decision```/```reason``` to ```deny``` to block it
+            ```decision```/```reason``` to ```deny``` it
 
         """
         pass

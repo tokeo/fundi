@@ -15,7 +15,7 @@ final place is decided before the release.
   limits where it runs, not what it means to do.
 - **The channels of a confirm.** A channel registered on the hook
   ```tokeo_ai_confirm``` speaks for a person (```by: human```) or for the app
-  (```by: auto```); fundi records which, it cannot verify it.
+  (```by: auto```); fundi records which, it cannot check it.
 
 ## Not trusted
 
@@ -26,7 +26,7 @@ final place is decided before the release.
   retrieval, requests from outside. It may carry instructions (prompt
   injection).
 - **Code the model writes.** It runs only in the wasm sandbox, with no network,
-  explicit mounts and hard caps on memory, time, disk and files.
+  explicit mounts and hard limits on memory, time, disk and files.
 - **What a sandbox guest reports about itself.** In the wasm sandbox the guest
   only delivers its value; the host records the run states itself (exit code,
   trap, timeout, stdout and stderr through its own capture).
@@ -39,23 +39,23 @@ final place is decided before the release.
   it; without one the call is denied. There is no catch-all.
 - **Whether a call runs:** a no of any layer wins. A confirm turns a yes into a
   no, never a no into a yes.
-- **What a sandbox promises:** only what the platform enforces; a cap that
-  cannot be enforced fails the call instead of running uncapped.
+- **What a sandbox promises:** only what the platform enforces; a limit that
+  cannot be enforced fails the call instead of running unlimited.
 - **What is recorded:** every step of every governor, with its author, on the
   trace of the result.
 
 ## Not protected
 
 - **A hostile developer** of the app, or a hostile config.
-- **Faults in tools that run ```in_process```**: there is no isolation there.
-  ```subprocess``` separates faults and resources, it is no jail: the tool can
+- **Errors in tools that run ```in_process```**: there is no isolation there.
+  ```subprocess``` separates errors and resources, it is no jail: the tool can
   read files and reach the network.
 - **Prompt injection steering the plan.** Injected text can change which of
   the permitted calls the model asks for and with which arguments. It cannot
   add a tool, lift a deny or leave a sandbox. Guards (```tool_policy```,
   ```tool_schema_validate```, ```regex_redact```, a confirm) narrow what such a
   plan can reach; they do not detect every injection.
-- **Side channels**, timing, and the resources of the host outside the caps a
+- **Side channels**, timing, and the resources of the host outside the limits a
   sandbox sets.
 - **The quality of an answer.** Fundi governs what runs, not whether the
   model's text is right.

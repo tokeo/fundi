@@ -33,7 +33,7 @@ class TokeoAiProvider:
 
     def __init__(self, app, *args, **kw):
         self.app = app
-        # never declared under a config key; the property reports the class
+        # never configured under a config key; the property reports the class
         self._config_name = None
 
     @property
@@ -41,7 +41,7 @@ class TokeoAiProvider:
         """
         The name this provider answers to. Never ```None``` or empty.
 
-        A provider is never declared under a config key (one object serves
+        A provider is never configured under a config key (one object serves
         every profile of its type), so this reports the class path.
 
         ### Returns
@@ -58,7 +58,7 @@ class TokeoAiProvider:
         Set up the provider.
 
         Same form as every other ai class; a provider has nothing to receive;
-        its settings come from the profile it is handed per chat call.
+        its options come from the profile it is handed per chat call.
 
         ### Args
 

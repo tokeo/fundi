@@ -245,7 +245,7 @@ def test_userdata_is_carried_unchanged_as_the_same_reference():
 def test_track_and_supersede_record_the_stage_on_the_step():
     """A loop track records stage None, a supersede at on_call records 'on_call'."""
     # the stage on the step makes the trace readable without inferring the
-    # station from order
+    # stage from order
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     assert ctx.trace[-1].stage is None

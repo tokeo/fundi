@@ -39,7 +39,7 @@ and says what your subclass is *for*.
     ship ready.
 - redact (```TokeoAiRedactGuard```): mask secret-looking content. A security
     guard: it may deny/abort when a leak cannot be closed. ```regex_redact``` ships
-    ready. (Length capping without a security purpose is a *truncate transformer*,
+    ready. (Shortening without a security purpose is a *truncate transformer*,
     not a guard; see ```TokeoAiTransformer```.)
 - validate (```TokeoAiValidateGuard```): check a call against a contract.
     ```tool_schema_validate``` (arguments against the tool's parameters) ships

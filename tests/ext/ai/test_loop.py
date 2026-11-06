@@ -3,7 +3,7 @@ Tests for the agent loop of the ai extension, ```app.ai.chat``` and ```ask```.
 
 A scripted provider plays a fixed sequence of model answers, so each test
 drives the loop through known rounds: tool calls, the follow-up model call,
-the budgets ```max_steps``` and ```max_loops```, and the path with and without
+the limits ```max_steps``` and ```max_loops```, and the path with and without
 governors at the tool stages. The tools run in process.
 """
 
@@ -163,7 +163,7 @@ def test_chat_successful_call_resets_the_failed_loops():
         assert result.loopdata.failed_loops == 2
 
 
-def test_chat_agent_budget_applies_without_a_call_argument():
+def test_chat_agent_limit_applies_without_a_call_argument():
     """The agent's max_steps 1 aborts the second tool round of the run."""
     with LoopTest(config_defaults=loop_config([call('again')], max_steps=1)) as app:
         with pytest.raises(TokeoAiError, match=r'max_steps \(1\) reached'):

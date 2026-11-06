@@ -17,7 +17,7 @@ How it reacts is the ```strict``` option:
 - ```strict: false``` (the default): a failing call is *flagged*: the problems
     are written to ```invocation.reason``` (so they show on the trace) and logged
     as a warning, but the call still runs. Use it to surface schema drift without
-    blocking.
+    denying.
 - ```strict: true```: a failing call is *denied* (```decision = DENY``` with the
     problems as the reason), like the tool policy guard. The loop continues and
     the model sees the ```denied: ...``` feedback, so it can correct the call
@@ -68,13 +68,13 @@ class TokeoAiToolSchemaValidator(TokeoAiValidateGuard):
     (```invocation.parameters```). All problems are collected into one reason,
     so the model (in strict mode) can fix the whole call at once. With no
     declared schema (no properties and no required names) the call passes
-    unchecked. The ```strict``` setting (read from the guard entry's
+    unchecked. The ```strict``` option (read from the guard entry's
     ```options```) decides whether a failing call is denied or only flagged.
 
     """
 
     class Meta:
-        """Tool-schema validator settings, overridden per guard by its options."""
+        """Tool-schema validator defaults, overridden per guard by its options."""
 
         # the configurable defaults, as one dict; the guard entry's options (and
         # an on_call override) overlay this, read at runtime via _config. strict:

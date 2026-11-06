@@ -13,7 +13,7 @@ The job has the shape::
     {
       "tool": "dotted.path.To.ToolClass",
       "arguments": { ... },          # the parsed call arguments
-      "options": { ... },            # the tool item's options, as declared
+      "options": { ... },            # the tool item's options, as configured
       "limits": { "memory_mb": 256 },  # limits to enforce in this process
       "output_mb": 1                 # MB of stdout and stderr kept per stream
     }
@@ -34,7 +34,7 @@ boundary as its encoded JSON shape.
 A tool that raised is a normal reply too, carrying its message in
 ```state.exception``` with a null ```value```; the tool throwing is the tool's
 own outcome, not a sandbox failure. Only a failure of the sandbox machinery
-itself (a bad job, an unenforceable cap, an unimportable tool) becomes a
+itself (a bad job, an unenforceable limit, an unimportable tool) becomes a
 ```{"error": "..."}``` reply with a non-zero exit, a short message and never a
 traceback, so nothing leaks across the boundary.
 
@@ -54,7 +54,7 @@ import contextlib
 
 def _set_limits(limits):
     # apply what a child process can truly enforce on itself BEFORE the tool
-    # is imported, so even import-time work is bounded. the wall-clock timeout
+    # is imported, so even import-time work is limited. the wall-clock timeout
     # is the parent's job (it kills the child), not something the child sets
     memory_mb = (limits or {}).get('memory_mb')
     if not memory_mb:
@@ -66,9 +66,9 @@ def _set_limits(limits):
     # process's already-mapped virtual size with EINVAL (python surfaces
     # that as "current limit exceeds maximum limit"); on apple silicon a
     # fresh interpreter maps gigabytes (dyld shared cache, malloc zones),
-    # so realistic caps are refused there. a configured cap is enforced
+    # so realistic limits are refused there. a configured limit is enforced
     # through whatever the platform accepts, or the call errors below,
-    # never a sham setting
+    # never a sham limit
     for name in ('RLIMIT_AS', 'RLIMIT_DATA'):
         res = getattr(resource, name, None)
         if res is None:
@@ -90,10 +90,10 @@ def _set_limits(limits):
                 return
             except (ValueError, OSError):
                 continue
-    # WHY error out: a configured cap is a promise. if no mechanism on this
-    # platform can keep it, a sham setting that silently runs uncapped would
+    # WHY error out: a configured limit is a promise. if no mechanism on this
+    # platform can keep it, a sham limit that silently runs unlimited would
     # lie to the config; fail the call with a clear reason instead
-    raise RuntimeError('memory cap (memory_mb) is not enforceable on this platform')
+    raise RuntimeError('memory limit (memory_mb) is not enforceable on this platform')
 
 
 def _load_tool(class_path, options):
@@ -132,7 +132,7 @@ def main():
     """
     Read one job from stdin, run the tool, write the result to stdout.
 
-    A failure of the sandbox machinery (a bad job, an unenforceable cap, an
+    A failure of the sandbox machinery (a bad job, an unenforceable limit, an
     unimportable tool) becomes a clean ```{"error": ...}``` reply with a
     non-zero exit. A tool that itself raises is not a machinery failure: it is
     caught around its own call and returned as a normal ```ToolResult``` reply
@@ -149,7 +149,7 @@ def main():
         _set_limits(job.get('limits'))
         tool = _load_tool(job['tool'], job.get('options'))
     except Exception as err:
-        # machinery failure (bad job, unenforceable cap, unimportable tool):
+        # machinery failure (bad job, unenforceable limit, unimportable tool):
         # a short message crosses back as an error, never a traceback
         sys.stdout.write(json.dumps(dict(error=f'{type(err).__name__}: {err}')))
         return 1
