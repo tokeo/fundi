@@ -443,7 +443,7 @@ class TokeoAi(MetaMixin):
             item = self._tool_items.get(config_name)
             if not item or not item.get('type'):
                 raise TokeoAiError(f'ai tool {config_name!r} is not configured under ai.tools')
-            settings = item.get('options') or {}
+            options = item.get('options') or {}
             obj = self.resolve('tool', item['type'])(self.app)
             # WHY: a sandbox that runs the tool in another process (subprocess,
             # docker) rebuilds it there. the import path comes from the tool's
@@ -451,7 +451,7 @@ class TokeoAi(MetaMixin):
             # boundary too); only the configured options must travel; carry
             # them on the instance so both twins are built the same way (the
             # uniformity rule)
-            obj._tokeo_parent_instance_options = dict(settings)
+            obj._tokeo_parent_instance_options = dict(options)
             obj._setup(self.app, config_name, item)
             self._tool_objs[config_name] = obj
         return obj
@@ -660,21 +660,21 @@ class TokeoAi(MetaMixin):
                 return lambda content: None
             return lambda content: ctx.track(tool, content, stage=stage)
 
-        def _failed(err):
+        def _error_result(err):
             return ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
 
         try:
             tool.prepare(turndata, arguments, _track('prepare'))
         except Exception as err:
             # nothing was set up, so nothing is owed a teardown
-            return _failed(err)
+            return _error_result(err)
         result = None
         try:
             try:
                 arguments = tool.before(turndata, arguments, _track('before')) or arguments
             except Exception as err:
                 # before runs outside the sandbox: its throw is the tool's own
-                result = _failed(err)
+                result = _error_result(err)
             else:
                 # the sandbox already turns a tool throw into a result, so what
                 # comes out here is machinery (a timeout, a denial) and rises;
@@ -682,14 +682,14 @@ class TokeoAi(MetaMixin):
                 try:
                     result = sandbox.exec(tool, arguments)
                 except Exception as err:
-                    result = _failed(err)
+                    result = _error_result(err)
                     raise
                 # a failed call has no result to reshape, so after is skipped
                 if getattr(result.state, 'exception', None) is None:
                     try:
                         result = tool.after(turndata, arguments, result, _track('after')) or result
                     except Exception as err:
-                        result = _failed(err)
+                        result = _error_result(err)
         finally:
             # owed once prepare succeeded, even while a machinery error rises
             try:
@@ -752,13 +752,13 @@ class TokeoAi(MetaMixin):
         # step), one that mutates in place or returns nothing leaves it (an
         # unchanged step; the guard is still on the trace, attributable)
 
-        def decided(governor, before, invocation, stage):
+        def check_decision(governor, previous_decision, invocation, stage):
             # only a guard decides: a transformer or conductor that changes the
             # decision breaks its role, a fault of the app that ends the run
-            if invocation.decision != before and not isinstance(governor, TokeoAiGuard):
+            if invocation.decision != previous_decision and not isinstance(governor, TokeoAiGuard):
                 raise TokeoAiError(f'{self._governor_label(governor)} changed the decision at {stage}, only a guard decides')
             if invocation.decision == Invocation.DENY and not invocation.reason:
-                invocation.reason = f'blocked by {self._governor_label(governor)}'
+                invocation.reason = f'by {self._governor_label(governor)}'
             return invocation
 
         def on_call(governor, invocation):
@@ -766,22 +766,22 @@ class TokeoAi(MetaMixin):
             # no_retry lets the guards of the stage judge anew
             if invocation.decision == Invocation.DENY and not isinstance(governor, TokeoAiConfirmGuard):
                 return invocation
-            before = invocation.decision
+            previous_decision = invocation.decision
             invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
-            return decided(governor, before, invocation, GOVERNOR_STAGE_ON_CALL)
+            return check_decision(governor, previous_decision, invocation, GOVERNOR_STAGE_ON_CALL)
 
         def on_return(governor, invocation):
             # every governor runs, so the record is complete; a no stays a no
-            before, reason = invocation.decision, invocation.reason
+            previous_decision, previous_reason = invocation.decision, invocation.reason
             invocation = ctx.supersede(governor, governor.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
-            invocation = decided(governor, before, invocation, GOVERNOR_STAGE_ON_RETURN)
-            if before == Invocation.DENY:
-                invocation.decision, invocation.reason = before, reason
+            invocation = check_decision(governor, previous_decision, invocation, GOVERNOR_STAGE_ON_RETURN)
+            if previous_decision == Invocation.DENY:
+                invocation.decision, invocation.reason = previous_decision, previous_reason
             return invocation
 
         invocation = self._govern(call_governors, on_call, invocation)
         # a no at on_call stays, whatever a retry at on_return does
-        called = invocation.decision, invocation.reason
+        call_decision = invocation.decision, invocation.reason
         if invocation.decision != Invocation.DENY:
             try:
                 # the seam: the agent's sandbox chain contains the exec (a hard
@@ -802,12 +802,12 @@ class TokeoAi(MetaMixin):
                 # loop continues, instead of crashing the whole call
                 invocation.error = f'{type(err).__name__}: {err}'
         invocation = self._govern(return_governors, on_return, invocation)
-        if called[0] == Invocation.DENY:
-            invocation.decision, invocation.reason = called
+        if call_decision[0] == Invocation.DENY:
+            invocation.decision, invocation.reason = call_decision
         # the text fed back to the model for this call; the invocation is
         # returned too, so the loop reads the outcome off the object it has
         if invocation.decision == Invocation.DENY:
-            content = f'denied: {invocation.reason or "blocked by a governor"}'
+            content = f'denied: {invocation.reason or "by a governor"}'
         elif invocation.error is not None:
             # a sandbox-machinery error (timeout, transport, an exhausted chain)
             content = f'error: {invocation.error}'
@@ -829,7 +829,7 @@ class TokeoAi(MetaMixin):
         agent=None,
         max_steps=None,
         max_loops=None,
-        turndata_preset=None,
+        turndata=None,
         userdata=None,
         notes=None,
     ):
@@ -869,7 +869,7 @@ class TokeoAi(MetaMixin):
         - **max_loops** (int|None): Maximum consecutive rounds without one
             successful call, 0 for unlimited; defaults to the agent's budget,
             otherwise the framework default
-        - **turndata_preset** (dict|None): Starting values for the run's
+        - **turndata** (dict|None): Starting values for the run's
             ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
         - **userdata**: An opaque value carried through the run on the context,
             untouched by the framework, for a guard or confirm hook to read back
@@ -909,11 +909,11 @@ class TokeoAi(MetaMixin):
         if max_steps is None:
             # the agent's own budgets win; without one (None) the handler's
             # base defaults (config_defaults max_steps / max_loops) apply
-            budget = agent_obj._config('max_steps')
-            max_steps = budget if budget is not None else self._config('max_steps', fallback=0)
+            agent_max_steps = agent_obj._config('max_steps')
+            max_steps = agent_max_steps if agent_max_steps is not None else self._config('max_steps', fallback=0)
         if max_loops is None:
-            budget = agent_obj._config('max_loops')
-            max_loops = budget if budget is not None else self._config('max_loops', fallback=3)
+            agent_max_steps = agent_obj._config('max_loops')
+            max_loops = agent_max_steps if agent_max_steps is not None else self._config('max_loops', fallback=3)
         specs = self._tool_specs(requested)
         # guards (selected on the agent) are positioned steps in the loop; each
         # participates at the stations whose method it overrides. partition once
@@ -934,7 +934,7 @@ class TokeoAi(MetaMixin):
         # incoming messages are tracked at construction, so ctx.messages is the
         # conversation history. the current result is a local, handed to the
         # stages and tracked, not a context field
-        ctx = TokeoAiContext(messages=messages, turndata_preset=turndata_preset, userdata=userdata, trace=self._trace_enabled, notes=notes)
+        ctx = TokeoAiContext(messages=messages, turndata=turndata, userdata=userdata, trace=self._trace_enabled, notes=notes)
 
         def on_messages(stage):
             # begin and prompt refine the conversation, no work object
@@ -985,7 +985,7 @@ class TokeoAi(MetaMixin):
                         # the invocation is tracked inside _exec_governed at
                         # creation and handed back, the outcome is read off it
                         invocation, content = self._exec_governed(call, at_call, at_return, ctx, agent_obj, profile, deny)
-                        ok = (
+                        is_successful = (
                             invocation.decision != Invocation.DENY
                             and invocation.error is None
                             and (invocation.result is None or invocation.result.state.exception is None)
@@ -1009,14 +1009,14 @@ class TokeoAi(MetaMixin):
                             # raised is carried in its state, not thrown here
                             if tool_result.state.exception is not None:
                                 content = f'error: {tool_result.state.exception}'
-                                ok = False
+                                is_successful = False
                             else:
                                 content = tool_result.value.as_str if tool_result.value else ''
-                                ok = True
+                                is_successful = True
                         except Exception as err:
                             content = f'error: {type(err).__name__}: {err}'
-                            ok = False
-                    succeeded = succeeded or ok
+                            is_successful = False
+                    succeeded = succeeded or is_successful
                     ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
                 ctx.loopdata.steps += 1
                 # max_loops caps the consecutive rounds without one successful
@@ -1069,7 +1069,7 @@ class TokeoAi(MetaMixin):
         model_params=None,
         purpose=None,
         agent=None,
-        turndata_preset=None,
+        turndata=None,
         userdata=None,
         notes=None,
     ):
@@ -1090,7 +1090,7 @@ class TokeoAi(MetaMixin):
         - **agent** (str|None): Select an agent by name; without it the
             profile's ```agent``` (```null``` is none), then
             ```ai.defaults.agent```, then the implicit agent without tools
-        - **turndata_preset** (dict|None): Starting values for the run's
+        - **turndata** (dict|None): Starting values for the run's
             ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
         - **userdata**: An opaque value carried through the run on the context,
             untouched by the framework, for a guard or confirm hook to read back
@@ -1116,7 +1116,7 @@ class TokeoAi(MetaMixin):
             model_params=model_params,
             purpose=purpose,
             agent=agent,
-            turndata_preset=turndata_preset,
+            turndata=turndata,
             userdata=userdata,
             notes=notes,
         )
@@ -1155,27 +1155,27 @@ class _ChatCompleter(Completer):
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
         words = text.split()
-        # split the line into "the word being typed" (current) and "the word
-        # before it" (prev). when the cursor sits just after a space the
-        # current word is empty and prev is the last whole word
+        # split the line into the word being typed (current_word) and the word
+        # before it (previous_word). when the cursor sits just after a space the
+        # current word is empty and the previous word is the last whole word
         if text[-1:].isspace() or text == '':
-            current = ''
-            prev = words[-1] if words else ''
+            current_word = ''
+            previous_word = words[-1] if words else ''
         else:
-            current = words[-1] if words else ''
-            prev = words[-2] if len(words) >= 2 else ''
-        if prev in self._switches:
+            current_word = words[-1] if words else ''
+            previous_word = words[-2] if len(words) >= 2 else ''
+        if previous_word in self._switches:
             # completing a value right after a switch: offer that switch's
             # configured names that match what is typed so far
-            for name in self._names.get(self._switches[prev], []):
-                if name.startswith(current):
-                    yield Completion(name, start_position=-len(current))
-        elif current.startswith('-'):
+            for name in self._names.get(self._switches[previous_word], []):
+                if name.startswith(current_word):
+                    yield Completion(name, start_position=-len(current_word))
+        elif current_word.startswith('-'):
             # completing a switch name itself (selectors plus the free-value
             # switches such as --model_param)
             for switch in list(self._switches) + self._extra_switches:
-                if switch.startswith(current):
-                    yield Completion(switch, start_position=-len(current))
+                if switch.startswith(current_word):
+                    yield Completion(switch, start_position=-len(current_word))
 
 
 class AiController(Controller):

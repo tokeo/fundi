@@ -128,8 +128,8 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
 
         if response.status_code >= 400:
             # surface the status and a short body excerpt, not a traceback
-            excerpt = response.text[:200]
-            raise TokeoAiError(f'oai_compat endpoint returned HTTP {response.status_code}: {excerpt!r}')
+            error = response.text[:200]
+            raise TokeoAiError(f'oai_compat endpoint returned HTTP {response.status_code}: {error!r}')
 
         try:
             data = response.json()

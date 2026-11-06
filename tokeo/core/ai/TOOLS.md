@@ -102,13 +102,13 @@ instance to have a second model check the request before it executes:
 def before(self, turndata, arguments, track):
     verdict = self.app.ai.chat(
         [{'role': 'user', 'content': f'is this safe? {arguments}'}],
-        turndata_preset=turndata,
+        turndata=turndata,
     )
     track(f'checked: {verdict.answer.text[:40]}')
     return arguments
 ```
 
-Pass ```turndata_preset=turndata``` and the sub-turn shares the caller's data
+Pass ```turndata=turndata``` and the sub-turn shares the caller's data
 area. That is the recursion brake: a mark the outer run left is visible inside,
 so a chain can stop itself, without forcing the sub-turn's trace into the main
 one. What surfaces is your choice: normally just the result, in a debug run the

@@ -109,35 +109,35 @@ class TokeoAiToolSchemaValidator(TokeoAiValidateGuard):
         if not properties and not required:
             return
         arguments = invocation.arguments or {}
-        problems = []
+        errors = []
         for name in required:
             if name not in arguments:
-                problems.append(f'missing required argument {name!r}')
+                errors.append(f'missing required argument {name!r}')
         # an argument outside the declared properties is almost always a
         # hallucinated name and would crash the tool's exec(**arguments);
         # a schema may opt out via additionalProperties: true
         if schema.get('additionalProperties') is not True:
             for name in arguments:
                 if name not in properties:
-                    problems.append(f'unknown argument {name!r}')
+                    errors.append(f'unknown argument {name!r}')
         for name, value in arguments.items():
-            declared = (properties.get(name) or {}).get('type')
-            expected = _SCHEMA_TYPES.get(declared)
+            schema_type = (properties.get(name) or {}).get('type')
+            expected = _SCHEMA_TYPES.get(schema_type)
             if expected is None:
                 continue
-            wrong = not isinstance(value, expected)
+            is_wrong_type = not isinstance(value, expected)
             # bool passes isinstance checks against int, but a model sending
             # true for a count is a mistake, not a number
-            if declared in ('integer', 'number') and isinstance(value, bool):
-                wrong = True
-            if wrong:
-                problems.append(f'argument {name!r} must be of type {declared!r}')
-        if not problems:
+            if schema_type in ('integer', 'number') and isinstance(value, bool):
+                is_wrong_type = True
+            if is_wrong_type:
+                errors.append(f'argument {name!r} must be of type {schema_type!r}')
+        if not errors:
             return
-        reason = 'invalid arguments: ' + '; '.join(problems)
+        reason = 'invalid arguments: ' + '; '.join(errors)
         # always carry the reason so the trace shows what was wrong; strict
         # turns it into a deny (the loop stops this call), otherwise the call
-        # runs and the problems are only surfaced (a warning in the log)
+        # runs and the errors are only surfaced (a warning in the log)
         invocation.reason = reason
         if self._config('strict', stage=GOVERNOR_STAGE_ON_CALL):
             invocation.decision = Invocation.DENY

@@ -107,8 +107,8 @@ def run_snippet(code, namespace=None):
             return None
         expression = ast.fix_missing_locations(ast.copy_location(ast.Expression(body=value), last))
         return eval(compile(expression, '<python_exec>', 'eval'), ns)
-    except _SnippetReturn as returned:
-        return returned.value
+    except _SnippetReturn as snippet_return:
+        return snippet_return.value
     finally:
         ns.pop(_SNIPPET_RETURN_NAME, None)
 
@@ -180,10 +180,10 @@ def _target_value(target):
         # a, b = ... delivers a tuple of the bound names; a non-name element
         # (a starred or nested target) makes the value ambiguous, so skip it
         names = []
-        for element in target.elts:
-            if not isinstance(element, ast.Name):
+        for entry in target.elts:
+            if not isinstance(entry, ast.Name):
                 return None
-            names.append(ast.Name(id=element.id, ctx=ast.Load()))
+            names.append(ast.Name(id=entry.id, ctx=ast.Load()))
         return ast.Tuple(elts=names, ctx=ast.Load())
     return None
 

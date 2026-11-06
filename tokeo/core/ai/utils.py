@@ -170,5 +170,5 @@ def drop_tool_calls(result, name=None):
     - **result** (ChatResult): The answer to trim
     - **name** (str, optional): The call name to drop; ```None``` drops all
     """
-    kept = [] if name is None else [c for c in result.tool_calls if c.name != name]
-    return replace(result, tool_calls=kept)
+    tool_calls = [] if name is None else [c for c in result.tool_calls if c.name != name]
+    return replace(result, tool_calls=tool_calls)

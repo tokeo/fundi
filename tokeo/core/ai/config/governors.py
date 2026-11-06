@@ -174,7 +174,7 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
     order = []
     appearances = {}
 
-    def record(config_name, stages, source):
+    def add_appearance(config_name, stages, source):
         resolved = _resolve_stages(config_name, stages, stages_of)
         if config_name not in appearances:
             appearances[config_name] = []
@@ -196,7 +196,7 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
                     raise TokeoAiError(f'guard chain {config_name!r} imports itself (cycle)')
                 walk(value, 'chain', chain_path + [config_name])
             else:
-                record(config_name, stages, source)
+                add_appearance(config_name, stages, source)
 
     walk(agent_governors, 'agent', [])
 

@@ -64,9 +64,9 @@ def test_tool_policy_allowlist_restricts_to_its_members():
         permitted = Invocation(id='t1', name='calc', arguments={})
         guard.on_call(ctx=None, invocation=permitted)
         assert permitted.decision == Invocation.ALLOW
-        blocked = Invocation(id='t2', name='time', arguments={})
-        guard.on_call(ctx=None, invocation=blocked)
-        assert blocked.decision == Invocation.DENY
+        denied_invocation = Invocation(id='t2', name='time', arguments={})
+        guard.on_call(ctx=None, invocation=denied_invocation)
+        assert denied_invocation.decision == Invocation.DENY
 
 
 def _files_config():
@@ -94,9 +94,9 @@ def test_tool_policy_allow_resolves_a_group_to_its_members():
         permitted = Invocation(id='t1', name='read_file', arguments={})
         guard.on_call(ctx=None, invocation=permitted)
         assert permitted.decision == Invocation.ALLOW
-        blocked = Invocation(id='t2', name='calc', arguments={})
-        guard.on_call(ctx=None, invocation=blocked)
-        assert blocked.decision == Invocation.DENY
+        denied_invocation = Invocation(id='t2', name='calc', arguments={})
+        guard.on_call(ctx=None, invocation=denied_invocation)
+        assert denied_invocation.decision == Invocation.DENY
 
 
 def test_tool_policy_single_name_is_a_list_of_one():

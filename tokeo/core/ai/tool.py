@@ -173,7 +173,7 @@ class TokeoAiTool(MetaMixin):
         Returns the arguments to run with, as a dict the loop passes on and
         ```exec``` unpacks; ```None``` leaves them unchanged. What it returns
         must stay JSON-able, like all sandbox arguments. May delegate via
-        ```self.app.ai.chat(..., turndata_preset=turndata)```; passing
+        ```self.app.ai.chat(..., turndata=turndata)```; passing
         ```turndata``` shares a recursion mark across that boundary.
 
         ### Args

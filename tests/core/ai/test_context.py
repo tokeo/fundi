@@ -5,8 +5,8 @@ Covers ```TokeoAiContext``` as the run's manager: the trace as a list of
 ```TraceStep``` (origin + object), the bare-object caches
 (```messages```/```invocations```/```results```), ```track``` (a fresh object)
 and ```supersede``` (a guard's step, with the identity rule and the cache swap),
-```cur_invocation```, ```status```, ```userdata```, and the ```ChatMessage``` dict
-subclass. These are the mechanics in isolation; the full LLM loop that drives
+```current_invocation```, ```status```, ```userdata```, and the ```ChatMessage```
+dict subclass. These are the mechanics in isolation; the full LLM loop that drives
 them is exercised by the Spiral tests.
 """
 
@@ -63,7 +63,7 @@ def test_context_empty_when_unseeded():
     assert ctx.messages == []
     assert ctx.invocations == []
     assert ctx.results == []
-    assert ctx.cur_invocation is None
+    assert ctx.current_invocation is None
     assert isinstance(ctx.loopdata, TokeoAiLoopdata)
     assert ctx.loopdata.steps == 0
     assert ctx.loopdata.failed_loops == 0
@@ -72,9 +72,9 @@ def test_context_empty_when_unseeded():
 
 
 def test_turndata_preset_seeds_values_one_to_one():
-    """A turndata_preset seeds a TokeoAiTurndata 1:1, not deep-copied."""
+    """A turndata seeds a TokeoAiTurndata 1:1, not deep-copied."""
     src = {'chain': ['toolA'], 'depth': 1}
-    ctx = TokeoAiContext(messages=[], turndata_preset=src)
+    ctx = TokeoAiContext(messages=[], turndata=src)
     assert isinstance(ctx.turndata, TokeoAiTurndata)
     assert ctx.turndata == {'chain': ['toolA'], 'depth': 1}
     # taken 1:1, NOT deep-copied: the inner object is the same one
@@ -82,7 +82,7 @@ def test_turndata_preset_seeds_values_one_to_one():
 
 
 def test_turndata_preset_absent_starts_empty():
-    """Without a turndata_preset the run starts with an empty turndata."""
+    """Without a turndata the run starts with an empty turndata."""
     ctx = TokeoAiContext(messages=[])
     assert ctx.turndata == {}
 
@@ -185,7 +185,7 @@ def test_supersede_with_a_new_object_swaps_the_cache_and_records_a_changed_step(
     assert returned is revised
     # the cache now holds the copy in place of the original (still one entry)
     assert ctx.invocations == [revised]
-    assert ctx.cur_invocation is revised
+    assert ctx.current_invocation is revised
     # the trace grew: the original track step plus the changed supersede step
     assert len(ctx.trace) == 2
     assert ctx.trace[-1].changed is True
@@ -207,13 +207,13 @@ def test_supersede_with_wrong_type_raises():
 
 
 def test_cur_invocation_is_the_latest_tool_call():
-    """cur_invocation is the last cached Invocation: None, then t1, then t2."""
+    """current_invocation is the last cached Invocation: None, then t1, then t2."""
     ctx = TokeoAiContext()
-    assert ctx.cur_invocation is None
+    assert ctx.current_invocation is None
     first = ctx.track(object(), Invocation(id='t1', name='calc'))
-    assert ctx.cur_invocation is first
+    assert ctx.current_invocation is first
     second = ctx.track(object(), Invocation(id='t2', name='time'))
-    assert ctx.cur_invocation is second
+    assert ctx.current_invocation is second
 
 
 def test_status_counters_are_mutable_in_place():
@@ -322,12 +322,12 @@ def test_trace_false_skips_the_trace_but_fills_the_caches():
     # so guards keep working off messages/invocations/results
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}], trace=False)
     ctx.track(object(), Invocation(id='t1', name='calc'))
-    ctx.supersede(object(), None, ctx.cur_invocation, stage='on_call')
+    ctx.supersede(object(), None, ctx.current_invocation, stage='on_call')
     ctx.refine_messages(object(), None, stage='on_prompt')
     # the history is empty, the state by kind is intact
     assert ctx.trace == []
     assert len(ctx.messages) == 1
-    assert ctx.cur_invocation.name == 'calc'
+    assert ctx.current_invocation.name == 'calc'
 
 
 # ---- free notes on the trace (TokeoAiTraceNote) -----------------------------
