@@ -14,7 +14,7 @@ import sys
 import warnings
 import subprocess
 import pytest
-from tests.utils import ROOT
+from tests.utils import ROOT_DIR
 
 
 class IsolatedPytest:
@@ -89,7 +89,7 @@ class IsolatedPytest:
         environ = {**os.environ, self.ENVIRON: '1'}
         # pytest makes only the last directory of the basetemp
         os.makedirs(os.path.dirname(self.basetemp), exist_ok=True)
-        self.result = subprocess.run(args, cwd=ROOT, env=environ, capture_output=True, text=True, timeout=self.timeout)
+        self.result = subprocess.run(args, cwd=ROOT_DIR, env=environ, capture_output=True, text=True, timeout=self.timeout)
         output = self.result.stdout + self.result.stderr
         summary = (self.result.stdout.strip().splitlines() or [''])[-1]
         if self.result.returncode != 0:

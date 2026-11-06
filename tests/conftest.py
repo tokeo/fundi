@@ -49,15 +49,15 @@ from io import StringIO
 import pytest
 from cement.utils.misc import rando as _rando
 from cement.utils import fs
-from tests.utils import ROOT
+from tests.utils import ROOT_DIR
 from tests.utils.isolation import IsolatedPytest
 
 
 def pytest_configure(config):
     # the temps of the tests stay in tmp/tests of the project after the run
     if config.option.basetemp is None:
-        os.makedirs(os.path.join(ROOT, "tmp"), exist_ok=True)
-        config.option.basetemp = os.path.join(ROOT, "tmp", "tests")
+        os.makedirs(os.path.join(ROOT_DIR, "tmp"), exist_ok=True)
+        config.option.basetemp = os.path.join(ROOT_DIR, "tmp", "tests")
     config.addinivalue_line("markers", "isolated: runs the test in a pytest of its own, in a fresh process")
 
 

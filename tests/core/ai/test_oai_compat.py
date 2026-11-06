@@ -156,9 +156,9 @@ def test_oai_compat_unreachable_endpoint_raises_clear_error(monkeypatch):
         raise httpx.ConnectError('connection refused')
 
     provider = _make_provider(handler, monkeypatch)
-    with pytest.raises(TokeoAiError) as exc:
+    with pytest.raises(TokeoAiError) as err_info:
         provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
-    assert 'not reachable' in str(exc.value)
+    assert 'not reachable' in str(err_info.value)
 
 
 def test_oai_compat_http_error_status_raises_with_excerpt(monkeypatch):
@@ -168,9 +168,9 @@ def test_oai_compat_http_error_status_raises_with_excerpt(monkeypatch):
         return httpx.Response(401, text='unauthorized: bad key')
 
     provider = _make_provider(handler, monkeypatch)
-    with pytest.raises(TokeoAiError) as exc:
+    with pytest.raises(TokeoAiError) as err_info:
         provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
-    assert 'HTTP 401' in str(exc.value)
+    assert 'HTTP 401' in str(err_info.value)
 
 
 def test_oai_compat_requires_base_url_and_model():

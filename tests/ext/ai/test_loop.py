@@ -271,18 +271,18 @@ def test_ask_returns_the_text_of_the_answer():
 def test_a_decline_at_on_prompt_raises_with_the_run_so_far():
     """Declined at on_prompt: no model call, the error names stage, reason, who."""
     with LoopTest(config_defaults=make_declining_config('on_prompt')) as app:
-        with pytest.raises(TokeoAiRunDeclinedError, match='run declined at on_prompt: not today') as declined:
+        with pytest.raises(TokeoAiRunDeclinedError, match='run declined at on_prompt: not today') as err_info:
             app.ai.chat([dict(role='user', content='hi')], agent='declining')
         assert app.ai._get_provider(SCRIPT).seen == []
-    assert (declined.value.stage, declined.value.reason, declined.value.by) == ('on_prompt', 'not today', 'human')
-    assert declined.value.result.trace[-1].object.content == dict(declined=dict(stage='on_prompt', reason='not today', by='human'))
+    assert (err_info.value.stage, err_info.value.reason, err_info.value.by) == ('on_prompt', 'not today', 'human')
+    assert err_info.value.result.trace[-1].object.content == dict(declined=dict(stage='on_prompt', reason='not today', by='human'))
 
 
 def test_a_decline_at_on_answer_keeps_the_declined_answer_off_the_result():
     """Declined at on_answer: the answer 'hello' is on the trace, not the result."""
     with LoopTest(config_defaults=make_declining_config('on_answer')) as app:
-        with pytest.raises(TokeoAiRunDeclinedError) as declined:
+        with pytest.raises(TokeoAiRunDeclinedError) as err_info:
             app.ai.chat([dict(role='user', content='hi')], agent='declining')
-    result = declined.value.result
-    assert (declined.value.by, result.answer.text) == ('auto', '')
+    result = err_info.value.result
+    assert (err_info.value.by, result.answer.text) == ('auto', '')
     assert any(getattr(step.object, 'text', None) == 'hello' for step in result.trace)

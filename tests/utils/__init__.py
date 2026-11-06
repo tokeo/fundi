@@ -12,7 +12,7 @@ terminal, ```tests.utils.isolation``` runs a test in a pytest of its own.
 ### Example
 
 ```python
-from tests.utils import ROOT, stresstest, isolated, wait_until, wait_until_async
+from tests.utils import ROOT_DIR, stresstest, isolated, wait_until, wait_until_async
 from tests.utils import free_port, wait_process_group_ended
 from tests.utils import use_disabled_stdin_capture
 from tests.utils.process import SubProcess
@@ -57,8 +57,8 @@ from contextlib import contextmanager
 import pytest
 
 #: The root of the project, the working directory of every program a test
-#: starts, e.g. ```subprocess.Popen([...], cwd=ROOT)```.
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#: starts, e.g. ```subprocess.Popen([...], cwd=ROOT_DIR)```.
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 #: The marker of the stress tests, they run only with
 #: ```make test STRESSTESTS=1```. Set it on all tests of a file by
@@ -141,7 +141,7 @@ def wait_process_group_ended(pgid, timeout=5.0):
     ```python
     def test_program_ends_with_its_group():
         args = [sys.executable, '-c', 'import time; time.sleep(30)']
-        proc = subprocess.Popen(args, start_new_session=True, cwd=ROOT)
+        proc = subprocess.Popen(args, start_new_session=True, cwd=ROOT_DIR)
         try:
             proc.terminate()
             assert proc.wait(timeout=8) != 0

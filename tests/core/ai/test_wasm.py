@@ -86,17 +86,17 @@ def _make_exit_wat(code):
 def test_wasm_exit_status_zero_is_a_clean_run():
     """A guest proc_exit(0) gives ExitTrap code 0, a run with no failure."""
     wasmtime = pytest.importorskip('wasmtime')
-    with pytest.raises(wasmtime.ExitTrap) as info:
+    with pytest.raises(wasmtime.ExitTrap) as err_info:
         _run_wat(_make_exit_wat(0))
-    assert getattr(info.value, 'code', None) == 0
+    assert getattr(err_info.value, 'code', None) == 0
 
 
 def test_wasm_exit_status_nonzero_is_a_failure():
     """proc_exit(1) gives ExitTrap code 1, made a TokeoAiError by the sandbox."""
     wasmtime = pytest.importorskip('wasmtime')
-    with pytest.raises(wasmtime.ExitTrap) as info:
+    with pytest.raises(wasmtime.ExitTrap) as err_info:
         _run_wat(_make_exit_wat(1))
-    assert getattr(info.value, 'code', None) == 1
+    assert getattr(err_info.value, 'code', None) == 1
 
 
 def test_wasm_needs_a_runtime():

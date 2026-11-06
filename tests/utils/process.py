@@ -16,7 +16,7 @@ import signal
 import tempfile
 import subprocess
 import pytest
-from tests.utils import ROOT, wait_process_group_ended
+from tests.utils import ROOT_DIR, wait_process_group_ended
 
 
 class SubProcess:
@@ -25,7 +25,7 @@ class SubProcess:
 
     A probe of the tests starts by ```probe()``` as module, any other program,
     e.g. a server binary, by ```run()```. The process leads a group of its
-    own and starts in ```ROOT```; its output goes to an anonymous temp file,
+    own and starts in ```ROOT_DIR```; its output goes to an anonymous temp file,
     so a wait that fails shows the end of the output instead of a blind
     timeout. Leaving the block kills the whole group, also after a failed
     assert.
@@ -88,7 +88,7 @@ class SubProcess:
         self.log = tempfile.TemporaryFile()
         environ = {**os.environ, **(self.env or {})}
         self.process = subprocess.Popen(
-            self.args, stdout=self.log, stderr=subprocess.STDOUT, start_new_session=True, env=environ, cwd=ROOT
+            self.args, stdout=self.log, stderr=subprocess.STDOUT, start_new_session=True, env=environ, cwd=ROOT_DIR
         )
         return self
 

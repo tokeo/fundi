@@ -14,7 +14,7 @@ import time
 import select
 import subprocess
 import pytest
-from tests.utils import ROOT
+from tests.utils import ROOT_DIR
 
 
 class Terminal:
@@ -28,7 +28,7 @@ class Terminal:
 
     ### Args
 
-    - **args** (list): The program and its arguments, started in ```ROOT```
+    - **args** (list): The program and its arguments, started in ```ROOT_DIR```
     - **rows** / **columns** (int): The size of the screen
     - **ctty** (bool): Make the terminal the controlling one of the program
     - **timeout** (float): The seconds ```wait_for``` waits at most in all
@@ -75,7 +75,7 @@ class Terminal:
     end_time = None
 
     def __init__(self, args, rows=24, columns=80, ctty=False, timeout=30):
-        #: The program and its arguments, started in ```ROOT```
+        #: The program and its arguments, started in ```ROOT_DIR```
         self.args = args
         #: The rows of the screen
         self.rows = rows
@@ -97,7 +97,7 @@ class Terminal:
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', self.rows, self.columns, 0, 0))
         env = dict(os.environ, TERM='xterm-256color')
         session = dict(start_new_session=True, preexec_fn=lambda: fcntl.ioctl(0, termios.TIOCSCTTY, 0)) if self.ctty else {}
-        self.process = subprocess.Popen(self.args, stdin=slave, stdout=slave, stderr=slave, env=env, cwd=ROOT, **session)
+        self.process = subprocess.Popen(self.args, stdin=slave, stdout=slave, stderr=slave, env=env, cwd=ROOT_DIR, **session)
         os.close(slave)
         self.screen = pyte.Screen(self.columns, self.rows)
         self.stream = pyte.ByteStream(self.screen)

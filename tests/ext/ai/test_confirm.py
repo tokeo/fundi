@@ -206,10 +206,10 @@ def test_a_no_at_on_return_replaces_the_result():
 @pytest.mark.parametrize('stage', ['on_begin', 'on_prompt', 'on_answer', 'on_close'])
 def test_a_no_at_a_stage_without_a_call_declines_the_run(stage):
     """A no at a stage without a tool call declines the run, its entry stays."""
-    with pytest.raises(TokeoAiRunDeclinedError) as declined:
+    with pytest.raises(TokeoAiRunDeclinedError) as err_info:
         run_chat(make_confirm_config([dict(text='done')], stages=(stage,)), NO)
-    assert (declined.value.stage, declined.value.reason, declined.value.by) == (stage, 'not now', 'human')
-    assert [c['answer'] for c in declined.value.result.confirmations] == ['no']
+    assert (err_info.value.stage, err_info.value.reason, err_info.value.by) == (stage, 'not now', 'human')
+    assert [c['answer'] for c in err_info.value.result.confirmations] == ['no']
 
 
 def test_no_retry_at_a_stage_without_a_call_asks_again():
@@ -246,9 +246,9 @@ def test_ask_raises_when_the_run_is_declined():
 
     cfg = make_confirm_config([dict(text='done')], stages=('on_prompt',))
     with LoopTest(config_defaults=cfg, hooks=[(GOVERNOR_CONFIRM_CHANNEL_HOOK, channel)]) as app:
-        with pytest.raises(TokeoAiRunDeclinedError) as declined:
+        with pytest.raises(TokeoAiRunDeclinedError) as err_info:
             app.ai.ask('hi', agent='careful')
-    assert (declined.value.stage, declined.value.reason) == ('on_prompt', 'not now')
+    assert (err_info.value.stage, err_info.value.reason) == ('on_prompt', 'not now')
 
 
 def test_the_linter_takes_the_confirm_options_and_flags_a_typo():

@@ -25,7 +25,7 @@ RAISE = 'tests.ext.ai.lib.ai_tests_helper:RaiseTool'
 LOUD = 'tests.ext.ai.lib.ai_tests_helper:LoudTool'
 BIG = 'tests.ext.ai.lib.ai_tests_helper:BigTool'
 TOOLS = ['echo', 'env', 'sleep', 'boom', 'loud', 'big']
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 DOCKER_FAKE_SCRIPT = """#!{python}
 import os, sys, json
@@ -67,7 +67,7 @@ class DockerTest(TokeoTest):
 def docker(tmp_path):
     """The path of a fake docker command; its log is get_docker_calls()."""
     path = tmp_path / 'docker'
-    path.write_text(DOCKER_FAKE_SCRIPT.format(python=sys.executable, log=str(tmp_path / 'calls.log'), root=ROOT))
+    path.write_text(DOCKER_FAKE_SCRIPT.format(python=sys.executable, log=str(tmp_path / 'calls.log'), root=ROOT_DIR))
     path.chmod(0o755)
     return str(path)
 

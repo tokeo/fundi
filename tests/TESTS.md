@@ -17,7 +17,7 @@ studying all the others. Each rule comes with an example.
 
 ```sh
 make test                          # all tests
-make test files=tests/ext/ai       # a folder or a file
+make test files=tests/ext/ai       # a directory or a file
 make test tests=throttle           # by name, as pytest -k
 make test debug=1                  # with prints and logs on debug level
 make test cov=1                    # with a coverage report
@@ -37,24 +37,25 @@ The temporary files of a run stay in ```tmp/tests/``` until the next run,
 
 ## Layout
 
-The folders of ```tests/``` follow the code under test: ```tests/core/```
+The directories of ```tests/``` follow the code under test: ```tests/core/```
 tests the core library, ```tests/ext/``` the extensions and ```tests/app/```
-the app itself. Below them the folders follow the package path of the code,
+the app itself. Below them the directories follow the package path of the code,
 e.g. ```tests/core/ai/``` for ```tokeo/core/ai/```.
 
 A subject is one module or package under test. Its tests sit in one flat
-file in the folder of its package path, or, as soon as it has more than one
-file, in a folder of its own named after it. When a subject folder holds
-more than 6 Python files, test files, helpers and probes counted together,
-its helpers and probes move into ```lib/```; the test files stay on top.
+file in the directory of its package path, or, as soon as it has more than
+one file, in a directory of its own named after it. When a subject directory
+holds more than 6 Python files, test files, helpers and probes counted
+together, its helpers and probes move into ```lib/```; the test files stay on
+top.
 Test data lives in ```data/``` of its subject. The files in the root of
 ```tests/``` are the shared base.
 
-Every folder of ```tests/``` with Python files has an empty
+Every directory of ```tests/``` with Python files has an empty
 ```__init__.py```, only the one of ```tests/``` itself has content. pytest
 then imports a test file by its full path, e.g.
 ```tests.ext.ai.test_wasm```, so a file name only has to be unique
-within its folder and repeats nothing the folder already says.
+within its directory and repeats nothing the directory already says.
 
 An example from the tests of fundi:
 
@@ -86,19 +87,19 @@ tests/
 | a package of the core, ```tokeo/core/ai/``` | ```tests/core/ai/test_<topic>.py```, e.g. ```test_config.py``` |
 | an extension with several test files, ```tokeo/ext/ai.py``` | ```tests/ext/ai/test_<part>.py```, e.g. ```test_wasm.py``` |
 
-- A test file is named after what it tests, without what its folder
+- A test file is named after what it tests, without what its directory
   already says: ```test_<module>.py``` for a module, e.g.
   ```tests/ext/test_print.py```, ```test_<topic>.py``` or
-  ```test_<part>.py``` in the folder of a subject, e.g.
+  ```test_<part>.py``` in the directory of a subject, e.g.
   ```tests/core/ai/test_config.py```, ```tests/ext/ai/test_wasm.py```
-- The main file of a subject folder is named after the subject, e.g.
+- The main file of a subject directory is named after the subject, e.g.
   ```tests/ext/ai/test_ai.py```, its parts after themselves,
   e.g. ```test_governor.py```, ```test_wasm.py```
 - A new test goes into the file of its subject, below the tests of the same
   function; a new file only for a part of its own, e.g. the stress tests or
   the tests against a live server
-- When a flat subject gets a second file, both move into a new folder named
-  after the subject, with an ```__init__.py```, e.g.
+- When a flat subject gets a second file, both move into a new directory
+  named after the subject, with an ```__init__.py```, e.g.
   ```tests/ext/test_print.py``` becomes ```tests/ext/print/test_print.py```
 
 ## Shared base
@@ -111,7 +112,7 @@ with the same base. Keeping it small lets each subject be read on its own.
 | File | Holds |
 |---|---|
 | ```conftest.py``` | the hook that puts the temporary files into ```tmp/tests/```, the hook that runs a test marked ```isolated``` in a pytest of its own, the fixtures ```tmp```, ```rando```, ```key``` and ```disable_stdin_capture``` |
-| ```utils/__init__.py``` | ```ROOT```, ```stresstest```, ```isolated```, ```wait_until```, ```wait_until_async```, ```free_port```, ```wait_process_group_ended```, ```use_disabled_stdin_capture``` |
+| ```utils/__init__.py``` | ```ROOT_DIR```, ```stresstest```, ```isolated```, ```wait_until```, ```wait_until_async```, ```free_port```, ```wait_process_group_ended```, ```use_disabled_stdin_capture``` |
 | ```utils/process.py``` | ```SubProcess```, runs a program as a process of its own and observes it from outside |
 | ```utils/tui.py``` | ```Terminal```, runs a program in a pseudo terminal |
 | ```utils/isolation.py``` | ```IsolatedPytest```, runs a test in a pytest of its own, in a fresh process |
@@ -135,7 +136,7 @@ from tests.utils.isolation import IsolatedPytest
 - ```disable_stdin_capture``` gives the test an empty stdin, for code that
   reads stdin while pytest captures it, e.g. ```Connection.run()``` of
   fabric; ```use_disabled_stdin_capture()``` does the same for one step
-- ```ROOT``` is the root of the project, the working directory of every
+- ```ROOT_DIR``` is the root of the project, the working directory of every
   program a test starts
 
 A fixture goes into ```conftest.py``` only if every test may need it.
@@ -151,15 +152,15 @@ new class gets a module of its own in ```utils/```.
 
 ## Subjects and imports
 
-A folder, or a single flat file, is one subject and builds its own
+A directory, or a single flat file, is one subject and builds its own
 environment.
 
 .. note::
 
     **Important:** a subject keeps its test apps, helpers, functions and
-    fixtures completely in its own folder. It imports the code under test
+    fixtures completely in its own directory. It imports the code under test
     and the shared base, nothing from other subjects, test files or tools
-    outside its folder.
+    outside its directory.
 
 Every import of the tests names the full path from the project root, also
 within the own subject:
@@ -255,7 +256,8 @@ def test_serve_queues_needs_a_name(serve, capsys):
   order
 - A subject has no ```conftest.py``` of its own
 - A function of a test file that is neither a test nor a fixture starts
-  with an underscore, e.g. ```_run```
+  with an underscore and is named by verb and object, ```make_``` for test
+  data, e.g. ```_run_tool``` or ```_make_config```; a fixture stays a noun
 
 ```python
 @pytest.fixture
@@ -314,6 +316,14 @@ def test_invalid_body(body):
     with SmtpTest() as app:
         with pytest.raises(TypeError):
             app.mail._make_message(body, **app.mail._get_params())
+```
+
+A test that reads the raised error names it ```err_info```:
+
+```python
+with pytest.raises(TokeoAiError) as err_info:
+    provider.chat(PROFILE, [{'role': 'user', 'content': 'hi'}])
+assert 'HTTP 401' in str(err_info.value)
 ```
 
 ## Docstrings
@@ -488,7 +498,7 @@ def test_thread_safety_with_multiple_connections():
     ...
 
     async def go():
-        srv, port = await start_smtpd(ev, settings=SETTINGS)
+        srv, port = await start_smtpd(ev, options=OPTIONS)
         try:
             ...
             assert await wait_until_async(lambda: srv.processings == 0)
