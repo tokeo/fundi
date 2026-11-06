@@ -3,7 +3,7 @@ The ```confirm``` guard *type*.
 
 ```TokeoAiConfirmGuard``` is the type for confirm guards: a guard that pauses
 the run to ask for a human decision before something happens (a prompt about to
-be sent, a tool about to run) and lets the answer confirm the state the guards
+be sent, a tool about to run) and lets the answer confirm the decision the guards
 reached or turn it into a no, never a no into a yes. It
 does nothing on its own; it is the class you derive from to write a confirm
 guard, so the agent's guard list and the trace can say "this is a confirm step"

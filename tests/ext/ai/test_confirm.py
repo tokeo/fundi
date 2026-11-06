@@ -1,5 +1,5 @@
 """
-Tests for the confirm guard: the state the guards reached, the answers, notes.
+Tests for the confirm guard: the decision the guards reached, the answers, notes.
 
 A scripted model calls echo; a test channel on the hook ```tokeo_ai_confirm```
 answers from a list and records every request. The tests cover the default,
@@ -61,37 +61,38 @@ def tool_contents(result):
 
 
 def test_without_a_channel_the_default_says_no():
-    """No channel: echo is skipped, the record says no by default, allow to deny."""
+    """No channel: echo is skipped, the entry says no by default, allow to deny."""
     result, _ = run(confirm_config([call('moin'), dict(text='done')]))
     assert tool_contents(result) == ['denied: declined by confirmation']
-    record = result.confirmations[0]
-    assert (record['answer'], record['by']) == ('no', 'default')
-    assert (record['state_before']['decision'], record['state_after']) == ('allow', 'deny')
+    confirmation = result.confirmations[0]
+    assert (confirmation['answer'], confirmation['by']) == ('no', 'default')
+    assert (confirmation['previous_decision'], confirmation['decision']) == ('allow', 'deny')
 
 
 @pytest.mark.parametrize('word, content', [('moin', 'moin'), ('bad', 'denied: says bad')])
-def test_the_default_yes_confirms_the_state_of_the_guards(word, content):
+def test_the_default_yes_confirms_the_decision_of_the_guards(word, content):
     """default yes: a yes of the guards runs echo, a no stays a no."""
     result, _ = run(confirm_config([call(word), dict(text='done')], options=dict(default='yes'), forbid=True))
     assert tool_contents(result) == [content]
 
 
-def test_a_yes_confirms_the_state_and_is_recorded():
-    """yes by tom: echo runs; the request shows the state, the record the answer."""
+def test_a_yes_confirms_the_decision_and_is_recorded():
+    """yes by tom: echo runs; the request has the decision, the entry the answer."""
     result, asked = run(confirm_config([call('moin'), dict(text='done')]), YES)
     assert tool_contents(result) == ['moin']
-    assert asked[0].answers == ('yes', 'yes_run', 'no', 'no_retry')
-    assert asked[0].state == dict(decision='allow', reason=None)
-    record = result.confirmations[0]
-    assert (record['answer'], record['by'], record['who'], record['state_after']) == ('yes', 'human', 'tom', 'allow')
-    assert record['subject'] == dict(tool='echo', arguments=dict(text='moin'))
+    assert asked[0].answer_values == ('yes', 'yes_run', 'no', 'no_retry')
+    assert (asked[0].decision, asked[0].reason) == ('allow', None)
+    confirmation = result.confirmations[0]
+    assert (confirmation['answer'], confirmation['by'], confirmation['who'], confirmation['decision']) == ('yes', 'human', 'tom', 'allow')
+    assert confirmation['subject_dict'] == dict(tool='echo', arguments=dict(text='moin'))
+    assert (confirmation['previous_reason'], confirmation['retries'], confirmation['is_recalled']) == (None, 0, False)
 
 
 def test_a_yes_never_turns_the_no_of_a_guard_into_a_yes():
     """forbid denies bad, tom answers yes: the call stays denied."""
     result, asked = run(confirm_config([call('bad'), dict(text='done')], forbid=True), YES)
     assert tool_contents(result) == ['denied: says bad']
-    assert asked[0].state == dict(decision='deny', reason='says bad')
+    assert (asked[0].decision, asked[0].reason) == ('deny', 'says bad')
 
 
 def test_a_no_turns_a_yes_into_a_no_with_its_note():
@@ -105,14 +106,14 @@ def test_yes_run_is_recalled_only_for_the_same_question():
     result, asked = run(confirm_config([call('a'), call('a'), call('b'), dict(text='done')]), YES_RUN)
     assert tool_contents(result) == ['a', 'a', 'b']
     assert [request.subject.arguments for request in asked] == [dict(text='a'), dict(text='b')]
-    assert [(c['recalled'], c['by']) for c in result.confirmations] == [(False, 'human'), (True, 'human'), (False, 'human')]
+    assert [(c['is_recalled'], c['by']) for c in result.confirmations] == [(False, 'human'), (True, 'human'), (False, 'human')]
 
 
 def test_no_retry_lets_the_guards_judge_anew_with_the_note():
     """forbid denies bad, no_retry 'trust it': forbid now allows, then a yes."""
     result, asked = run(confirm_config([call('bad'), dict(text='done')], forbid=True), TRUST, YES)
     assert tool_contents(result) == ['bad']
-    assert [request.state['decision'] for request in asked] == ['deny', 'allow']
+    assert [request.decision for request in asked] == ['deny', 'allow']
     assert [note['note'] for note in asked[1].notes] == ['trust it']
     assert [c['answer'] for c in result.confirmations] == ['no_retry', 'yes']
 
@@ -177,7 +178,7 @@ def test_notes_of_an_earlier_run_reach_the_guards():
 
 
 def test_a_note_on_a_yes_is_kept_for_the_run_and_the_result():
-    """yes with a note: the record carries it, the next request shows it."""
+    """yes with a note: the entry carries it, the next request shows it."""
     noted = TokeoAiConfirmAnswer('yes', by='auto', who='a model', note='+20 % for this header')
     result, asked = run(confirm_config([call('a'), call('b'), dict(text='done')]), noted)
     assert result.confirmations[0]['note'] == '+20 % for this header'
@@ -204,7 +205,7 @@ def test_a_no_at_on_return_replaces_the_result():
 
 @pytest.mark.parametrize('stage', ['on_begin', 'on_prompt', 'on_answer', 'on_close'])
 def test_a_no_at_a_stage_without_a_call_declines_the_run(stage):
-    """A no at a stage without a tool call declines the run, its record stays."""
+    """A no at a stage without a tool call declines the run, its entry stays."""
     with pytest.raises(TokeoAiRunDeclinedError) as declined:
         run(confirm_config([dict(text='done')], stages=(stage,)), NO)
     assert (declined.value.stage, declined.value.reason, declined.value.by) == (stage, 'not now', 'human')
@@ -273,25 +274,25 @@ def terminal(*lines):
     return terminal_channel(lambda prompt: lines.pop(0), written.append), written
 
 
-def request(state, notes=()):
-    """A confirm request at on_call for echo('moin') in the given state."""
+def request(decision, reason, notes=()):
+    """A confirm request at on_call for echo('moin') with the given decision."""
     invocation = Invocation(id='c1', name='echo', arguments=dict(text='moin'))
-    return TokeoAiConfirmRequest('on_call', 'ask', invocation, state, list(notes), ('yes', 'yes_run', 'no', 'no_retry'))
+    return TokeoAiConfirmRequest('on_call', 'ask', invocation, decision, reason, list(notes), ('yes', 'yes_run', 'no', 'no_retry'))
 
 
-def test_the_terminal_shows_the_state_and_asks_until_an_answer():
-    """x is no answer, y is yes: the call, the state and the notes are shown."""
+def test_the_terminal_shows_the_decision_and_asks_until_an_answer():
+    """x is no answer, y is yes: the call, the decision and the notes are shown."""
     channel, written = terminal('x', 'y', '')
-    answer = channel(None, request(dict(decision='deny', reason='says bad'), [dict(note='trust it')]))
-    assert (answer.answer, answer.by, answer.note) == ('yes', 'human', None)
-    assert written == ['confirm on_call (ask): echo {"text": "moin"}', '  state: deny (says bad)', '  note: trust it']
+    answer = channel(None, request('deny', 'says bad', [dict(note='trust it')]))
+    assert (answer.value, answer.by, answer.note) == ('yes', 'human', None)
+    assert written == ['confirm on_call (ask): echo {"text": "moin"}', '  decision: deny (says bad)', '  note: trust it']
 
 
 def test_the_terminal_asks_for_the_note_of_a_no_retry():
     """t, an empty note, then 'trust it': the no_retry carries the note."""
     channel, _ = terminal('t', '', 'trust it')
-    answer = channel(None, request(dict(decision='deny', reason='says bad')))
-    assert (answer.answer, answer.note) == ('no_retry', 'trust it')
+    answer = channel(None, request('deny', 'says bad'))
+    assert (answer.value, answer.note) == ('no_retry', 'trust it')
 
 
 @pytest.mark.parametrize('key, out', [('y', 'done'), ('n', 'declined at on_prompt: declined by confirmation (by human)')])

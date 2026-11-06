@@ -261,15 +261,36 @@ flowchart TD
     A note is shown by ```ai lint```, not during ```ask```/```chat```. An error
     stops both: the run aborts and ```ai lint``` reports it.
 
-### 4.6 Confirming the state with ```confirm```
+### 4.6 Confirming the decision with ```confirm```
 
 The built-in guard ```confirm``` stops at the stages it takes part in and asks a
-channel to confirm the state the guards before it reached (```allow``` or
+channel to confirm the decision the guards before it reached (```allow``` or
 ```deny``` with the reason). A channel is a function on the cement hook
 ```tokeo_ai_confirm``` that gets ```(app, request)``` and returns a
 ```TokeoAiConfirmAnswer``` or ```None```. ```ai ask``` and ```ai chat``` register
 a terminal channel when they run in a terminal; an app registers its own (a web
 page, a chat, a classifier, a model).
+
+The ```TokeoAiConfirmRequest``` holds ```stage```, ```guard``` (the config name),
+```subject``` (the ```Invocation``` at the tool stages, the ```ChatResult``` at
+```on_answer```/```on_close```, the messages at ```on_begin```/```on_prompt```),
+```decision``` and ```reason``` of the guards, ```notes```, ```answer_values```
+(the values an answer may have) and the ```userdata``` of the run. The
+```TokeoAiConfirmAnswer``` holds ```value``` (```yes```, ```yes_run```, ```no```
+or ```no_retry```), ```by```, ```who``` and ```note```:
+
+```python
+from tokeo.core.ai.guards.confirm import GOVERNOR_CONFIRM_CHANNEL_HOOK, TokeoAiConfirmAnswer
+
+
+def ask_the_reviewer(app, request):
+    if request.decision == 'deny':
+        return TokeoAiConfirmAnswer(TokeoAiConfirmAnswer.NO, by=TokeoAiConfirmAnswer.BY_AUTO)
+    return None  # the next channel or the default decides
+
+
+app.hook.register(GOVERNOR_CONFIRM_CHANNEL_HOOK, ask_the_reviewer)
+```
 
 ```yaml
 guards:
@@ -290,19 +311,19 @@ The answers, each may carry a note:
 
 | Answer | Effect |
 |--------|--------|
-| ```yes``` | the state of the guards stands |
-| ```yes_run``` | the same, and the same question (stage, content and state 1:1) is not asked again in this run |
-| ```no``` | the state becomes deny: ```on_call``` skips the call, ```on_return``` replaces the result, every other stage declines the run (```TokeoAiRunDeclinedError```) |
+| ```yes``` | the decision of the guards stands |
+| ```yes_run``` | the same, and the same question (stage, content, decision and reason 1:1) is not asked again in this run |
+| ```no``` | the decision becomes deny: ```on_call``` skips the call, ```on_return``` replaces the result, every other stage declines the run (```TokeoAiRunDeclinedError```) |
 | ```no_retry``` | not like this: the note (required) goes to ```ctx.notes```, the stage runs again, its guards judge anew with the notes, and the channel is asked again |
 
-Without an answer the option ```default``` decides: ```no``` turns every state
-into deny, ```yes``` confirms the state of the guards.
+Without an answer the option ```default``` decides: ```no``` turns every
+decision into deny, ```yes``` confirms the decision of the guards.
 
 .. important::
 
     A confirm turns a yes into a no, never a no into a yes, and it changes no
     config. A no of a guard turns into a yes only when a guard judges anew with
-    the notes (after a ```no_retry```) and that new state is confirmed. The
+    the notes (after a ```no_retry```) and that new decision is confirmed. The
     limits of the config (what the agent offers, the deny sets, the sandbox
     chain) stand anyway: an agent can never do more than its config allows. A
     stage runs again at most ```max_retries``` times (default 5, per guard or
@@ -310,9 +331,12 @@ into deny, ```yes``` confirms the state of the guards.
 
 Every answer says who decided, ```by``` is required: ```human``` for a person,
 ```auto``` for a function of the app; without an answer it is ```default```.
-Every answer lands in ```result.confirmations``` (stage, content, state before
-and after, answer, note, by, who, time) and on the trace, a note also in
-```ctx.notes```. The guards read ```ctx.notes```; a later run gets the notes by
+Every answer lands in ```result.confirmations``` and on the trace, a note also
+in ```ctx.notes```. Each entry is a dict with ```stage```, ```guard```,
+```subject_dict``` (a short form of the subject), ```previous_decision``` and
+```previous_reason``` (what the guards reached), ```answer```, ```decision```
+(after the confirm), ```note```, ```by```, ```who```, ```retries``` (of the stage
+before this answer), ```is_recalled``` (a ```yes_run``` answered it) and ```at```. The guards read ```ctx.notes```; a later run gets the notes by
 ```chat(..., notes=result.confirmations)```. Whether the model sees a note is a
 guard's decision, confirm never hands it on by itself.
 

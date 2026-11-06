@@ -32,7 +32,7 @@ def terminal_channel(read, write):
     """
     Build a confirm channel that asks a person in the terminal.
 
-    It shows the stage, the guard, what is to be confirmed, the state the
+    It shows the stage, the guard, what is to be confirmed, the decision the
     guards reached and the notes so far, then reads an answer by its key and a
     note. A ```no_retry``` needs a note. The answer is a person's
     (```by='human'```) with the login name.
@@ -63,12 +63,11 @@ def terminal_channel(read, write):
         else:
             shown = getattr(subject, 'text', subject)
         write(f'confirm {request.stage} ({request.guard}): {shown}')
-        state = request.state
-        write(f'  state: {state["decision"]}' + (f' ({state["reason"]})' if state.get('reason') else ''))
+        write(f'  decision: {request.decision}' + (f' ({request.reason})' if request.reason else ''))
         for note in request.notes:
             write(f'  note: {note.get("note")}')
         answer = None
-        while answer not in request.answers:
+        while answer not in request.answer_values:
             answer = keys.get(read('  [y]es, yes_[r]un, [n]o, no_re[t]ry? ').strip().lower()[:1])
         note = read('  note (empty for none): ').strip() or None
         while answer == TokeoAiConfirmAnswer.NO_RETRY and not note:

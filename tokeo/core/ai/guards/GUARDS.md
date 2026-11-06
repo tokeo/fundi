@@ -45,7 +45,7 @@ and says what your subclass is *for*.
     ```tool_schema_validate``` (arguments against the tool's parameters) ships
     ready.
 - confirm (```TokeoAiConfirmGuard```): have a person or a function confirm the
-    state the guards reached. ```confirm``` ships ready: it asks the channels on
+    decision the guards reached. ```confirm``` ships ready: it asks the channels on
     the hook ```tokeo_ai_confirm```, records every answer and its notes, and
     never turns a no into a yes (CONFIG.md, section 4.6).
 

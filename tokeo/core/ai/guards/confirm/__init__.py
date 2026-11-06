@@ -8,7 +8,7 @@ raises to abort. Both are re-exported here, so the short path
 
 The ready-to-use implementation is the ```confirm``` guard
 (```TokeoAiChannelConfirmGuard```): it asks the channels on the cement hook
-```tokeo_ai_confirm``` to confirm the state the guards reached, and records
+```tokeo_ai_confirm``` to confirm the decision the guards reached, and records
 every answer.
 """
 
