@@ -16,9 +16,8 @@ class TokeoAiConfirmGuardError(TokeoAiGuardError):
 
     A confirm guard normally pauses for a human decision and then lets the run
     continue with that answer; this exists so a derived confirm guard that
-    *does* need to abort (e.g. the human declined and the run must not proceed,
-    or no input channel is available to ask on) has a typed error to raise,
-    distinct from other guards' aborts.
+    *does* need to abort (e.g. no input channel is available to ask on, or a
+    bad answer) has a typed error to raise, distinct from other guards' aborts.
     """
 
 

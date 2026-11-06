@@ -52,7 +52,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from tokeo.core.utils.validate import is_int_ge
-from tokeo.core.ai import Invocation, TokeoAiError, TokeoAiRunDeclinedError
+from tokeo.core.ai import Invocation, TokeoAiRunDeclinedError
 from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_BEGIN,
     GOVERNOR_STAGE_ON_PROMPT,
@@ -62,7 +62,7 @@ from tokeo.core.ai.governor import (
     GOVERNOR_STAGE_ON_CLOSE,
 )
 from tokeo.core.ai.guards.confirm.base import TokeoAiConfirmGuard
-from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmRetry
+from tokeo.core.ai.guards.confirm.exc import TokeoAiConfirmGuardError, TokeoAiConfirmRetry
 
 #: The cement hook a confirm channel registers on.
 GOVERNOR_CONFIRM_CHANNEL_HOOK = 'tokeo_ai_confirm'
@@ -216,7 +216,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
 
     def on_call(self, ctx, invocation):
         """Confirm a tool call; a no skips it."""
-        self._confirm_call(ctx, GOVERNOR_STAGE_ON_CALL, invocation, 'declined by confirmation')
+        self._confirm_call(ctx, GOVERNOR_STAGE_ON_CALL, invocation, 'denied by confirmation')
 
     def on_return(self, ctx, invocation):
         """Confirm a tool result; a no replaces it."""
@@ -277,17 +277,21 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         if answer is None:
             default = self._config('default', stage=stage)
             if default not in (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.YES):
-                raise TokeoAiError(f'confirm guard {self.config_name!r}: default must be no or yes, got {default!r}')
+                raise TokeoAiConfirmGuardError(f'confirm guard {self.config_name!r}: default must be no or yes, got {default!r}')
             answer = TokeoAiConfirmAnswer(default, by=TokeoAiConfirmAnswer.BY_DEFAULT)
         elif not is_recalled:
             if answer.value not in answer_values:
-                raise TokeoAiError(f'confirm guard {self.config_name!r}: answer {answer.value!r} is not one of {answer_values}')
+                raise TokeoAiConfirmGuardError(
+                    f'confirm guard {self.config_name!r}: answer {answer.value!r} is not one of {answer_values}'
+                )
             if answer.by not in (TokeoAiConfirmAnswer.BY_HUMAN, TokeoAiConfirmAnswer.BY_AUTO):
-                raise TokeoAiError(f'confirm guard {self.config_name!r}: an answer must say by human or auto, got {answer.by!r}')
+                raise TokeoAiConfirmGuardError(
+                    f'confirm guard {self.config_name!r}: an answer must say by human or auto, got {answer.by!r}'
+                )
         retries = confirm_cache['retries'].get(retry_key, 0)
         if answer.value == TokeoAiConfirmAnswer.NO_RETRY:
             if not answer.note:
-                raise TokeoAiError(f'confirm guard {self.config_name!r}: no_retry needs a note')
+                raise TokeoAiConfirmGuardError(f'confirm guard {self.config_name!r}: no_retry needs a note')
             max_retries = self._config('max_retries', stage=stage)
             if retries >= max_retries:
                 raise TokeoAiRunDeclinedError(stage, f'retried more than {max_retries} times in a confirm', by=answer.by)

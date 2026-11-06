@@ -9,8 +9,14 @@ the config, the stages without a tool call, and the terminal channel.
 """
 
 import pytest
-from tokeo.core.ai import TokeoAiError, TokeoAiRunDeclinedError, TokeoAiGuard, Invocation
-from tokeo.core.ai.guards.confirm import GOVERNOR_CONFIRM_CHANNEL_HOOK, TokeoAiConfirmAnswer, TokeoAiConfirmRequest, TokeoAiConfirmRetry
+from tokeo.core.ai import TokeoAiRunDeclinedError, TokeoAiGuard, Invocation
+from tokeo.core.ai.guards.confirm import (
+    GOVERNOR_CONFIRM_CHANNEL_HOOK,
+    TokeoAiConfirmAnswer,
+    TokeoAiConfirmGuardError,
+    TokeoAiConfirmRequest,
+    TokeoAiConfirmRetry,
+)
 from tests.ext.ai.test_loop import LoopTest, make_loop_config, make_call
 
 YES = TokeoAiConfirmAnswer('yes', by='human', who='tom')
@@ -63,7 +69,7 @@ def get_tool_contents(result):
 def test_without_a_channel_the_default_says_no():
     """No channel: echo is skipped, the entry says no by default, allow to deny."""
     result, _ = run_chat(make_confirm_config([make_call('moin'), dict(text='done')]))
-    assert get_tool_contents(result) == ['denied: declined by confirmation']
+    assert get_tool_contents(result) == ['denied: denied by confirmation']
     confirmation = result.confirmations[0]
     assert (confirmation['answer'], confirmation['by']) == ('no', 'default')
     assert (confirmation['previous_decision'], confirmation['decision']) == ('allow', 'deny')
@@ -127,7 +133,7 @@ def test_the_dialog_is_asked_again_after_each_retry_until_yes():
 
 def test_no_retry_needs_a_note():
     """no_retry without a note is an error."""
-    with pytest.raises(TokeoAiError, match='no_retry needs a note'):
+    with pytest.raises(TokeoAiConfirmGuardError, match='no_retry needs a note'):
         run_chat(make_confirm_config([make_call('moin'), dict(text='done')]), TokeoAiConfirmAnswer('no_retry', by='human'))
 
 
@@ -234,7 +240,7 @@ def test_the_request_carries_the_userdata_of_the_run():
 )
 def test_a_wrong_answer_is_an_error(answer, message):
     """An unknown answer, or by default from a channel, ends the run in an error."""
-    with pytest.raises(TokeoAiError, match=message):
+    with pytest.raises(TokeoAiConfirmGuardError, match=message):
         run_chat(make_confirm_config([make_call('moin'), dict(text='done')]), answer)
 
 
