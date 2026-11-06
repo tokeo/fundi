@@ -77,10 +77,11 @@ class TokeoAiToolSchemaValidator(TokeoAiValidateGuard):
         """Tool-schema validator defaults, overridden per guard by its options."""
 
         # the configurable defaults, as one dict; the guard entry's options (and
-        # an on_call override) overlay this, read at runtime via _config. strict:
-        # when true a failing call is denied (decision DENY + reason), when false
-        # it is only flagged (a reason + a logged warning) and still runs
+        # an on_call override) overlay this, read at runtime via _config
         config_defaults = dict(
+            # when true a failing call is denied (decision DENY + reason), when
+            # false it is only flagged (a reason + a logged warning) and still
+            # runs
             strict=False,
         )
 

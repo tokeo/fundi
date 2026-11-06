@@ -58,8 +58,11 @@ class GovernorConfigEntry:
     """
 
     def __init__(self, config_name, stages, source):
+        #: (str) The name as written, a configured name or a class path
         self.config_name = config_name
+        #: (frozenset) The stages this entry runs at
         self.stages = frozenset(stages)
+        #: (str) ```'agent'``` or ```'chain'```, for nearest-wins
         self.source = source
 
     def __repr__(self):

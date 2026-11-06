@@ -87,8 +87,11 @@ class AiLintIssue:
 
     """
 
+    #: The ```ai.<section>.<name>``` location of the problem
     path: str
+    #: What is wrong, with a hint where one applies
     message: str
+    #: ```error```, ```warning``` or ```note```
     level: str = 'error'
 
 
@@ -110,7 +113,9 @@ class TokeoAiLinter:
     """
 
     def __init__(self, app):
+        #: The Tokeo application instance
         self.app = app
+        #: (list) The ```AiLintIssue``` entries of the last ```lint```
         self.issues = []
         self._validators = {}
         # built-in element validations; a project or a later derivation adds

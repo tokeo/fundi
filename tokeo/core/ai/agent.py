@@ -11,7 +11,8 @@ from cement.core.meta import MetaMixin
 from tokeo.core.utils.dict import deep_merge
 from tokeo.core.ai.exc import TokeoAiError
 
-# the agent when none results: offers nothing, no name selects it
+#: The name of the agent when none results: it offers nothing, no name
+#: selects it
 AGENT_IMPLICIT_NAME = '__implicit'
 
 
@@ -59,37 +60,39 @@ class TokeoAiAgent(MetaMixin):
         """Agent meta-data."""
 
         # the configurable defaults, as one dict; the agent entry's options
-        # overlay this, read at runtime via _config. tools: the tool selection
-        # (item or group names), merged with the profile's. governors: the
-        # governor composition (guard/transformer/conductor names) for the loop
-        # pipeline, in order. sandboxes: the
-        # ordered sandbox chain (sandbox names); a tool runs in the first
-        # sandbox whose tools contain it; when none does the call is denied,
-        # there is no catch-all. deny: tools (item or group names) forbidden
-        # outright before any sandbox lookup, a hard exclusion unlike a
-        # sandbox except.
-        # omit: governor config names to drop from this agent's composition (a
-        # local leaving-out, e.g. one a chain brought in), next to governors so
-        # it never collides with a governor or chain name.
-        # max_steps: per-agent max of tool rounds (0 = unlimited). max_loops:
-        # per-agent max of consecutive rounds without one successful call
-        # (0 = unlimited). both resolve in three levels, nearest wins: a chat()
-        # call argument, then this agent option, then the ai-section base
-        # (ai.max_steps / ai.max_loops). None here means "this agent sets none":
-        # the value falls through to the ai-section base, which is the home
-        # of the default numbers
+        # overlay this, read at runtime via _config
         config_defaults = dict(
+            # the tool selection (item or group names), merged with the
+            # profile's
             tools=[],
+            # the governor composition (guard/transformer/conductor names) for
+            # the loop pipeline, in order
             governors=[],
+            # the ordered sandbox chain (sandbox names); a tool runs in the
+            # first sandbox whose tools contain it; when none does the call is
+            # denied, there is no catch-all
             sandboxes=[],
+            # tools (item or group names) forbidden outright before any
+            # sandbox lookup, a hard exclusion unlike a sandbox except
             deny=[],
+            # governor config names to drop from this agent's composition (a
+            # local leaving-out, e.g. one a chain brought in), next to
+            # governors so it never collides with a governor or chain name
             omit=[],
+            # per-agent max of tool rounds (0 = unlimited). it resolves in
+            # three levels, nearest wins: a chat() call argument, then this
+            # agent option, then the ai-section base (ai.max_steps). None
+            # means "this agent sets none": the value falls through to the
+            # ai-section base, which is the home of the default numbers
             max_steps=None,
+            # per-agent max of consecutive rounds without one successful call
+            # (0 = unlimited), resolved like max_steps (ai.max_loops)
             max_loops=None,
         )
 
     def __init__(self, app, *args, **kw):
         super(TokeoAiAgent, self).__init__(*args, **kw)
+        #: The Tokeo application instance
         self.app = app
         self._config_name = None
         self._config_options = None

@@ -12,6 +12,7 @@ Hands out the version of fundi, counted by cement like the build does.
 
 from cement.utils.version import get_version as cement_get_version
 
+#: (tuple) The version of fundi: major, minor, patch, release level and serial
 VERSION = (2, 2, 0, 'final', 0)
 
 

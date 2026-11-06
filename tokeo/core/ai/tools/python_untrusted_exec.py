@@ -45,12 +45,14 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiPythonExecTool):
     stays invisible to it.
     """
 
-    # the wasm sandbox runs the code in the guest without rebuilding this tool
+    #: The wasm sandbox runs the code in the guest without rebuilding this
+    #: tool
     wasm_exec_pysnippet = True
 
     class Meta:
         """Tool meta-data sent to the model."""
 
+        # the description of the tool for the model
         description = (
             'Execute a short to medium Python source code snippet to compute an answer. '
             'The answer from snippet must be one of: a. expression on the last snippet '
@@ -61,6 +63,7 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiPythonExecTool):
             'standard library.'
         )
 
+        # the JSON schema of the arguments for the model
         parameters = {
             'type': 'object',
             'properties': {

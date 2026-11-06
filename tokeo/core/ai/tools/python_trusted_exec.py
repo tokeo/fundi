@@ -41,6 +41,7 @@ class TokeoAiPythonTrustedExecTool(TokeoAiPythonExecTool):
     class Meta:
         """Tool meta-data sent to the model."""
 
+        # the description of the tool for the model
         description = (
             'Execute a short to medium Python source code snippet to compute an answer. '
             'The answer from snippet must be one of: a. expression on the last snippet '
@@ -50,6 +51,7 @@ class TokeoAiPythonTrustedExecTool(TokeoAiPythonExecTool):
             'completely in background.'
         )
 
+        # the JSON schema of the arguments for the model
         parameters = {
             'type': 'object',
             'properties': {

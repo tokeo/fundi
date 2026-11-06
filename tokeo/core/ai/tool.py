@@ -79,6 +79,7 @@ class TokeoAiTool(MetaMixin):
 
     def __init__(self, app, *args, **kw):
         super(TokeoAiTool, self).__init__(*args, **kw)
+        #: The Tokeo application instance
         self.app = app
         self._config_name = None
         self._config_options = None
@@ -261,8 +262,9 @@ class TokeoJsonAiToolResultEncoder(TokeoJsonUnknownNoneEncoder):
 
     def __init__(self):
         super().__init__()
-        # flipped the moment the base returns None for an unknown object, so
-        # after one json_dump it tells whether anything was substituted
+        #: (bool) Flipped the moment the base returns None for an unknown
+        #: object, so after one json_dump it tells whether anything was
+        #: substituted
         self.substituted = False
 
     def encode(self, obj):

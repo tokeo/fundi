@@ -89,16 +89,18 @@ class TokeoAiContext:
         self._trace = []
         # the typed views, one list per cached kind, by exact class
         self._caches = {kind: [] for kind in self._CACHE_KINDS}
-        # the loop's counters
+        #: (TokeoAiLoopdata) The loop's counters
         self.loopdata = TokeoAiLoopdata()
-        # a free, shared data area for this run; participants write under
-        # their own key; a preset seeds it (see __init__ args)
+        #: (TokeoAiTurndata) A free, shared data area for this run;
+        #: participants write under their own key; a preset seeds it (see
+        #: the args)
         self.turndata = TokeoAiTurndata(turndata) if turndata is not None else TokeoAiTurndata()
-        # the caller's opaque carry-through value; set once, never touched by
-        # the framework, constant for the run (not history, not a counter)
+        #: The caller's opaque carry-through value; set once, never touched
+        #: by the framework, constant for the run (not history, not a
+        #: counter)
         self.userdata = userdata
-        # the notes of confirm answers, from earlier runs and this one, for the
-        # guards to judge with
+        #: (list) The notes of confirm answers, from earlier runs and this
+        #: one, for the guards to judge with
         self.notes = list(notes or [])
         #: (list) Every confirm decision of this run in order; chat hands it
         #: out as the result's confirmations

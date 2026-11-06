@@ -54,8 +54,37 @@ class Terminal:
 
     """
 
+    #: (int) The file descriptor of the master side of the terminal, set on
+    #: enter
+    master = None
+
+    #: (Popen) The running program, set on enter
+    process = None
+
+    #: (pyte.Screen) The screen the output is drawn on, set on enter
+    screen = None
+
+    #: (pyte.ByteStream) The stream that feeds the screen, set on enter
+    stream = None
+
+    #: (bytes) Every byte read from the program, set on enter
+    raw = None
+
+    #: (float) The ```time.monotonic()``` at which ```wait_for``` gives up,
+    #: set on enter
+    end_time = None
+
     def __init__(self, args, rows=24, columns=80, ctty=False, timeout=30):
-        self.args, self.rows, self.columns, self.ctty, self.timeout = args, rows, columns, ctty, timeout
+        #: The program and its arguments, started in ```ROOT```
+        self.args = args
+        #: The rows of the screen
+        self.rows = rows
+        #: The columns of the screen
+        self.columns = columns
+        #: Whether the terminal is the controlling one of the program
+        self.ctty = ctty
+        #: The seconds ```wait_for``` waits at most in all
+        self.timeout = timeout
 
     def __enter__(self):
         pyte = pytest.importorskip('pyte')

@@ -78,22 +78,25 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         """Redact rules, overridden per guard by its entry's options."""
 
         # the default options, as one dict (the '_any' base that per-stage
-        # options overlay). patterns: None by default; there is no built-in
-        # list. the project supplies the full list of regex patterns through the
-        # patterns option (each pattern matches the secret span itself, so the
-        # whole match is replaced). it is required wherever the guard runs: a
-        # stage with no patterns, or a pattern that does not compile, raises
-        # rather than silently masking nothing (deep merge appends lists, so a
-        # built-in default could not be replaced, only extended, hence none).
-        # replacement: what each matched span is replaced with. sanitize_data:
-        # when true (the default), the structured result view (value.as_data) is
-        # masked too (recursively, the string values only, keys untouched), so
-        # a secret cannot survive in as_data/as_json and leak to the trace; set
-        # false to mask only the model-facing as_str and leave the structure as
-        # the tool returned it
+        # options overlay)
         config_defaults = dict(
+            # None by default; there is no built-in list. the project supplies
+            # the full list of regex patterns through the patterns option (each
+            # pattern matches the secret span itself, so the whole match is
+            # replaced). it is required wherever the guard runs: a stage with
+            # no patterns, or a pattern that does not compile, raises rather
+            # than silently masking nothing (deep merge appends lists, so a
+            # built-in default could not be replaced, only extended, hence
+            # none)
             patterns=None,
+            # what each matched span is replaced with
             replacement='[redacted]',
+            # when true (the default), the structured result view
+            # (value.as_data) is masked too (recursively, the string values
+            # only, keys untouched), so a secret cannot survive in
+            # as_data/as_json and leak to the trace; set false to mask only the
+            # model-facing as_str and leave the structure as the tool returned
+            # it
             sanitize_data=True,
         )
 

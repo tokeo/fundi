@@ -58,6 +58,7 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
     class Meta:
         """The in-process options: only the limit of the captured output."""
 
+        # the configurable defaults; the item's options overlay them
         config_defaults = dict(
             # MB of stdout and stderr kept per call, the rest is cut
             output_mb=SANDBOX_OUTPUT_MAX_MB,

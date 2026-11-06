@@ -58,8 +58,20 @@ class SubProcess:
 
     """
 
+    #: (file) The anonymous temp file of the output, set on enter
+    log = None
+
+    #: (Popen) The running program, set on enter
+    process = None
+
     def __init__(self, args, env=None, timeout=30, name=None):
-        self.args, self.env, self.timeout = [str(arg) for arg in args], env, timeout
+        #: The program and its arguments, as strings
+        self.args = [str(arg) for arg in args]
+        #: More environment variables of the program
+        self.env = env
+        #: The seconds ```wait_for``` waits at most
+        self.timeout = timeout
+        #: The name in a failure, by default the program
         self.name = name or os.path.basename(self.args[0])
 
     @classmethod

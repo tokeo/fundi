@@ -93,13 +93,21 @@ class TokeoAiConfirmRequest:
 
     """
 
+    #: The stage that asks
     stage: str
+    #: The config name of the asking guard
     guard: str
+    #: The work object of the stage
     subject: object
+    #: The decision of the guards so far
     decision: str
+    #: The reason of the decision
     reason: str | None
+    #: Every note so far, also from earlier runs
     notes: list
+    #: The values an answer may have
     answer_values: tuple
+    #: The caller's ```userdata``` of the run
     userdata: object = None
 
 
@@ -118,17 +126,28 @@ class TokeoAiConfirmAnswer:
 
     """
 
+    #: Yes for this call or stage
     YES = 'yes'
+    #: Yes for the rest of the run
     YES_RUN = 'yes_run'
+    #: No
     NO = 'no'
+    #: No, run the stage again with the note
     NO_RETRY = 'no_retry'
+    #: A person decided
     BY_HUMAN = 'human'
+    #: A function of the app decided
     BY_AUTO = 'auto'
+    #: No channel answered, the default decided
     BY_DEFAULT = 'default'
 
+    #: ```YES```, ```YES_RUN```, ```NO``` or ```NO_RETRY```
     value: str
+    #: ```BY_HUMAN``` or ```BY_AUTO```, who decided
     by: str
+    #: The person or function that decided
     who: str | None = None
+    #: The note; required with ```NO_RETRY```
     note: str | None = None
 
 
@@ -145,12 +164,14 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
     class Meta:
         """The confirm options, overridden per guard by its entry's options."""
 
-        # tools: the calls asked at the tool stages, None = all. default: the
-        # answer when no channel answers, no or yes. max_retries: how often a
-        # stage may run again after no_retry before the run is declined
+        # the configurable defaults, as one dict
         config_defaults = dict(
+            # the calls asked at the tool stages, None = all
             tools=None,
+            # the answer when no channel answers, no or yes
             default='no',
+            # how often a stage may run again after no_retry before the run
+            # is declined
             max_retries=GOVERNOR_CONFIRM_STAGE_MAX_RETRIES,
         )
 

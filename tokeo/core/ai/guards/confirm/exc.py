@@ -40,4 +40,5 @@ class TokeoAiConfirmRetry(TokeoBaseException):
 
     def __init__(self, subject=None):
         super().__init__('retried in a confirm')
+        #: The work object of the stage, or ```None``` for the messages
         self.subject = subject

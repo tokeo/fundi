@@ -39,21 +39,27 @@ from tokeo.core.ai.exc import TokeoAiError
 
 # the stage method names, as constants so call sites and config use a name, not
 # a string literal; the GOVERNOR_STAGE_ prefix makes a stage reference obvious
+#: The stage at the start of the run, on the accumulated messages
 GOVERNOR_STAGE_ON_BEGIN = 'on_begin'
+#: The stage before the model is asked, on the messages about to be sent
 GOVERNOR_STAGE_ON_PROMPT = 'on_prompt'
+#: The stage after each model answer, on the round's ChatResult
 GOVERNOR_STAGE_ON_ANSWER = 'on_answer'
+#: The stage before a tool runs, on the Invocation
 GOVERNOR_STAGE_ON_CALL = 'on_call'
+#: The stage after a tool ran, on the completed Invocation
 GOVERNOR_STAGE_ON_RETURN = 'on_return'
+#: The stage at the end of the run, on the final ChatResult
 GOVERNOR_STAGE_ON_CLOSE = 'on_close'
 
-# the value standing for "all the class's stages": the base view key in the
-# per-stage config (the default that every stage falls back to) and, in a
-# composition stage list, "run at all the class's stages". a value, never a
-# name
+#: The value standing for "all the class's stages": the base view key in
+#: the per-stage config (the default that every stage falls back to) and,
+#: in a composition stage list, "run at all the class's stages". A value,
+#: never a name
 GOVERNOR_STAGE_ANY = '_any'
 
-# the stages in chain order; the handler reflects over these to learn which
-# stages a governor participates in (an overridden method = active)
+#: The stages in chain order; the handler reflects over these to learn
+#: which stages a governor participates in (an overridden method = active)
 GOVERNOR_STAGES = (
     GOVERNOR_STAGE_ON_BEGIN,
     GOVERNOR_STAGE_ON_PROMPT,
@@ -199,6 +205,7 @@ class TokeoAiGovernor(MetaMixin):
 
     def __init__(self, app, *args, **kw):
         super(TokeoAiGovernor, self).__init__(*args, **kw)
+        #: The Tokeo application instance
         self.app = app
         # the set of stages this governor participates in, filled lazily on the
         # first has_stage call (reflection once per governor, then cached)

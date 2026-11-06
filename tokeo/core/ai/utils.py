@@ -90,6 +90,7 @@ class TokeoJsonAiTraceEncoder(TokeoJsonUnknownNameEncoder):
 
     def __init__(self, compact=False):
         super().__init__()
+        #: (bool) Drop the ```object``` of an unchanged ```TraceStep```
         self.compact = compact
 
     def encode(self, obj):

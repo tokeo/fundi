@@ -32,6 +32,7 @@ class TokeoAiProvider:
         config_defaults = {}
 
     def __init__(self, app, *args, **kw):
+        #: The Tokeo application instance
         self.app = app
         # never configured under a config key; the property reports the class
         self._config_name = None

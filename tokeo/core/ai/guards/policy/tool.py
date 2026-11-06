@@ -45,11 +45,11 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
         """Policy rules, overridden per guard by its entry's options."""
 
         # the configurable defaults, as one dict; a guard entry's options (and an
-        # on_call override) overlay this, read at runtime via _config. allow:
-        # tools allowed, None means "allow any tool not denied". deny: tools
-        # always denied, a deny wins over the allowlist
+        # on_call override) overlay this, read at runtime via _config
         config_defaults = dict(
+            # tools allowed, None means "allow any tool not denied"
             allow=None,
+            # tools always denied, a deny wins over the allowlist
             deny=[],
         )
 

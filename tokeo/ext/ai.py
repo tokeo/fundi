@@ -167,6 +167,7 @@ class TokeoAi(MetaMixin):
 
     """
 
+    #: The notice shown until ```ai.license_acknowledged``` is set
     FUNDI_LICENSE_NOTICE = 'tokeo-fundi is source-available, not open source. See LICENSE.md, then set ai.license_acknowledged=true.'
 
     class Meta:
@@ -178,17 +179,18 @@ class TokeoAi(MetaMixin):
         # Configuration section name in the application config
         config_section = 'ai'
 
-        # Default configuration settings
+        # the defaults of the config section
         config_defaults = dict(
             # the app-wide base limits for the loop. they are resolved in three
             # levels, nearest wins: a chat() call argument, then the selected
             # agent's option, then this ai-section base. an agent leaves its
             # limit None to fall through to here, so this is the single home of
             # the default numbers. max_steps limits the tool rounds of one request
-            # (0 = unlimited); max_loops limits the consecutive rounds without one
-            # successful call (0 = unlimited), so a model stuck on denied or
-            # failing calls is stopped. set either at ai.max_steps / ai.max_loops
+            # (0 = unlimited), set at ai.max_steps
             max_steps=0,
+            # max_loops limits the consecutive rounds without one successful
+            # call (0 = unlimited), so a model stuck on denied or failing calls
+            # is stopped, set at ai.max_loops
             max_loops=3,
             # whether the run records its step history (the trace). True by
             # default; set ai.trace=False to skip building the trace; the
@@ -214,6 +216,7 @@ class TokeoAi(MetaMixin):
 
     def __init__(self, app, *args, **kw):
         super(TokeoAi, self).__init__(*args, **kw)
+        #: The Tokeo application instance
         self.app = app
         # initialize display license notice
         self._show_license_notice = True
@@ -1185,9 +1188,12 @@ class AiController(Controller):
     """
 
     class Meta:
+        # the name of the command group
         label = 'ai'
+        # nested under the base controller
         stacked_type = 'nested'
         stacked_on = 'base'
+        # the texts of the help output
         description = 'talk to the configured model and run agentic tasks'
         help = 'ai and agentic commands'
 

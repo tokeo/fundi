@@ -43,8 +43,11 @@ class Usage:
 
     """
 
+    #: Tokens consumed by the prompt
     prompt_tokens: int = 0
+    #: Tokens produced in the completion
     completion_tokens: int = 0
+    #: Total as reported by the provider
     total_tokens: int = 0
 
 
@@ -62,8 +65,11 @@ class ToolCall:
 
     """
 
+    #: Provider-assigned id, echoed back with the tool result
     id: str
+    #: Name of the tool the model wants to call
     name: str
+    #: Parsed arguments for the call
     arguments: dict = field(default_factory=dict)
 
 
@@ -88,8 +94,11 @@ class ToolValue:
 
     """
 
+    #: The value as a string, the model-facing form
     as_str: str = ''
+    #: The value as a json string
     as_json: str = ''
+    #: The value as a structured object for the trace or a ui
     as_data: object = None
 
 
@@ -119,9 +128,13 @@ class ToolStates:
 
     """
 
+    #: The json form is not faithful to the value
     incomplete: bool = False
+    #: (str|None) Informal output of the run
     stdout: object = None
+    #: (str|None) Informal error output of the run
     stderr: object = None
+    #: (str|None) The exception the executed code raised, as ```type: message```
     exception: object = None
 
 
@@ -143,7 +156,9 @@ class ToolResult:
 
     """
 
-    value: object = None  # a ToolValue, or None when nothing was returned
+    #: (ToolValue|None) The delivered value in prepared views, or ```None```
+    value: object = None
+    #: Facts about the run
     state: ToolStates = field(default_factory=ToolStates)
 
 
@@ -176,13 +191,21 @@ class ChatResult:
 
     """
 
+    #: Assistant message content
     text: str = ''
+    #: The model's reasoning, when available
     reasoning: str = ''
+    #: The model's explicit refusal message, when it declines
     refusal: str = ''
+    #: The ```ToolCall``` entries the model requested
     tool_calls: list = field(default_factory=list)
+    #: Token usage, when the provider reports it
     usage: Usage | None = None
+    #: Why the model stopped, when reported
     finish_reason: str | None = None
+    #: The backend configuration fingerprint, when reported
     system_fingerprint: str | None = None
+    #: The unmodified provider response
     raw: dict | None = None
 
 
@@ -223,17 +246,28 @@ class Invocation:
     # the decision values a guard sets / the loop reads, named here at the
     # concept (the invocation's decision field) so call sites use a constant,
     # not a bare string literal that a typo could silently break
+    #: The decision that lets the call run
     ALLOW = 'allow'
+    #: The decision that denies the call
     DENY = 'deny'
 
+    #: The provider-assigned tool-call id, echoed in the result
     id: str
+    #: The tool the model wants to call
     name: str
+    #: The parsed arguments for the call
     arguments: dict = field(default_factory=dict)
+    #: The called tool's parameters schema, ```None``` for an unknown tool
     parameters: dict | None = None
+    #: ```ALLOW``` or ```DENY```
     decision: str = ALLOW
+    #: Why a guard denied or flagged the call
     reason: str | None = None
+    #: The tool's result when it ran
     result: ToolResult | None = None
+    #: The text of a failure of the sandbox machinery
     error: str | None = None
+    #: The configured name of the sandbox the tool ran in
     sandbox: str | None = None
 
 
@@ -272,15 +306,19 @@ class TraceStep:
 
     """
 
+    #: Who produced this step: a governor, or the loop at a ```track```
     origin: object
+    #: The run object as it stood after this step
     object: object
+    #: Whether this step introduced a new object
     changed: bool = True
     # WHY a default factory: each step stamps its own creation time, so a
     # field default (shared) would be wrong; utc_now is tz-aware UTC, and the
     # json encoder formats it via to_utc_timestring
+    #: (datetime) When the step was recorded, in UTC
     at: object = field(default_factory=lambda: datetime_type.now(timezone.utc))
-    # the guard stage that recorded this step; None for a loop track (a fresh
-    # object the loop added outside any stage)
+    #: (str|None) The stage that recorded this step; ```None``` for a loop
+    #: track (a fresh object the loop added outside any stage)
     stage: object = None
 
 
@@ -303,7 +341,9 @@ class TokeoAiLoopdata:
 
     """
 
+    #: The number of tool rounds run so far, against ```max_steps```
     steps: int = 0
+    #: Consecutive rounds with no successful tool call, against ```max_loops```
     failed_loops: int = 0
 
 
@@ -341,6 +381,7 @@ class TokeoAiTraceNote:
 
     """
 
+    #: The noted value, as handed to ```track```
     content: object = None
 
 
@@ -380,7 +421,11 @@ class TokeoAiResult:
 
     """
 
+    #: The final model reply in full
     answer: ChatResult = field(default_factory=ChatResult)
+    #: The loop's live counters for the run
     loopdata: TokeoAiLoopdata = field(default_factory=TokeoAiLoopdata)
+    #: The run's ```TraceStep``` history, in order
     trace: list = field(default_factory=list)
+    #: Every confirm decision of the run, in order
     confirmations: list = field(default_factory=list)

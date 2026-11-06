@@ -51,9 +51,13 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
     class Meta:
         """The connection options of a profile, with their defaults."""
 
+        # the keys a profile may set under options, with their defaults
         config_defaults = dict(
+            # the base url of the endpoint, e.g. http://localhost:8000/v1
             base_url=None,
+            # the api key, sent as bearer token; None sends none
             key=None,
+            # seconds for one request to the endpoint
             timeout=120,
         )
 
