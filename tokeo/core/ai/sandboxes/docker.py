@@ -19,8 +19,8 @@ itself is the simplest choice.
 Always set, not configurable: ```--rm```, ```--cap-drop ALL```,
 ```--security-opt no-new-privileges```, never ```--privileged```, and every
 mount read-only. Configurable with safe defaults: no network, a read-only root
-file system with a ```/tmp``` of ```disk_mb```, a memory and a process limit, a
-timeout, a user that is not root, and ```output_mb``` for the output the host
+file system with a ```/tmp``` of ```max_disk_mb```, a memory and a process limit, a
+timeout, a user that is not root, and ```max_output_mb``` for the output the host
 reads.
 
 ```yaml
@@ -30,7 +30,7 @@ sandboxes:
     tools: [mathematics]
     options:
       image: myapp:latest
-      memory_mb: 256
+      max_memory_mb: 256
       timeout: 20
 ```
 
@@ -57,7 +57,7 @@ import subprocess
 
 from tokeo.core.utils.validate import is_int_ge
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError
-from tokeo.core.ai.sandbox import SANDBOX_OUTPUT_MAX_MB
+from tokeo.core.ai.sandbox import SANDBOX_MAX_OUTPUT_MB
 from tokeo.core.ai.sandboxes._common import (
     _get_importable_path,
     expand_env,
@@ -101,14 +101,14 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             python='python3',
             # a docker network, none = no network at all
             network='none',
-            # a read-only root file system with a tmpfs /tmp of disk_mb
+            # a read-only root file system with a tmpfs /tmp of max_disk_mb
             read_only=True,
             # MB of the tmpfs /tmp, the only writable place with read_only
-            disk_mb=64,
+            max_disk_mb=64,
             # MB of memory (cgroup), 0 = no limit
-            memory_mb=512,
+            max_memory_mb=512,
             # processes in the container, 0 = no limit
-            pids=128,
+            max_pids=128,
             # the user in the container, never root
             user='65534:65534',
             # {guest_path: host_path}, mounted read-only
@@ -120,7 +120,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             # true = one container for the process, else one per call
             reuse=False,
             # MB of stdout and stderr kept, and the largest reply read
-            output_mb=SANDBOX_OUTPUT_MAX_MB,
+            max_output_mb=SANDBOX_MAX_OUTPUT_MB,
         )
 
     def __init__(self, app, *args, **kw):
@@ -139,13 +139,13 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
 
         ### Returns
 
-        - **list[str]**: An error for a missing image, a root user, a disk_mb
-            that is no whole number from 1, or an output_mb not above 0
+        - **list[str]**: An error for a missing image, a root user, a max_disk_mb
+            that is no whole number from 1, or a max_output_mb not above 0
 
         """
         errors = TokeoAiSandbox.validate_options(self, options)
-        if 'disk_mb' in (options or {}) and not is_int_ge(options['disk_mb'], 1):
-            errors.append('disk_mb must be a whole number of MB, at least 1')
+        if 'max_disk_mb' in (options or {}) and not is_int_ge(options['max_disk_mb'], 1):
+            errors.append('max_disk_mb must be a whole number of MB, at least 1')
         if not (options or {}).get('image'):
             errors.append('image is required')
         if str((options or {}).get('user', '65534:65534')).split(':')[0] in ('root', '0'):
@@ -181,7 +181,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 arguments=arguments or {},
                 options=getattr(tool, '_tokeo_parent_instance_options', {}) or {},
                 limits={},
-                output_mb=self._config('output_mb'),
+                max_output_mb=self._config('max_output_mb'),
             )
         )
         # the image's own entrypoint (often the app) is replaced by python
@@ -209,9 +209,9 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 if self._container == name:
                     self._container = None
             raise
-        output_mb = self._config('output_mb')
+        max_output_mb = self._config('max_output_mb')
         result = result_from_reply(out, err, class_path, 'docker')
-        return check_output(result, output_bytes(output_mb), f'{output_mb:g} MB', class_path, 'docker')
+        return check_output(result, output_bytes(max_output_mb), f'{max_output_mb:g} MB', class_path, 'docker')
 
     def close(self):
         """Remove the container of ```reuse```, if one is running."""
@@ -231,11 +231,11 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         args += ['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges']
         args += ['--network', str(self._config('network'))]
         if self._config('read_only'):
-            args += ['--read-only', '--tmpfs', f'/tmp:rw,noexec,nosuid,size={self._config("disk_mb")}m']
-        if self._config('memory_mb'):
-            args += ['--memory', f'{self._config("memory_mb")}m']
-        if self._config('pids'):
-            args += ['--pids-limit', str(self._config('pids'))]
+            args += ['--read-only', '--tmpfs', f'/tmp:rw,noexec,nosuid,size={self._config("max_disk_mb")}m']
+        if self._config('max_memory_mb'):
+            args += ['--memory', f'{self._config("max_memory_mb")}m']
+        if self._config('max_pids'):
+            args += ['--pids-limit', str(self._config('max_pids'))]
         if self._config('user'):
             args += ['--user', str(self._config('user'))]
         for guest_path, host_path in (self._config('mounts') or {}).items():
@@ -246,9 +246,9 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
 
     def _run_client(self, args, job, class_path):
         # run the client, stdin carries the job; a timeout is a failure. stdout
-        # and stderr go to files and are read at most output_mb, so a reply
+        # and stderr go to files and are read at most max_output_mb, so a reply
         # without end cannot fill the memory of the host
-        output_mb = self._config('output_mb')
+        max_output_mb = self._config('max_output_mb')
         with tempfile.TemporaryFile() as out_file, tempfile.TemporaryFile() as err_file:
             try:
                 proc = subprocess.run(
@@ -264,8 +264,8 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 raise TokeoAiError(f'the docker sandbox cannot run {args[0]!r}: {err}')
             out_file.seek(0)
             err_file.seek(0)
-            out = read_reply(out_file, output_bytes(output_mb), f'{output_mb:g} MB', class_path, 'docker')
-            err = read_diagnostics(err_file, output_bytes(output_mb))
+            out = read_reply(out_file, output_bytes(max_output_mb), f'{max_output_mb:g} MB', class_path, 'docker')
+            err = read_diagnostics(err_file, output_bytes(max_output_mb))
         if job is None and proc.returncode != 0:
             raise TokeoAiError(f'the docker sandbox cannot start its container: {err.strip()[:200]}')
         return out, err

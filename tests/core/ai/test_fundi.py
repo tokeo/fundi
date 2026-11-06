@@ -76,7 +76,7 @@ def test_runner_memory_limit_falls_back_per_platform(monkeypatch):
     monkeypatch.setattr(res_mod, 'getrlimit', fake_getrlimit)
     monkeypatch.setattr(res_mod, 'setrlimit', fake_setrlimit)
     # must fall through to the next mechanism instead of crashing the call
-    runner._set_limits({'memory_mb': 64})
+    runner._set_limits({'max_memory_mb': 64})
     assert res_mod.RLIMIT_DATA in attempts
 
 
@@ -100,7 +100,7 @@ def test_runner_memory_limit_soft_only_when_hard_is_refused(monkeypatch):
 
     monkeypatch.setattr(res_mod, 'getrlimit', fake_getrlimit)
     monkeypatch.setattr(res_mod, 'setrlimit', fake_setrlimit)
-    runner._set_limits({'memory_mb': 64})
+    runner._set_limits({'max_memory_mb': 64})
     memory_bytes = 64 * 1024 * 1024
     # first the pinned pair, then the accepted soft-only fallback
     assert calls == [(memory_bytes, memory_bytes), (memory_bytes, res_mod.RLIM_INFINITY)]
@@ -118,7 +118,7 @@ def test_runner_memory_limit_refuses_a_sham_limit(monkeypatch):
     monkeypatch.setattr(res_mod, 'setrlimit', fake_setrlimit)
     # a configured limit that cannot be kept must error, not silently skip
     with pytest.raises(RuntimeError, match='not enforceable'):
-        runner._set_limits({'memory_mb': 64})
+        runner._set_limits({'max_memory_mb': 64})
 
 
 def test_setup_reads_the_item_once_and_is_idempotent():

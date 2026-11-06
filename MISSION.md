@@ -38,10 +38,10 @@ run") and an isolation boundary ("it runs behind this wall") are different
 things with different guarantees. Fundi keeps them apart: a *governor* decides,
 a *sandbox* contains, and no governor ever runs inside a sandbox.
 
-**Security promises cannot be checked.** Whoever offers ```memory_mb``` and
+**Security promises cannot be checked.** Whoever offers ```max_memory_mb``` and
 cannot enforce it on the target platform sells theatre. On current macOS the
 kernel refuses realistic memory limits for a fresh interpreter; fundi then fails
-the call with "memory limit (memory_mb) is not enforceable on this platform"
+the call with "memory limit (max_memory_mb) is not enforceable on this platform"
 instead of letting it run unlimited. The documentation says it plainly:
 ```in_process``` is no isolation, ```subprocess``` separates errors and
 resources but is no jail, real isolation needs the docker or the WebAssembly

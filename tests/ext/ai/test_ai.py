@@ -34,7 +34,7 @@ ENV = 'tests.ext.ai.lib.ai_tests_helper:EnvTool'
 # address space and the runner refuses sham limits by design
 JAILED_OPTIONS = dict(timeout=5)
 if sys.platform == 'linux':
-    JAILED_OPTIONS['memory_mb'] = 256
+    JAILED_OPTIONS['max_memory_mb'] = 256
 SLEEP = 'tests.ext.ai.lib.ai_tests_helper:SleepTool'
 SPAWN = 'tests.ext.ai.lib.ai_tests_helper:SpawnTool'
 CHATTER = 'tests.ext.ai.lib.ai_tests_helper:ChatterTool'

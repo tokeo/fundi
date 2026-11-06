@@ -138,8 +138,8 @@ def test_the_docker_sandbox_mounts_read_only_and_passes_only_its_env(docker, mon
 
 
 def test_the_docker_sandbox_takes_its_limits_from_the_options(docker):
-    """network, read_only, memory_mb, pids and user follow the options."""
-    cfg = make_ai_config(docker, network='bridge', read_only=False, memory_mb=0, pids=0, user='1000:1000', python='python3.13')
+    """network, read_only, max_memory_mb, max_pids and user follow the options."""
+    cfg = make_ai_config(docker, network='bridge', read_only=False, max_memory_mb=0, max_pids=0, user='1000:1000', python='python3.13')
     with DockerTest(config_defaults=cfg) as app:
         run_tool(app, 'echo', dict(text='x'))
     args = get_docker_calls(docker)[0]
@@ -151,16 +151,16 @@ def test_the_docker_sandbox_takes_its_limits_from_the_options(docker):
 
 
 def test_disk_mb_sizes_the_tmpfs_of_a_read_only_container(docker):
-    """disk_mb 16 makes /tmp a tmpfs of 16m."""
-    with DockerTest(config_defaults=make_ai_config(docker, disk_mb=16)) as app:
+    """max_disk_mb 16 makes /tmp a tmpfs of 16m."""
+    with DockerTest(config_defaults=make_ai_config(docker, max_disk_mb=16)) as app:
         run_tool(app, 'echo', dict(text='x'))
     args = get_docker_calls(docker)[0]
     assert args[args.index('--tmpfs') + 1] == '/tmp:rw,noexec,nosuid,size=16m'
 
 
 def test_the_docker_sandbox_cuts_the_output_and_refuses_a_large_value(docker):
-    """output_mb 0.001: 5000 bytes printed are cut, a value of 5000 bytes fails."""
-    with DockerTest(config_defaults=make_ai_config(docker, output_mb=0.001)) as app:
+    """max_output_mb 0.001: 5000 bytes printed are cut, a 5000 byte value fails."""
+    with DockerTest(config_defaults=make_ai_config(docker, max_output_mb=0.001)) as app:
         out = run_tool(app, 'loud', dict(size=5000))
         assert out.state.stdout == 'x' * 1048 + '\n[... cut after 0.001 MB]'
         with pytest.raises(TokeoAiError, match='delivered more than 0.001 MB in the docker sandbox'):
@@ -246,9 +246,9 @@ def test_the_docker_sandbox_needs_an_image(docker):
         (dict(user='root'), 'ai.sandboxes.docked.options', 'user must not be root'),
         (dict(user='0:0'), 'ai.sandboxes.docked.options', 'user must not be root'),
         (dict(privileged=True), 'ai.sandboxes.docked.options.privileged', "unknown option 'privileged'"),
-        (dict(disk_mb=0), 'ai.sandboxes.docked.options', 'disk_mb must be a whole number'),
-        (dict(disk_mb=1.5), 'ai.sandboxes.docked.options', 'disk_mb must be a whole number'),
-        (dict(output_mb=0), 'ai.sandboxes.docked.options', 'output_mb must be a number of MB above 0'),
+        (dict(max_disk_mb=0), 'ai.sandboxes.docked.options', 'max_disk_mb must be a whole number'),
+        (dict(max_disk_mb=1.5), 'ai.sandboxes.docked.options', 'max_disk_mb must be a whole number'),
+        (dict(max_output_mb=0), 'ai.sandboxes.docked.options', 'max_output_mb must be a number of MB above 0'),
     ],
 )
 def test_the_linter_checks_the_docker_options(options, path, message):

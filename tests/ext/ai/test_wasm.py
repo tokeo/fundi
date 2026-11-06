@@ -115,7 +115,7 @@ def make_wasm_ai_config():
             wasm_untrusted=dict(
                 type='tokeo.core.ai.sandboxes:TokeoAiWasmSandbox',
                 tools=['run_untrusted'],
-                options=dict(runtime=_RUNTIME, stdlib=_STDLIB, memory_mb=256, timeout=10),
+                options=dict(runtime=_RUNTIME, stdlib=_STDLIB, max_memory_mb=256, timeout=10),
             ),
             # trusted: the app is mounted so the tool can be rebuilt in the guest
             wasm_trusted=dict(
@@ -124,7 +124,7 @@ def make_wasm_ai_config():
                 options=dict(
                     runtime=_RUNTIME,
                     stdlib=_STDLIB,
-                    memory_mb=256,
+                    max_memory_mb=256,
                     timeout=10,
                     # the tool's base class needs tokeo, tokeo-fundi AND cement (a
                     # separate site-packages tree), so mount both read-only
@@ -406,33 +406,33 @@ def test_the_linter_checks_the_watch_interval(value, valid):
 
 @needs_build
 def test_the_watcher_stops_a_guest_that_writes_endlessly():
-    """A guest writing to /io without end stops at disk_mb 1, before any timeout."""
+    """A guest writing to /io endlessly stops at max_disk_mb 1, before a timeout."""
     code = 'f = open("/io/fill", "w")\nwhile True:\n    f.write("x" * 65536)\n    f.flush()'
     with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
-        run_untrusted(code, disk_mb=1, timeout=None)
+        run_untrusted(code, max_disk_mb=1, timeout=None)
 
 
 @needs_build
 def test_the_watcher_counts_what_a_guest_prints():
-    """A guest printing without end fills no host disk: disk_mb 1 stops it."""
+    """A guest printing without end fills no host disk: max_disk_mb 1 stops it."""
     with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
-        run_untrusted('while True:\n    print("x" * 65536)', disk_mb=1, timeout=None)
+        run_untrusted('while True:\n    print("x" * 65536)', max_disk_mb=1, timeout=None)
 
 
 @needs_build
 def test_the_wasm_sandbox_cuts_the_output_and_refuses_a_large_value():
-    """output_mb 0.001: 5000 bytes printed are cut, a value of 5000 bytes fails."""
-    out = run_untrusted('print("x" * 5000)\n1', output_mb=0.001)
+    """max_output_mb 0.001: 5000 bytes printed are cut, a 5000 byte value fails."""
+    out = run_untrusted('print("x" * 5000)\n1', max_output_mb=0.001)
     assert out.state.stdout == 'x' * 1048 + '\n[... cut after 0.001 MB]'
     with pytest.raises(TokeoAiError, match='delivered more than 0.001 MB in the wasm sandbox'):
-        run_untrusted('"z" * 5000', output_mb=0.001)
+        run_untrusted('"z" * 5000', max_output_mb=0.001)
 
 
 @needs_build
 def test_a_quick_guest_over_the_disk_limit_fails_too():
-    """2 MB written at once with disk_mb 1 fails, even if the guest ended first."""
+    """2 MB written at once with max_disk_mb 1 fails, even if the guest ended."""
     with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
-        run_untrusted('open("/io/big", "w").write("x" * 2 * 1024 * 1024)\n1', disk_mb=1)
+        run_untrusted('open("/io/big", "w").write("x" * 2 * 1024 * 1024)\n1', max_disk_mb=1)
 
 
 @needs_build
@@ -444,10 +444,10 @@ def test_the_watcher_counts_the_files_a_guest_creates():
 
 @needs_build
 def test_the_watcher_counts_only_what_the_guest_adds_to_work(tmp):
-    """A 2 MB file already in cwd is not the guest's, disk_mb 1 still passes."""
+    """A 2 MB file already in cwd is not the guest's, max_disk_mb 1 still passes."""
     with open(os.path.join(tmp.dir, 'kept'), 'w') as f:
         f.write('x' * 2 * 1024 * 1024)
-    assert run_untrusted('"ok"', cwd=tmp.dir, disk_mb=1).value.as_str == 'ok'
+    assert run_untrusted('"ok"', cwd=tmp.dir, max_disk_mb=1).value.as_str == 'ok'
 
 
 @needs_build

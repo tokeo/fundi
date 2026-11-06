@@ -171,7 +171,7 @@ transformers:
   truncate:                       # a project transformer by class path
     type: myapp.core.ai.transformers.truncate:MyAppAiTruncateTransformer
     options:
-      limit: 500
+      max_chars: 500
 ```
 
 ### 4.2 Per-stage options
@@ -184,10 +184,10 @@ transformers:
   truncate:
     type: myapp.core.ai.transformers.truncate:MyAppAiTruncateTransformer
     options:
-      limit: 2000           # the default for every stage
+      max_chars: 2000       # the default for every stage
     on_close:
       options:
-        limit: 200          # but shorten the final answer harder
+        max_chars: 200      # but shorten the final answer harder
 ```
 
 ### 4.3 Composing governors on an agent
@@ -420,19 +420,19 @@ around it.
 | Limit | ```in_process``` | ```subprocess``` | ```docker``` | wasm |
 |---|---|---|---|---|
 | run time (```timeout```) | no | yes, SIGKILL to the group | yes, the container is killed | yes, a timer stops the guest |
-| memory (```memory_mb```) | no | yes, rlimit (macos rejects small limits) | yes, cgroup | yes, store limits |
-| processes (```pids```) | no | no, all end with the call | yes | no processes |
-| disk (```disk_mb```) | no | no | yes, the tmpfs ```/tmp``` with ```read_only``` | yes, ```/io```, ```/work```, stdout and stderr |
+| memory (```max_memory_mb```) | no | yes, rlimit (macos rejects small limits) | yes, cgroup | yes, store limits |
+| processes (```max_pids```) | no | no, all end with the call | yes | no processes |
+| disk (```max_disk_mb```) | no | no | yes, the tmpfs ```/tmp``` with ```read_only``` | yes, ```/io```, ```/work```, stdout and stderr |
 | files (```max_files```) | no | no | no | yes |
 | network | no | no | yes, ```network: none``` | yes, there is none |
 | visible files (```mounts```) | all | all | only the mounts, read-only | only the mounts and ```cwd``` |
 | environment (```env```) | the app's | only ```env``` | only ```env``` | only ```env``` |
-| output (```output_mb```) | yes | yes | yes | yes |
+| output (```max_output_mb```) | yes | yes | yes | yes |
 
-```output_mb``` limits two things in every sandbox. The captured stdout and
-stderr of a tool keep their first ```output_mb``` each and end with a mark
+```max_output_mb``` limits two things in every sandbox. The captured stdout and
+stderr of a tool keep their first ```max_output_mb``` each and end with a mark
 ```[... cut after 1 MB]```; they are hints, so a cut is no error. The reply the
-host reads (the value) is read up to ```output_mb``` only; a larger reply is an
+host reads (the value) is read up to ```max_output_mb``` only; a larger reply is an
 error ```tool ... delivered more than 1 MB```. So a tool cannot fill the memory
 of the host, whatever it prints or returns.
 
@@ -440,8 +440,8 @@ of the host, whatever it prints or returns.
 
     In ```subprocess``` and ```docker``` a tool that writes past its capture
     straight to the file descriptor 1 still grows a temporary file on the host
-    disk; the host reads only ```output_mb``` of it. Where the disk must be
-    safe from the tool, use the wasm sandbox (```disk_mb```).
+    disk; the host reads only ```max_output_mb``` of it. Where the disk must be
+    safe from the tool, use the wasm sandbox (```max_disk_mb```).
 
 ### 5.2 ```in_process```
 
@@ -450,7 +450,7 @@ wall. Name only trusted, quick tools here.
 
 | Option | Default | Values | Enforced by |
 |---|---|---|---|
-| ```output_mb``` | ```1``` | a number above 0 | the capture buffer |
+| ```max_output_mb``` | ```1``` | a number above 0 | the capture buffer |
 
 ```yaml
 sandboxes:
@@ -458,7 +458,7 @@ sandboxes:
     type: in_process
     tools: [calendar]
     options:
-      output_mb: 1              # stdout and stderr kept per call
+      max_output_mb: 1          # stdout and stderr kept per call
 ```
 
 ### 5.3 ```subprocess```
@@ -470,10 +470,10 @@ runaway, it is no jail: the tool can read files and reach the network.
 | Option | Default | Values | Enforced by |
 |---|---|---|---|
 | ```timeout``` | ```null``` | seconds, ```null``` = no limit | the host, SIGKILL to the group |
-| ```memory_mb``` | ```null``` | MB, ```null``` = no limit | the kernel, rlimit (RLIMIT_AS, else RLIMIT_DATA); macos rejects small limits, the call then fails |
+| ```max_memory_mb``` | ```null``` | MB, ```null``` = no limit | the kernel, rlimit (RLIMIT_AS, else RLIMIT_DATA); macos rejects small limits, the call then fails |
 | ```cwd``` | ```null``` | a directory, created on demand | nothing, it steers relative paths |
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | the host, nothing else is set |
-| ```output_mb``` | ```1``` | a number above 0 | the runner (capture), the host (reply) |
+| ```max_output_mb``` | ```1``` | a number above 0 | the runner (capture), the host (reply) |
 
 ```yaml
 sandboxes:
@@ -482,11 +482,11 @@ sandboxes:
     tools: [mathematics]
     options:
       timeout: 10               # seconds, then the group is killed
-      memory_mb: 256            # rlimit (linux; macos rejects small limits)
+      max_memory_mb: 256        # rlimit (linux; macos rejects small limits)
       cwd: tmp/sandbox          # working dir for relative paths
       env:                      # only these variables, ${NAME} expands
         TZ: ${TZ}
-      output_mb: 1              # stdout and stderr kept, largest reply
+      max_output_mb: 1          # stdout and stderr kept, largest reply
 ```
 
 ### 5.4 ```docker```
@@ -504,15 +504,15 @@ read-only. Several docker sandboxes may differ in their rights.
 | ```python``` | ```python3``` | the interpreter in the image | the client |
 | ```network``` | ```none``` | a docker network, ```none``` = no network | docker |
 | ```read_only``` | ```true``` | ```true```, ```false``` | docker |
-| ```disk_mb``` | ```64``` | a whole number from 1, the tmpfs ```/tmp``` (with ```read_only```) | docker |
-| ```memory_mb``` | ```512``` | MB, ```0``` = no limit | docker, cgroup |
-| ```pids``` | ```128``` | processes, ```0``` = no limit | docker |
+| ```max_disk_mb``` | ```64``` | a whole number from 1, the tmpfs ```/tmp``` (with ```read_only```) | docker |
+| ```max_memory_mb``` | ```512``` | MB, ```0``` = no limit | docker, cgroup |
+| ```max_pids``` | ```128``` | processes, ```0``` = no limit | docker |
 | ```user``` | ```65534:65534``` | ```uid:gid```, never root (lint error) | docker |
 | ```mounts``` | ```null``` | ```{guest_path: host_path}```, read-only | docker |
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | docker, nothing else is set |
 | ```timeout``` | ```30``` | seconds | the host, then the container is killed |
 | ```reuse``` | ```false``` | ```true``` = one container for the process | the host |
-| ```output_mb``` | ```1``` | a number above 0 | the runner (capture), the host (reply) |
+| ```max_output_mb``` | ```1``` | a number above 0 | the runner (capture), the host (reply) |
 
 ```yaml
 sandboxes:
@@ -524,9 +524,9 @@ sandboxes:
       command: docker           # or podman (rootless)
       network: none             # a docker network, none = no network
       read_only: true           # read-only root, a tmpfs /tmp
-      disk_mb: 64               # size of /tmp
-      memory_mb: 512            # memory limit, 0 = none
-      pids: 128                 # process limit, 0 = none
+      max_disk_mb: 64           # size of /tmp
+      max_memory_mb: 512        # memory limit, 0 = none
+      max_pids: 128             # process limit, 0 = none
       user: '65534:65534'       # never root
       mounts:                   # guest path: host path, read-only
         /data: ./data
@@ -534,7 +534,7 @@ sandboxes:
         TZ: ${TZ}
       timeout: 30               # seconds, then the container is killed
       reuse: false              # true = one container for the process
-      output_mb: 1              # stdout and stderr kept, largest reply
+      max_output_mb: 1          # stdout and stderr kept, largest reply
 ```
 
 .. warning::
@@ -544,7 +544,7 @@ sandboxes:
     podman, and never mount the docker socket into a container of the app.
 
 With ```read_only: false``` the container writes to its own layer on the host
-disk and ```disk_mb``` has no effect; keep ```read_only``` where the disk
+disk and ```max_disk_mb``` has no effect; keep ```read_only``` where the disk
 matters.
 
 ### 5.5 wasm
@@ -562,13 +562,13 @@ guest works is in the guide ```WASM.md``` of the sandboxes.
 | ```cwd``` | ```null``` | a host directory, read-write at ```/work``` | the host |
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | the host, nothing else is set |
 | ```timeout``` | ```null``` | seconds, ```null``` = no limit | the host, a timer at the epoch |
-| ```memory_mb``` | ```null``` | MB, ```null``` = no limit | Wasmtime, store limits |
-| ```disk_mb``` | ```64``` | MB the guest adds to ```/io```, ```/work```, stdout and stderr; ```null``` = no limit | the host, the watcher |
+| ```max_memory_mb``` | ```null``` | MB, ```null``` = no limit | Wasmtime, store limits |
+| ```max_disk_mb``` | ```64``` | MB the guest adds to ```/io```, ```/work```, stdout and stderr; ```null``` = no limit | the host, the watcher |
 | ```max_files``` | ```1000``` | files and dirs the guest adds to ```/io``` and ```/work```; ```null``` = no limit | the host, the watcher |
-| ```watch_interval``` | ```1.0``` | seconds between two checks of ```disk_mb``` and ```max_files```, at least ```0.1``` | the host |
+| ```watch_interval``` | ```1.0``` | seconds between two checks of ```max_disk_mb``` and ```max_files```, at least ```0.1``` | the host |
 | ```cache``` | ```null``` | a directory only the operator can write | the host |
 | ```shim_wasi_stdlib``` | ```true``` | ```true```, ```false``` | the host, trusted path only |
-| ```output_mb``` | ```1``` | a number above 0 | the host |
+| ```max_output_mb``` | ```1``` | a number above 0 | the host |
 
 ```yaml
 sandboxes:
@@ -578,12 +578,12 @@ sandboxes:
     options:
       runtime: ./wasm/python.wasm
       stdlib: ./wasm/lib/python3.13
-      memory_mb: 256            # hard limit, the same on every platform
+      max_memory_mb: 256        # hard limit, the same on every platform
       timeout: 10               # seconds
-      disk_mb: 64               # what the guest may write
+      max_disk_mb: 64           # what the guest may write
       max_files: 1000           # what the guest may create
       watch_interval: 1.0       # seconds between the disk and file checks
-      output_mb: 1              # stdout and stderr kept, largest value
+      max_output_mb: 1          # stdout and stderr kept, largest value
 ```
 
 ## 6. The compositions in ```agents```

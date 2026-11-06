@@ -57,5 +57,5 @@ class TokeoAiTruncateTransformer(TokeoAiTransformer):
         """Truncate transformer meta-data."""
 
         # no configurable options; empty per the config_defaults rule. a
-        # concrete truncate transformer declares its own (e.g. limit, marker)
+        # concrete truncate transformer declares its own (e.g. max_chars, marker)
         config_defaults = {}

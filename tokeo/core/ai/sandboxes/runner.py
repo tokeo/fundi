@@ -14,8 +14,8 @@ The job has the shape::
       "tool": "dotted.path.To.ToolClass",
       "arguments": { ... },          # the parsed call arguments
       "options": { ... },            # the tool item's options, as configured
-      "limits": { "memory_mb": 256 },  # limits to enforce in this process
-      "output_mb": 1                 # MB of stdout and stderr kept per stream
+      "limits": { "max_memory_mb": 256 },  # limits to enforce in this process
+      "max_output_mb": 1                 # MB of stdout and stderr kept per stream
     }
 
 The reply is the JSON-encoded ```ToolResult``` on success::
@@ -56,10 +56,10 @@ def _set_limits(limits):
     # apply what a child process can truly enforce on itself BEFORE the tool
     # is imported, so even import-time work is limited. the wall-clock timeout
     # is the parent's job (it kills the child), not something the child sets
-    memory_mb = (limits or {}).get('memory_mb')
-    if not memory_mb:
+    max_memory_mb = (limits or {}).get('max_memory_mb')
+    if not max_memory_mb:
         return
-    memory_bytes = int(memory_mb) * 1024 * 1024
+    memory_bytes = int(max_memory_mb) * 1024 * 1024
     # WHY two mechanisms and retries: linux sets rlimits as asked and
     # enforces them on future allocations. current macos (xnu) delegates
     # RLIMIT_AS/RLIMIT_DATA to mach vm and rejects any limit BELOW the
@@ -93,7 +93,7 @@ def _set_limits(limits):
     # WHY error out: a configured limit is a promise. if no mechanism on this
     # platform can keep it, a sham limit that silently runs unlimited would
     # lie to the config; fail the call with a clear reason instead
-    raise RuntimeError('memory limit (memory_mb) is not enforceable on this platform')
+    raise RuntimeError('memory limit (max_memory_mb) is not enforceable on this platform')
 
 
 def _load_tool(class_path, options):
@@ -156,10 +156,10 @@ def main():
     # capture the tool's own stdout/stderr while it runs: a print() must not
     # reach the real stdout, where it would corrupt the single JSON reply the
     # parent reads. the buffers also hold output a tool emitted before raising,
-    # and keep at most output_mb each, so the reply stays small
-    output_mb = job.get('output_mb') or 1
-    out_buf = OutputBuffer(output_bytes(output_mb), f'{output_mb:g} MB')
-    err_buf = OutputBuffer(output_bytes(output_mb), f'{output_mb:g} MB')
+    # and keep at most max_output_mb each, so the reply stays small
+    max_output_mb = job.get('max_output_mb') or 1
+    out_buf = OutputBuffer(output_bytes(max_output_mb), f'{max_output_mb:g} MB')
+    err_buf = OutputBuffer(output_bytes(max_output_mb), f'{max_output_mb:g} MB')
     try:
         with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
             output = tool.exec(**(job.get('arguments') or {}))

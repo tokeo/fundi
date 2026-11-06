@@ -214,7 +214,7 @@ ai:
       options:
         runtime: ./wasm/python.wasm
         stdlib: ./wasm/lib/python3.13
-        memory_mb: 256
+        max_memory_mb: 256
         timeout: 10
 
     # trusted: the tool is rebuilt in the guest, so it needs the framework,
@@ -226,7 +226,7 @@ ai:
       options:
         runtime: ./wasm/python.wasm
         stdlib: ./wasm/lib/python3.13
-        memory_mb: 256
+        max_memory_mb: 256
         timeout: 10
         mounts:
           /tokeo: /path/to/tokeo            # the tokeo source root
@@ -271,14 +271,14 @@ matters beyond the table:
 
 - ```mounts``` are the entire attack surface: only what you mount is visible.
   Empty means the guest sees no host code at all.
-- ```disk_mb``` counts what the guest adds to ```/io``` and ```/work``` and what it
+- ```max_disk_mb``` counts what the guest adds to ```/io``` and ```/work``` and what it
   writes to stdout and stderr. What is in ```/work``` before the run does not
   count.
 - ```watch_interval```: each check walks ```/io```, ```/work``` and the captured
   output, so a large ```/work``` costs more per check; a longer interval lets
   the guest write more past the limit before it is stopped. A check after the
   run catches what is left.
-- ```output_mb``` cuts stdout and stderr at that size (with a mark) and makes a
+- ```max_output_mb``` cuts stdout and stderr at that size (with a mark) and makes a
   larger value an error.
 - ```cache```: the first run compiles ```python.wasm``` (about 2 s) and stores it
   there, later runs of any process load it in milliseconds. A file in it is
@@ -309,7 +309,7 @@ There is no stdin runner here. For each call the sandbox:
 4. Runs the interpreter on the entry script with a scrubbed environment, a hard
    memory limit, and an epoch deadline. The guest's stdout and stderr go to files
    the host keeps outside ```/io```, out of the guest's reach; they count for
-   ```disk_mb``` and are cut at ```output_mb```.
+   ```max_disk_mb``` and are cut at ```max_output_mb```.
 5. The guest entry either runs the ```code``` argument directly (untrusted,
    ```_GUEST_ENTRY_EXEC_PYSNIPPET```) or rebuilds the tool and calls it
    (trusted, ```_GUEST_ENTRY_EXEC_TOOL```); the two are detailed under the trust
@@ -317,7 +317,7 @@ There is no stdin runner here. For each call the sandbox:
    ```/io/value.json```: its model-facing string, its json, and whether the json
    is incomplete. No file means no value.
 6. The host builds the ```ToolResult```: the value from ```/io/value.json``` (read
-   with ```json.loads``` up to ```output_mb```), the states from what it
+   with ```json.loads``` up to ```max_output_mb```), the states from what it
    observed itself. A clean exit leaves ```exception``` empty. A tool or snippet
    that raises exits with code 1: the result has no value and the last stderr
    line as ```exception``` (a tool error, A). A failure of the entry's own
@@ -563,7 +563,7 @@ runs. A missing source ends the run with an error. The rules:
   of the list; a test checks that by the syntax tree.
 - The guest writes only ```/io``` and ```/work```; everything else is read-only.
 - The guest hands back only data: the value in ```/io/value.json```, read with
-  ```json.loads``` up to ```output_mb```, with ```incomplete```. The
+  ```json.loads``` up to ```max_output_mb```, with ```incomplete```. The
   exit code, a trap and the timeout are observed by the host; the text of
   stdout, stderr and the exception is the guest's and only a hint.
 - ```PYTHONDONTWRITEBYTECODE=1```: the guest writes no bytecode next to the
@@ -602,7 +602,7 @@ The guest cannot:
 - Open a socket; the syscalls do not exist in its world.
 - Read a host file outside the explicit mounts.
 - Exceed the memory limit (a runaway allocation traps).
-- Outrun the timeout, or write more than ```disk_mb``` or ```max_files``` into
+- Outrun the timeout, or write more than ```max_disk_mb``` or ```max_files``` into
   ```/io``` and ```/work```.
 
 A watcher thread checks the time, the bytes, and the files every 0.1 s and stops
@@ -654,7 +654,7 @@ source root is not mounted. The trusted tool is rebuilt from
 ```PYTHONPATH``` alongside the app.
 
 A "wrote more than N MB" or "created more than N files" error: the snippet
-exceeded ```disk_mb``` or ```max_files```. Raise the limit if the tool needs
+exceeded ```max_disk_mb``` or ```max_files```. Raise the limit if the tool needs
 the space, or check the code is not writing in a loop.
 
 A "timed out after Ns" error: the snippet exceeded ```timeout```. Raise

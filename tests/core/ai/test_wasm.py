@@ -29,15 +29,15 @@ _SPIN_WAT = r"""(module (memory (export "memory") 1)
   (func (export "_start") (loop $s (br $s))))"""
 
 
-def _run_wat(wat, memory_mb=None, timeout=None):
+def _run_wat(wat, max_memory_mb=None, timeout=None):
     wasmtime = pytest.importorskip('wasmtime')
     config = wasmtime.Config()
     if timeout:
         config.epoch_interruption = True
     engine = wasmtime.Engine(config)
     store = wasmtime.Store(engine)
-    if memory_mb:
-        store.set_limits(memory_size=memory_mb * 1024 * 1024)
+    if max_memory_mb:
+        store.set_limits(memory_size=max_memory_mb * 1024 * 1024)
     linker = wasmtime.Linker(engine)
     linker.define_wasi()
     store.set_wasi(wasmtime.WasiConfig())
@@ -62,7 +62,7 @@ def test_wasm_memory_limit_is_hard():
     """
     wasmtime = pytest.importorskip('wasmtime')
     with pytest.raises(wasmtime.Trap):
-        _run_wat(_GROW_WAT, memory_mb=8)
+        _run_wat(_GROW_WAT, max_memory_mb=8)
 
 
 def test_wasm_timeout_interrupts_a_spin():

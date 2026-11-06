@@ -12,9 +12,9 @@ from tokeo.core.utils.validate import is_number_gt
 from tokeo.core.ai.exc import TokeoAiError
 
 #: The MB of output a sandbox takes from one tool run, the default of the
-#: option output_mb: the captured stdout and stderr are cut there, a larger
+#: option max_output_mb: the captured stdout and stderr are cut there, a larger
 #: reply is an error.
-SANDBOX_OUTPUT_MAX_MB = 1
+SANDBOX_MAX_OUTPUT_MB = 1
 
 
 class TokeoAiSandbox(MetaMixin):
@@ -63,7 +63,7 @@ class TokeoAiSandbox(MetaMixin):
         timeout, a memory limit, a container name, a scratch mount ...) is the
         concrete mechanism's business, set in its own ```config_defaults```;
         the linter reports any other key as an error, values are checked by
-        ```validate_options```. Every built-in sandbox has ```output_mb```.
+        ```validate_options```. Every built-in sandbox has ```max_output_mb```.
         """
 
         # the configurable defaults, as one dict; the item's options overlay
@@ -127,7 +127,7 @@ class TokeoAiSandbox(MetaMixin):
 
         ### Args
 
-        - **key** (str): The option key (e.g. ```timeout```, ```memory_mb```)
+        - **key** (str): The option key (e.g. ```timeout```, ```max_memory_mb```)
         - **fallback** (any, optional): Returned when the key is absent
 
         ### Returns
@@ -172,7 +172,7 @@ class TokeoAiSandbox(MetaMixin):
         Validate the item's ```options``` for the linter.
 
         The linter checks the keys against ```Meta.config_defaults```. The base
-        checks ```output_mb```, the option every built-in sandbox has; a
+        checks ```max_output_mb```, the option every built-in sandbox has; a
         derivation that checks more values calls it and adds its own errors.
 
         ### Args
@@ -185,6 +185,6 @@ class TokeoAiSandbox(MetaMixin):
 
         """
         errors = []
-        if 'output_mb' in (options or {}) and not is_number_gt(options['output_mb'], 0):
-            errors.append('output_mb must be a number of MB above 0')
+        if 'max_output_mb' in (options or {}) and not is_number_gt(options['max_output_mb'], 0):
+            errors.append('max_output_mb must be a number of MB above 0')
         return errors

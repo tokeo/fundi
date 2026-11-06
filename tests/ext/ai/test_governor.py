@@ -220,14 +220,14 @@ def test_governor_config_reads_a_key_honouring_the_stage():
             app,
             'truncate',
             {
-                'options': {'limit': 10, 'marker': '...'},
-                'on_close': {'options': {'limit': 99}},
+                'options': {'max_chars': 10, 'marker': '...'},
+                'on_close': {'options': {'max_chars': 99}},
             },
         )
-        assert governor._config('limit') == 10
-        assert governor._config('limit', stage='on_close') == 99
+        assert governor._config('max_chars') == 10
+        assert governor._config('max_chars', stage='on_close') == 99
         assert governor._config('marker', stage='on_close') == '...'
-        assert governor._config('limit', stage='on_return') == 10
+        assert governor._config('max_chars', stage='on_return') == 10
         assert governor._config('missing', fallback='x') == 'x'
 
 

@@ -124,20 +124,20 @@ def result_from_reply(stdout, stderr, class_path, sandbox_type):
     return ToolResult(value=value, state=state)
 
 
-def output_bytes(output_mb):
+def output_bytes(max_output_mb):
     """
-    Turn the option ```output_mb``` into bytes.
+    Turn the option ```max_output_mb``` into bytes.
 
     ### Args
 
-    - **output_mb** (int|float): The MB of the option
+    - **max_output_mb** (int|float): The MB of the option
 
     ### Returns
 
     - **int**: The bytes
 
     """
-    return int(output_mb * 1024 * 1024)
+    return int(max_output_mb * 1024 * 1024)
 
 
 class OutputBuffer(io.StringIO):
