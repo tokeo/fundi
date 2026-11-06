@@ -224,7 +224,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
     def _confirm_run(self, ctx, stage, subject):
         # the stages without a tool call: the guards there cannot deny, the
         # decision is allow; a no ends the run in order
-        answer = self._ask(ctx, stage, subject, Invocation.ALLOW, None, f'{stage}:{ctx.loopdata.steps}')
+        answer = self._get_answer(ctx, stage, subject, Invocation.ALLOW, None, f'{stage}:{ctx.loopdata.steps}')
         if answer.value == TokeoAiConfirmAnswer.NO_RETRY:
             raise TokeoAiConfirmRetry(None if isinstance(subject, list) else subject)
         if answer.value == TokeoAiConfirmAnswer.NO:
@@ -235,7 +235,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         tools = self._config('tools', stage=stage)
         if tools is not None and invocation.name not in self.app.ai.tool_names(tools):
             return
-        answer = self._ask(ctx, stage, invocation, invocation.decision, invocation.reason, f'{stage}:{invocation.id}')
+        answer = self._get_answer(ctx, stage, invocation, invocation.decision, invocation.reason, f'{stage}:{invocation.id}')
         if answer.value == TokeoAiConfirmAnswer.NO_RETRY:
             # the guards of the stage judge the same call anew, with the notes
             invocation.decision, invocation.reason = Invocation.ALLOW, None
@@ -243,7 +243,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         if answer.value == TokeoAiConfirmAnswer.NO and invocation.decision != Invocation.DENY:
             invocation.decision, invocation.reason = Invocation.DENY, answer.note or deny_reason
 
-    def _ask(self, ctx, stage, subject, decision, reason, retry_key):
+    def _get_answer(self, ctx, stage, subject, decision, reason, retry_key):
         # the answer: recalled for the run when the question is 1:1 the same,
         # else from a channel, else the default; recorded on the result and
         # the trace, a note also in ctx.notes

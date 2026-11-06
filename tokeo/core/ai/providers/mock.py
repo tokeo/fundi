@@ -55,7 +55,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # a tool result on top closes the loop: answer with that result
         last = messages[-1] if messages else {}
         if isinstance(last, dict) and last.get('role') == 'tool':
-            return self._result(f'Done. The tool returned: {last.get("content") or ""}')
+            return self._build_result(f'Done. The tool returned: {last.get("content") or ""}')
         # the most recent user turn drives the reply
         prompt = ''
         for message in messages:
@@ -65,9 +65,9 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # SYNTHESIZE python that computes the value and call the untrusted exec
         # tool with it; the model writes code, the sandbox runs it. only
         # active when that tool is actually offered to this agent
-        synth = self._codeact_synthesis(prompt, tools)
+        synth = self._build_codeact_call(prompt, tools)
         if synth is not None:
-            return self._result('', tool_calls=[synth], finish_reason='tool_calls')
+            return self._build_result('', tool_calls=[synth], finish_reason='tool_calls')
         # if the prompt names an available tool, request that tool with its
         # first declared parameter filled from the rest of the prompt
         match = self._match_tool(prompt, tools)
@@ -75,14 +75,14 @@ class TokeoAiMockProvider(TokeoAiProvider):
             spec, argument = match
             call = ToolCall(
                 id='call_1',
-                name=self._tool_name(spec),
-                arguments=self._tool_arguments(spec, argument),
+                name=self._get_tool_name(spec),
+                arguments=self._build_tool_arguments(spec, argument),
             )
-            return self._result('', tool_calls=[call], finish_reason='tool_calls')
+            return self._build_result('', tool_calls=[call], finish_reason='tool_calls')
         # plain reply: a canned answer for ping, an echo otherwise
         if prompt.strip().lower() == 'ping':
-            return self._result('pong')
-        return self._result(f'[mock] {prompt}' if prompt else '[mock] (no prompt)')
+            return self._build_result('pong')
+        return self._build_result(f'[mock] {prompt}' if prompt else '[mock] (no prompt)')
 
     # the codeact keyword: ```text``` plus an operation word, then the sentence.
     # each operation maps (with a few language synonyms) to a python expression
@@ -100,7 +100,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         'länge': 'len({s!r})',
     }
 
-    def _codeact_synthesis(self, prompt, tools):
+    def _build_codeact_call(self, prompt, tools):
         # recognise ```text <op> <sentence>``` and, when a code-running tool is
         # on offer, build a tool call whose code computes the value. returns a
         # ToolCall or None (so the normal tool/echo paths still apply). the tool
@@ -108,7 +108,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # a fixed name, since the config name is the project's to choose
         if not prompt or not tools:
             return None
-        coder = self._code_tool(tools)
+        coder = self._find_code_tool(tools)
         if coder is None:
             return None
         head, _, rest = prompt.strip().partition(' ')
@@ -121,13 +121,13 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # the synthesized snippet: assign the computed value to ```result```,
         # which the exec tool returns. the sentence is embedded as a literal
         code = f'result = {template.format(s=sentence.strip())}'
-        return ToolCall(id='call_1', name=self._tool_name(coder), arguments={'code': code})
+        return ToolCall(id='call_1', name=self._get_tool_name(coder), arguments={'code': code})
 
-    def _code_tool(self, tools):
+    def _find_code_tool(self, tools):
         # the code-running tool is the one whose only/first parameter is
         # ```code```, a stable shape, independent of the config name
         for tool in tools:
-            names, _ = self._tool_params(tool)
+            names, _ = self._get_tool_params(tool)
             if names and names[0] == 'code':
                 return tool
         return None
@@ -139,11 +139,11 @@ class TokeoAiMockProvider(TokeoAiProvider):
             return None
         head, _, rest = prompt.strip().partition(' ')
         for tool in tools:
-            if self._tool_name(tool) == head:
+            if self._get_tool_name(tool) == head:
                 return tool, rest.strip()
         return None
 
-    def _tool_name(self, tool):
+    def _get_tool_name(self, tool):
         # accept a plain name or an openai-style function tool definition
         if isinstance(tool, str):
             return tool
@@ -155,7 +155,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
                 return function.get('name')
         return None
 
-    def _tool_params(self, tool):
+    def _get_tool_params(self, tool):
         # read the declared parameter names and the required ones from an
         # openai-style function spec; dicts preserve insertion order
         schema = {}
@@ -168,15 +168,15 @@ class TokeoAiMockProvider(TokeoAiProvider):
         required = [name for name in (schema.get('required') or []) if name in properties]
         return names, required
 
-    def _tool_arguments(self, tool, value):
+    def _build_tool_arguments(self, tool, value):
         # fill the first declared parameter (a required one if any) with the
         # prompt remainder, so the mock drives any tool, not only one named
         # ```input```; a parameterless tool is called with no arguments
-        names, required = self._tool_params(tool)
+        names, required = self._get_tool_params(tool)
         key = required[0] if required else (names[0] if names else None)
         return {key: value} if key else {}
 
-    def _result(self, text, tool_calls=None, finish_reason='stop'):
+    def _build_result(self, text, tool_calls=None, finish_reason='stop'):
         # build a ChatResult with deterministic, faked token usage
         return ChatResult(
             text=text,

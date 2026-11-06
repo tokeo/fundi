@@ -32,7 +32,7 @@ class ToolResultTest(TokeoTest):
         ]
 
 
-def ai_config():
+def make_ai_config():
     """An ai config with the tools boom, data and void behind either wall."""
     # a self-contained ai config with the three tools these tests need, each
     # reachable in both the in_process catch-all and the subprocess sandbox so
@@ -64,8 +64,8 @@ def ai_config():
 
 def test_in_process_catches_a_raising_tool_into_state_exception():
     """In process a raise lands in state.exception (tool error A), value None."""
-    with ToolResultTest(config_defaults=ai_config()) as app:
-        agent = app.ai._agent('plain')
+    with ToolResultTest(config_defaults=make_ai_config()) as app:
+        agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
         assert isinstance(out, ToolResult)
         assert out.value is None
@@ -75,8 +75,8 @@ def test_in_process_catches_a_raising_tool_into_state_exception():
 
 def test_subprocess_catches_a_raising_tool_into_state_exception():
     """The subprocess child catches the raise, the parent gets state.exception."""
-    with ToolResultTest(config_defaults=ai_config()) as app:
-        agent = app.ai._agent('jail')
+    with ToolResultTest(config_defaults=make_ai_config()) as app:
+        agent = app.ai._get_agent('jail')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
         assert out.value is None
         assert out.state.exception is not None
@@ -92,10 +92,10 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
     'timed out' and propagates, so the loop, not the result, carries it. The
     loop's shaping of both into 'error: ...' content is in the Spiral tests.
     """
-    cfg = ai_config()
+    cfg = make_ai_config()
     with ToolResultTest(config_defaults=cfg) as app:
         # A: a raising tool returns a result with state.exception set
-        agent = app.ai._agent('plain')
+        agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
         assert out.state.exception is not None
     # B: a subprocess timeout is a machinery failure: raised, not in state
@@ -104,7 +104,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
     cfg['ai']['sandboxes']['jailed']['tools'].append('slow')
     cfg['ai']['agents']['jail']['options']['tools'].append('slow')
     with ToolResultTest(config_defaults=cfg) as app:
-        agent = app.ai._agent('jail')
+        agent = app.ai._get_agent('jail')
         with pytest.raises(TokeoAiError, match='timed out'):
             app.ai._exec_in_sandbox('slow', dict(seconds=3), agent, None, None, None, None)
 
@@ -114,8 +114,8 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
 
 def test_in_process_captures_tool_stdout_into_state():
     """In process printed 'side output' lands in state.stdout, not the console."""
-    with ToolResultTest(config_defaults=ai_config()) as app:
-        agent = app.ai._agent('plain')
+    with ToolResultTest(config_defaults=make_ai_config()) as app:
+        agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('data', {}, agent, None, None, None, None)
         assert out.state.stdout is not None
         assert 'side output' in out.state.stdout
@@ -123,8 +123,8 @@ def test_in_process_captures_tool_stdout_into_state():
 
 def test_subprocess_captures_tool_stdout_into_state():
     """In a subprocess the child's printed 'side output' reaches state.stdout."""
-    with ToolResultTest(config_defaults=ai_config()) as app:
-        agent = app.ai._agent('jail')
+    with ToolResultTest(config_defaults=make_ai_config()) as app:
+        agent = app.ai._get_agent('jail')
         out = app.ai._exec_in_sandbox('data', {}, agent, None, None, None, None)
         assert out.state.stdout is not None
         assert 'side output' in out.state.stdout
@@ -132,8 +132,8 @@ def test_subprocess_captures_tool_stdout_into_state():
 
 def test_a_structured_tool_result_keeps_its_views_through_the_sandbox():
     """In process a returned dict keeps as_data {'answer': 42, 'label': 'ok'}."""
-    with ToolResultTest(config_defaults=ai_config()) as app:
-        agent = app.ai._agent('plain')
+    with ToolResultTest(config_defaults=make_ai_config()) as app:
+        agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('data', {}, agent, None, None, None, None)
         assert out.value is not None
         assert out.value.as_data == dict(answer=42, label='ok')
@@ -141,8 +141,8 @@ def test_a_structured_tool_result_keeps_its_views_through_the_sandbox():
 
 def test_a_tool_returning_nothing_yields_no_value():
     """A tool returning nothing gives value None, no exception: not a failure."""
-    with ToolResultTest(config_defaults=ai_config()) as app:
-        agent = app.ai._agent('plain')
+    with ToolResultTest(config_defaults=make_ai_config()) as app:
+        agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('void', {}, agent, None, None, None, None)
         assert out.value is None
         assert out.state.exception is None

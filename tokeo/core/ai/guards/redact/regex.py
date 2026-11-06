@@ -102,8 +102,9 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
 
     def __init__(self, app, *args, **kw):
         super(TokeoAiRegexRedactGuard, self).__init__(app, *args, **kw)
-        # per-stage compiled-pattern cache, filled on first use in _compiled;
-        # pre-declared here so masking never depends on _setup having run
+        # per-stage compiled-pattern cache, filled on first use in
+        # _compile_patterns; pre-declared here so masking never depends on
+        # _setup having run
         self._compiled_by_stage = {}
 
     def _setup(self, app, config_name=None, config=None):
@@ -125,7 +126,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         super(TokeoAiRegexRedactGuard, self)._setup(app, config_name, config)
         self._compiled_by_stage = {}
 
-    def _compiled(self, stage):
+    def _compile_patterns(self, stage):
         """
         Return the compiled patterns for a stage; raise if missing or invalid.
 
@@ -160,7 +161,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
             self._compiled_by_stage[stage] = compiled
         return self._compiled_by_stage[stage]
 
-    def _mask(self, text, stage):
+    def _mask_text(self, text, stage):
         """
         Mask every pattern match in a single text; return the text and hit count.
 
@@ -178,7 +179,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         """
         replacement = self._config('replacement', stage=stage)
         hits = 0
-        for pattern in self._compiled(stage):
+        for pattern in self._compile_patterns(stage):
             text, count = pattern.subn(replacement, text)
             hits += count
         return text, hits
@@ -190,7 +191,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         # cleaned the same way as_str is; a secret that the text view hid must
         # not survive in the structured view
         if isinstance(obj, str):
-            return self._mask(obj, stage)
+            return self._mask_text(obj, stage)
         if isinstance(obj, dict):
             out, hits = {}, 0
             for key, value in obj.items():
@@ -207,7 +208,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
             return out, hits
         return obj, 0
 
-    def _note(self, invocation, hits):
+    def _add_note(self, invocation, hits):
         """Record on the invocation's reason how many spans were masked."""
         note = f'redacted {hits} secret(s)'
         invocation.reason = f'{invocation.reason}; {note}' if invocation.reason else note
@@ -238,7 +239,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         if ctx is not None:
             self._mask_request(ctx, invocation.id)
         if hits:
-            self._note(invocation, hits)
+            self._add_note(invocation, hits)
 
     def _mask_request(self, ctx, call_id):
         # the model's own request of the call: the tool call in the assistant
@@ -285,17 +286,17 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         stage = GOVERNOR_STAGE_ON_RETURN
         hits = 0
         if invocation.error:
-            invocation.error, hits = self._mask(invocation.error, stage)
+            invocation.error, hits = self._mask_text(invocation.error, stage)
         result = invocation.result
         if result is None:
             if hits:
-                self._note(invocation, hits)
+                self._add_note(invocation, hits)
             return
         state = {}
         for name in ('stdout', 'stderr', 'exception'):
             text = getattr(result.state, name)
             if isinstance(text, str):
-                text, count = self._mask(text, stage)
+                text, count = self._mask_text(text, stage)
                 hits += count
             state[name] = text
         state['incomplete'] = result.state.incomplete
@@ -303,11 +304,11 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         if value is None:
             if hits:
                 invocation.result = ToolResult(value=None, state=ToolStates(**state))
-                self._note(invocation, hits)
+                self._add_note(invocation, hits)
             return
         # the text view is always masked, even when it is the tool's own wording
         # rather than a copy of the data, so both are cleaned on their own terms
-        masked_str, count = self._mask(value.as_str or '', stage)
+        masked_str, count = self._mask_text(value.as_str or '', stage)
         hits += count
         masked_data = value.as_data
         if self._config('sanitize_data', stage=stage) and value.as_data is not None:
@@ -320,4 +321,4 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         # (the explicit string wins, keeping a reshaped wording); the run state
         # carries the masked streams and exception
         invocation.result = create_tool_result(masked_data, as_str=masked_str, state=state)
-        self._note(invocation, hits)
+        self._add_note(invocation, hits)

@@ -64,7 +64,7 @@ def pytest_configure(config):
 @pytest.hookimpl(tryfirst=True)
 def pytest_pyfunc_call(pyfuncitem):
     # a test marked isolated runs in a pytest of its own, in a fresh process
-    if pyfuncitem.get_closest_marker("isolated") is None or IsolatedPytest.inside():
+    if pyfuncitem.get_closest_marker("isolated") is None or IsolatedPytest.is_inside():
         return None
     name = re.sub(r"\W", "_", pyfuncitem.name)[:30]
     basetemp = os.path.join(os.path.abspath(pyfuncitem.config.option.basetemp), "isolated", name)

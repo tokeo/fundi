@@ -96,7 +96,7 @@ def run_snippet(code, namespace=None):
     if isinstance(last, ast.Expr):
         head, value = tree.body[:-1], last.value
     else:
-        head, value = tree.body, _assignment_value(last)
+        head, value = tree.body, _find_assignment_value(last)
     ns = namespace if namespace is not None else {}
     ns[_SNIPPET_RETURN_NAME] = _SnippetReturn
     try:
@@ -130,13 +130,13 @@ class _TopLevelReturn(ast.NodeTransformer):
     # rewrite each return of the block itself into a raise of _SnippetReturn;
     # the returns of its own functions, classes and lambdas stay as they are
 
-    def _keep(self, node):
+    def _keep_node(self, node):
         return node
 
-    visit_FunctionDef = _keep
-    visit_AsyncFunctionDef = _keep
-    visit_ClassDef = _keep
-    visit_Lambda = _keep
+    visit_FunctionDef = _keep_node
+    visit_AsyncFunctionDef = _keep_node
+    visit_ClassDef = _keep_node
+    visit_Lambda = _keep_node
 
     def visit_Return(self, node):
         value = node.value if node.value is not None else ast.Constant(value=None)
@@ -144,7 +144,7 @@ class _TopLevelReturn(ast.NodeTransformer):
         return ast.copy_location(ast.Raise(exc=call, cause=None), node)
 
 
-def _assignment_value(stmt):
+def _find_assignment_value(stmt):
     # the value an assignment on the snippet's last line delivers, as an ast
     # expression to return after it, or None when the form has no single
     # unambiguous value (an attribute write, a mixed or starred target)
@@ -152,16 +152,16 @@ def _assignment_value(stmt):
         # plain or chained (a = b = x): every target gets the same value, so the
         # first target that resolves to a deliverable node carries it
         for target in stmt.targets:
-            value = _target_value(target)
+            value = _find_target_value(target)
             if value is not None:
                 return value
         return None
     if isinstance(stmt, (ast.AugAssign, ast.AnnAssign)):
-        return _target_value(stmt.target)
+        return _find_target_value(stmt.target)
     return None
 
 
-def _target_value(target):
+def _find_target_value(target):
     # turn an assignment target into the ast expression to hand back, or None
     if isinstance(target, ast.Name):
         # a single name delivers its bound value

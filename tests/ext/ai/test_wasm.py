@@ -96,7 +96,7 @@ class WasmTest(TokeoTest):
         ]
 
 
-def wasm_ai_config():
+def make_wasm_ai_config():
     """An ai config with the untrusted and the trusted tool, each behind wasm."""
     # a self-contained ai config with BOTH built-in tools, each behind a wasm
     # sandbox: the untrusted tool runs directly in the guest (no app mount), the
@@ -160,8 +160,8 @@ def wasm_ai_config():
 def test_untrusted_exec_through_the_agent_chain():
     """Untrusted, statistics.median([5, 1, 9, 3, 7]) runs in the guest: '5'."""
     # no app mount; the result crosses the file bridge back
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('untrusted_coder')
+    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+        agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
             dict(code='import statistics\nstatistics.median([5, 1, 9, 3, 7])'),
@@ -182,8 +182,8 @@ def test_untrusted_exec_through_the_agent_chain():
 )
 def test_trusted_exec_through_the_agent_chain():
     """The trusted tool, rebuilt from the mounted source, imports tokeo: 'True'."""
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('trusted_coder')
+    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+        agent = app.ai._get_agent('trusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_trusted',
             dict(code='import tokeo\nbool(tokeo.__name__)'),
@@ -209,8 +209,8 @@ def test_untrusted_guest_cannot_import_the_framework():
     Nothing of tokeo enters the untrusted guest, only copies of the guest
     modules under _guest. The failure is a tool exception on the result (A).
     """
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('untrusted_coder')
+    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+        agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
             dict(code='import tokeo.core.ai\n1'),
@@ -236,8 +236,8 @@ def test_wasm_guest_has_no_network():
     on the result's state (A). Its type is build-specific (gaierror, OSError or
     a missing socket module), so only the recorded failure is asserted.
     """
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('untrusted_coder')
+    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+        agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
             dict(code='import socket\nsocket.gethostbyname("example.com")'),
@@ -264,8 +264,8 @@ def test_wasm_guest_cannot_write_a_read_only_mount():
     stays the only writable surface.
     """
     probe = os.path.join(_STDLIB, 'tokeo_wasm_probe.txt')
-    with WasmTest(config_defaults=wasm_ai_config()) as app:
-        agent = app.ai._agent('untrusted_coder')
+    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+        agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
             dict(code='open("/lib/tokeo_wasm_probe.txt", "w").write("x")'),
@@ -288,10 +288,10 @@ needs_build = pytest.mark.skipif(
 
 def run_untrusted(code, **options):
     """Run the code by the untrusted tool in wasm with extra options, return it."""
-    cfg = wasm_ai_config()
+    cfg = make_wasm_ai_config()
     cfg['ai']['sandboxes']['wasm_untrusted']['options'].update(options)
     with WasmTest(config_defaults=cfg) as app:
-        agent = app.ai._agent('untrusted_coder')
+        agent = app.ai._get_agent('untrusted_coder')
         return app.ai._exec_in_sandbox('run_untrusted', dict(code=code), agent, None, None, None, None)
 
 
@@ -396,7 +396,7 @@ def test_a_quick_guest_does_not_wait_for_the_watch_interval():
 )
 def test_the_linter_checks_the_watch_interval(value, valid):
     """watch_interval is a number of seconds of at least 0.1."""
-    cfg = wasm_ai_config()
+    cfg = make_wasm_ai_config()
     cfg['ai']['sandboxes']['wasm_untrusted']['options']['watch_interval'] = value
     with WasmTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
@@ -458,9 +458,9 @@ def test_the_cache_dir_keeps_the_compiled_runtime(tmp, monkeypatch):
     assert run_untrusted('1', cache=tmp.dir).value.as_str == '1'
     assert [name for name in os.listdir(tmp.dir) if name.endswith('.cwasm')]
 
-    def no_compile(*args, **kw):
+    def fail_compile(*args, **kw):
         raise AssertionError('compiled although cached')
 
-    cached = type('Module', (), dict(__init__=no_compile, deserialize_file=wasmtime.Module.deserialize_file))
+    cached = type('Module', (), dict(__init__=fail_compile, deserialize_file=wasmtime.Module.deserialize_file))
     monkeypatch.setattr(wasmtime, 'Module', cached)
     assert run_untrusted('2', cache=tmp.dir).value.as_str == '2'

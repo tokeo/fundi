@@ -43,7 +43,7 @@ import importlib.util
 
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
 from tokeo.core.ai.sandbox import SANDBOX_OUTPUT_MAX_MB
-from tokeo.core.ai.sandboxes._common import _importable_path, expand_env, output_bytes, reply_bytes, check_output
+from tokeo.core.ai.sandboxes._common import _get_importable_path, expand_env, output_bytes, reply_bytes, check_output
 from tokeo.core.utils.validate import is_number_ge
 
 #: The stdlib-only modules the guest gets as copies in ```/io/_guest```, per run.
@@ -269,7 +269,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         if not self._runtime or not self._stdlib:
             raise TokeoAiError('the wasm sandbox needs a runtime (python.wasm) and a stdlib path; see the docs')
 
-        class_path = _importable_path(type(tool), 'tool')
+        class_path = _get_importable_path(type(tool), 'tool')
         # an untrusted tool runs as a snippet; nothing of tokeo enters the guest
         trusted = not getattr(tool, 'wasm_exec_pysnippet', False)
         task = dict(arguments=arguments or {})
@@ -305,7 +305,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             output_mb = self._config('output_mb')
             max_bytes = output_bytes(output_mb)
 
-            def read(path, max_read_bytes):
+            def read_file(path, max_read_bytes):
                 # one byte over the limit, cut in bytes before decoding; a
                 # missing file reads as empty
                 if not os.path.exists(path):
@@ -313,19 +313,19 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                 with open(path, 'rb') as f:
                     return f.read(max_read_bytes + 1)
 
-            def text(data):
+            def cut_text(data):
                 # the captured output, cut at output_mb and marked like the
                 # captures of the other sandboxes
                 cut = f'\n[... cut after {output_mb:g} MB]' if len(data) > max_bytes else ''
                 return data[:max_bytes].decode('utf-8', 'replace') + cut
 
-            stdout = text(read(os.path.join(capture_dir, 'stdout'), max_bytes))
-            stderr = text(read(os.path.join(capture_dir, 'stderr'), max_bytes))
+            stdout = cut_text(read_file(os.path.join(capture_dir, 'stdout'), max_bytes))
+            stderr = cut_text(read_file(os.path.join(capture_dir, 'stderr'), max_bytes))
             if code == _GUEST_EXIT_MACHINERY:
                 raise TokeoAiError(f'tool {class_path!r} failed in the wasm sandbox: {stderr.strip()[-400:]}')
             # the raw value.json frames two views of the value, read with the
             # max of a raw reply; the views are held to output_mb below
-            data = read(os.path.join(io_dir, 'value.json'), reply_bytes(max_bytes)) if code == 0 else b''
+            data = read_file(os.path.join(io_dir, 'value.json'), reply_bytes(max_bytes)) if code == 0 else b''
         if len(data) > reply_bytes(max_bytes):
             raise TokeoAiError(f'tool {class_path!r} delivered more than {output_mb:g} MB in the wasm sandbox')
         reply = data.decode('utf-8', 'replace')
@@ -361,25 +361,25 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         wasi = wasmtime.WasiConfig()
         wasi.argv = ('python', '/io/entry.py')
 
-        def mount(host_path, guest_path, writable, what):
+        def mount_dir(host_path, guest_path, writable, what):
             # name the path and its role; wasmtime only says "failed to add
             # preopen dir"
             if not os.path.isdir(host_path):
                 raise TokeoAiError(f'the wasm {what} path does not exist or is not a directory: {host_path!r}')
             wasi.preopen_dir(host_path, guest_path, fs_mutable=writable)
 
-        mount(self._stdlib, '/lib', False, 'stdlib')
-        mount(io_dir, '/io', True, 'io scratch')
+        mount_dir(self._stdlib, '/lib', False, 'stdlib')
+        mount_dir(io_dir, '/io', True, 'io scratch')
         stderr_path = os.path.join(capture_dir, 'stderr')
         wasi.stdout_file = os.path.join(capture_dir, 'stdout')
         wasi.stderr_file = stderr_path
         work = self._config('cwd')
         if work:
             os.makedirs(work, exist_ok=True)
-            mount(work, '/work', True, 'cwd scratch')
+            mount_dir(work, '/work', True, 'cwd scratch')
         # only what the config granted, read-only
         for guest_path, host_path in (self._config('mounts') or {}).items():
-            mount(host_path, guest_path, False, f'mount {guest_path!r}')
+            mount_dir(host_path, guest_path, False, f'mount {guest_path!r}')
         # the scrubbed env: the stdlib boots the interpreter, the shims lead on
         # the trusted path; /io, the script's dir, holds _guest
         env = expand_env(self._config('env'))
@@ -392,7 +392,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # WasiConfig.env takes all pairs at once, per key keeps only the last
         wasi.env = [(key, value) for key, value in env.items()]
         store.set_wasi(wasi)
-        module = self._module(wasmtime, engine)
+        module = self._load_module(wasmtime, engine)
         # the epoch deadline comes before instantiate, which already runs start code
         store.set_epoch_deadline(1)
         instance = linker.instantiate(store, module)
@@ -403,7 +403,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         disk_mb, max_files, timeout = self._config('disk_mb'), self._config('max_files'), self._config('timeout')
         interval = self._config('watch_interval')
 
-        def usage(stop=None):
+        def get_usage(stop=None):
             # bytes and entries under the watched dirs, counting stops past stop
             size = count = 0
             for watch_dir in watch_dirs:
@@ -418,37 +418,37 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                         return size, count
             return size, count
 
-        def exceeded():
+        def find_limit_error():
             # the limit the guest broke, or None
-            size, count = usage(base_count + max_files if max_files else None)
+            size, count = get_usage(base_count + max_files if max_files else None)
             if disk_mb and size - base_size > disk_mb * 1024 * 1024:
                 return f'wrote more than {disk_mb} MB'
             if max_files and count - base_count > max_files:
                 return f'created more than {max_files} files'
             return None
 
-        base_size, base_count = usage()
+        base_size, base_count = get_usage()
         stop_reasons = []
         guest_end = threading.Event()
 
-        def stop(reason):
+        def stop_guest(reason):
             # the first broken limit names the stop; the guest ends at its
             # next epoch check
             if not stop_reasons:
                 stop_reasons.append(reason)
             engine.increment_epoch()
 
-        def watch():
+        def watch_guest():
             # one check of size and files per interval
             while not guest_end.wait(interval):
-                limit_error = exceeded()
+                limit_error = find_limit_error()
                 if limit_error:
-                    stop(limit_error)
+                    stop_guest(limit_error)
                     return
 
         # the timeout fires once at its time, the limits are checked per interval
-        timer = threading.Timer(timeout, stop, (f'timed out after {timeout}s',)) if timeout else None
-        watcher = threading.Thread(target=watch, daemon=True) if disk_mb or max_files else None
+        timer = threading.Timer(timeout, stop_guest, (f'timed out after {timeout}s',)) if timeout else None
+        watcher = threading.Thread(target=watch_guest, daemon=True) if disk_mb or max_files else None
         for thread in (timer, watcher):
             if thread:
                 thread.daemon = True
@@ -473,12 +473,12 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             if watcher:
                 watcher.join()
         # a guest that broke a limit and ended before the next check still failed
-        limit_error = (disk_mb or max_files) and exceeded()
+        limit_error = (disk_mb or max_files) and find_limit_error()
         if limit_error:
             raise TokeoAiError(f'tool {class_path!r} {limit_error} in the wasm sandbox')
         return code
 
-    def _module(self, wasmtime, engine):
+    def _load_module(self, wasmtime, engine):
         # the compiled runtime: from the cache dir when set and fitting, else
         # compiled now (and stored there). a file in the cache is native code
         # the host runs, so the dir must be writable only by the operator

@@ -140,9 +140,9 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         except ValueError as err:
             raise TokeoAiError(f'oai_compat endpoint returned non-JSON body: {err}')
 
-        return self._to_result(data)
+        return self._build_result(data)
 
-    def _to_result(self, data):
+    def _build_result(self, data):
         # map a chat-completions reply into a ChatResult; missing fields degrade
         # to sensible empties rather than raising, so an odd-but-valid reply is
         # still usable and fully visible on ```raw```
@@ -157,8 +157,8 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         # a structured-outputs refusal is a real reply, not empty content; keep
         # it apart so a caller can tell "declined" from "no content"
         refusal = message.get('refusal') or ''
-        tool_calls = self._tool_calls(message.get('tool_calls') or [])
-        usage = self._usage(data.get('usage'))
+        tool_calls = self._parse_tool_calls(message.get('tool_calls') or [])
+        usage = self._parse_usage(data.get('usage'))
         finish_reason = first.get('finish_reason')
         return ChatResult(
             text=text,
@@ -171,7 +171,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
             raw=data,
         )
 
-    def _tool_calls(self, raw_calls):
+    def _parse_tool_calls(self, raw_calls):
         # turn native function tool_calls into our ToolCall objects. arguments
         # arrive as a JSON STRING in the openai shape, so parse it; empty means
         # no arguments. anything else, malformed json or json that is no
@@ -198,7 +198,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
             calls.append(ToolCall(id=call.get('id') or f'call_{index + 1}', name=name, arguments=arguments))
         return calls
 
-    def _usage(self, raw_usage):
+    def _parse_usage(self, raw_usage):
         # map the usage block when the endpoint reports one; absent on many
         # local servers, so None is a normal outcome
         if not isinstance(raw_usage, dict):

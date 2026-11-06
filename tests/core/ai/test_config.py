@@ -26,17 +26,17 @@ from tokeo.core.ai.config.profiles import resolve_profile, find_profile, resolve
 
 # a stub class-stage lookup: every config name can do these three stages, so the
 # tests target the composition logic, not reflection
-def _stages_of(config_name):
+def _get_class_stages(config_name):
     return ['on_prompt', 'on_call', 'on_return']
 
 
-def _resolve(guards_section, agent_guards, agent_omit=None):
-    return resolve_governors(guards_section, agent_guards, agent_omit or [], _stages_of)
+def _resolve_governors(guards_section, agent_guards, agent_omit=None):
+    return resolve_governors(guards_section, agent_guards, agent_omit or [], _get_class_stages)
 
 
 def test_bare_name_runs_all_class_stages():
     """A bare 'alpha' is additive: it runs at all three stages its class can do."""
-    entries = _resolve({}, ['alpha'])
+    entries = _resolve_governors({}, ['alpha'])
     assert len(entries) == 1
     assert entries[0].config_name == 'alpha'
     assert entries[0].stages == frozenset({'on_prompt', 'on_call', 'on_return'})
@@ -45,40 +45,40 @@ def test_bare_name_runs_all_class_stages():
 def test_stage_list_runs_only_named_stages():
     """{'alpha': ['on_call']} replaces the class stages: only on_call runs."""
     # the listed stages are intersected with what the class can do
-    entries = _resolve({}, [{'alpha': ['on_call']}])
+    entries = _resolve_governors({}, [{'alpha': ['on_call']}])
     assert entries[0].stages == frozenset({'on_call'})
 
 
 def test_any_token_means_all_class_stages():
     """[_any] is the explicit form of the bare name: all three class stages run."""
-    entries = _resolve({}, [{'alpha': [GOVERNOR_STAGE_ANY]}])
+    entries = _resolve_governors({}, [{'alpha': [GOVERNOR_STAGE_ANY]}])
     assert entries[0].stages == frozenset({'on_prompt', 'on_call', 'on_return'})
 
 
 def test_named_stage_the_class_cannot_do_is_dropped():
     """on_begin, which the class cannot do, is dropped and only on_call is left."""
     # the linter flags such a stage; the resolver does not block the run
-    entries = _resolve({}, [{'alpha': ['on_call', 'on_begin']}])
+    entries = _resolve_governors({}, [{'alpha': ['on_call', 'on_begin']}])
     assert entries[0].stages == frozenset({'on_call'})
 
 
 def test_empty_stage_list_is_an_error():
     """A [] or a null stage list raises TokeoAiError, too easily a mistake."""
     with pytest.raises(TokeoAiError):
-        _resolve({}, [{'alpha': []}])
+        _resolve_governors({}, [{'alpha': []}])
     with pytest.raises(TokeoAiError):
-        _resolve({}, [{'alpha': None}])
+        _resolve_governors({}, [{'alpha': None}])
 
 
 def test_order_is_first_appearance():
     """alpha, beta, gamma come back in the order they first appear."""
-    entries = _resolve({}, ['alpha', 'beta', 'gamma'])
+    entries = _resolve_governors({}, ['alpha', 'beta', 'gamma'])
     assert [e.config_name for e in entries] == ['alpha', 'beta', 'gamma']
 
 
 def test_same_config_name_same_stages_collapses_silently():
     """{'alpha': ['on_call']} named twice collapses silently into one entry."""
-    entries = _resolve({}, [{'alpha': ['on_call']}, {'alpha': ['on_call']}])
+    entries = _resolve_governors({}, [{'alpha': ['on_call']}, {'alpha': ['on_call']}])
     assert len(entries) == 1
     assert entries[0].stages == frozenset({'on_call'})
 
@@ -87,13 +87,13 @@ def test_same_config_name_different_stages_same_level_is_error():
     """alpha at on_call and at on_return on one level is not decidable: raises."""
     # to run it at several stages, name them in one stage list
     with pytest.raises(TokeoAiError):
-        _resolve({}, [{'alpha': ['on_call']}, {'alpha': ['on_return']}])
+        _resolve_governors({}, [{'alpha': ['on_call']}, {'alpha': ['on_return']}])
 
 
 def test_a_chain_is_expanded_in_place():
     """A chain under ai.guards expands in place: alpha, beta (on_call), gamma."""
     section = {'my_chain': ['alpha', {'beta': ['on_call']}]}
-    entries = _resolve(section, ['my_chain', 'gamma'])
+    entries = _resolve_governors(section, ['my_chain', 'gamma'])
     assert [e.config_name for e in entries] == ['alpha', 'beta', 'gamma']
     assert entries[1].stages == frozenset({'on_call'})
 
@@ -101,7 +101,7 @@ def test_a_chain_is_expanded_in_place():
 def test_a_chain_may_import_another_chain():
     """The chain outer imports the chain inner: alpha, then beta."""
     section = {'inner': ['alpha'], 'outer': ['inner', 'beta']}
-    entries = _resolve(section, ['outer'])
+    entries = _resolve_governors(section, ['outer'])
     assert [e.config_name for e in entries] == ['alpha', 'beta']
 
 
@@ -109,14 +109,14 @@ def test_a_chain_cycle_is_an_error():
     """Chains a and b importing each other raise TokeoAiError (cycle)."""
     section = {'a': ['b'], 'b': ['a']}
     with pytest.raises(TokeoAiError):
-        _resolve(section, ['a'])
+        _resolve_governors(section, ['a'])
 
 
 def test_two_chains_contradicting_is_an_error():
     """chainA and chainB give alpha different stages: no nearer form, raises."""
     section = {'chainA': [{'alpha': ['on_call']}], 'chainB': [{'alpha': ['on_return']}]}
     with pytest.raises(TokeoAiError):
-        _resolve(section, ['chainA', 'chainB'])
+        _resolve_governors(section, ['chainA', 'chainB'])
 
 
 def test_agent_over_chain_logs_a_note_and_agent_wins():
@@ -130,7 +130,7 @@ def test_agent_over_chain_logs_a_note_and_agent_wins():
         def warning(self, message):
             notes.append(message)
 
-    entries = resolve_governors(section, ['chainA', {'alpha': ['on_return']}], [], _stages_of, logger=_Log())
+    entries = resolve_governors(section, ['chainA', {'alpha': ['on_return']}], [], _get_class_stages, logger=_Log())
     assert len(entries) == 1
     assert entries[0].stages == frozenset({'on_return'})
     assert len(notes) == 1 and 'overrides' in notes[0]
@@ -140,14 +140,14 @@ def test_omit_drops_a_config_name():
     """omit=['beta'] drops beta that my_chain brought in: alpha, gamma remain."""
     # omit matches by the name as written
     section = {'my_chain': ['alpha', 'beta']}
-    entries = _resolve(section, ['my_chain', 'gamma'], agent_omit=['beta'])
+    entries = _resolve_governors(section, ['my_chain', 'gamma'], agent_omit=['beta'])
     assert [e.config_name for e in entries] == ['alpha', 'gamma']
 
 
 def test_agent_entry_wins_over_chain_for_same_config_name():
     """Nearest wins: the agent's on_return replaces the chain's on_call."""
     section = {'my_chain': [{'alpha': ['on_call']}]}
-    entries = _resolve(section, ['my_chain', {'alpha': ['on_return']}])
+    entries = _resolve_governors(section, ['my_chain', {'alpha': ['on_return']}])
     assert len(entries) == 1
     assert entries[0].stages == frozenset({'on_return'})
 
@@ -210,48 +210,48 @@ def test_find_cycles_empty_when_acyclic():
 # ---- sandboxes: containment and the chain walk (config.sandboxes) -----------
 
 
-def _resolve_passthrough(names):
+def _resolve_names(names):
     # a tool resolver stub: names pass through unchanged (no groups)
     return list(names or [])
 
 
 def test_sandbox_has_no_all_keyword():
     """tools: _all is just a name, so a sandbox with it contains no 'anything'."""
-    assert not sandbox_contains_tool({'tools': '_all'}, 'anything', _resolve_passthrough)
+    assert not sandbox_contains_tool({'tools': '_all'}, 'anything', _resolve_names)
 
 
 def test_sandbox_listed_tool_is_contained():
     """A sandbox with tools: [calc] contains calc and not other."""
-    assert sandbox_contains_tool({'tools': ['calc']}, 'calc', _resolve_passthrough)
-    assert not sandbox_contains_tool({'tools': ['calc']}, 'other', _resolve_passthrough)
+    assert sandbox_contains_tool({'tools': ['calc']}, 'calc', _resolve_names)
+    assert not sandbox_contains_tool({'tools': ['calc']}, 'other', _resolve_names)
 
 
 def test_sandbox_except_excludes_from_this_sandbox():
     """except: [calc] takes calc out of a [calc, other] sandbox, other stays in."""
     item = {'tools': ['calc', 'other'], 'except': ['calc']}
-    assert not sandbox_contains_tool(item, 'calc', _resolve_passthrough)
-    assert sandbox_contains_tool(item, 'other', _resolve_passthrough)
+    assert not sandbox_contains_tool(item, 'calc', _resolve_names)
+    assert sandbox_contains_tool(item, 'other', _resolve_names)
 
 
 def test_sandbox_scalar_tools_and_except_are_one_name():
     """A scalar 'calc' in tools or except is one name, not iterated chars."""
     # as_list does that
-    assert sandbox_contains_tool({'tools': 'calc'}, 'calc', _resolve_passthrough)
-    assert not sandbox_contains_tool({'tools': ['calc'], 'except': 'calc'}, 'calc', _resolve_passthrough)
+    assert sandbox_contains_tool({'tools': 'calc'}, 'calc', _resolve_names)
+    assert not sandbox_contains_tool({'tools': ['calc'], 'except': 'calc'}, 'calc', _resolve_names)
 
 
 def test_sandbox_for_takes_first_matching_in_chain():
     """The first containing sandbox wins: calc in jailed, other in allow."""
     items = {'jailed': {'tools': ['calc']}, 'allow': {'tools': ['calc', 'other']}}
     # calc is in jailed (first); other falls through to allow
-    assert sandbox_for('calc', ['jailed', 'allow'], items.get, _resolve_passthrough) == 'jailed'
-    assert sandbox_for('other', ['jailed', 'allow'], items.get, _resolve_passthrough) == 'allow'
+    assert sandbox_for('calc', ['jailed', 'allow'], items.get, _resolve_names) == 'jailed'
+    assert sandbox_for('other', ['jailed', 'allow'], items.get, _resolve_names) == 'allow'
 
 
 def test_sandbox_for_exhausted_chain_returns_none():
     """No sandbox in the chain contains other: sandbox_for returns None."""
     items = {'jailed': {'tools': ['calc']}}
-    assert sandbox_for('other', ['jailed'], items.get, _resolve_passthrough) is None
+    assert sandbox_for('other', ['jailed'], items.get, _resolve_names) is None
 
 
 # ---- profiles: selection and agent binding (config.profiles) ----------------
@@ -311,7 +311,7 @@ def test_agent_name_profile_null_opts_out():
 # ---- CONFIG.md: the sandbox options as specified ------------------------------
 
 
-def _yaml_default(value):
+def _format_yaml_default(value):
     # a default as CONFIG.md writes it in its tables
     if value is None:
         return 'null'
@@ -345,4 +345,4 @@ def test_config_md_lists_every_sandbox_option_with_its_default(heading, cls_path
     section = text[start:]
     section = section[: min(i for i in (section.find('\n### '), section.find('\n## ')) if i > 0)]
     rows = re.findall(r'^\| ```(\w+)``` \| ```([^`]*)``` \|', section, flags=re.M)
-    assert dict(rows) == {key: _yaml_default(value) for key, value in cls.Meta.config_defaults.items()}
+    assert dict(rows) == {key: _format_yaml_default(value) for key, value in cls.Meta.config_defaults.items()}

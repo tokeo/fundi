@@ -38,18 +38,18 @@ def resolve_tools(names, groups):
     resolved = []
     seen = set()
 
-    def add(name, path):
+    def add_name(name, path):
         if name in groups:
             if name in path:
                 return
             for member in groups[name]:
-                add(member, path | {name})
+                add_name(member, path | {name})
         elif name not in seen:
             seen.add(name)
             resolved.append(name)
 
     for name in names or []:
-        add(name, set())
+        add_name(name, set())
     return resolved
 
 
@@ -72,15 +72,15 @@ def find_cycles(groups):
     """
     cyclic = set()
 
-    def walk(name, chain):
+    def walk_group(name, chain):
         if name in chain:
             for entry in chain[chain.index(name) :]:  # noqa E203
                 cyclic.add(entry)
             return
         for entry in groups.get(name, []):
             if entry in groups:
-                walk(entry, chain + [name])
+                walk_group(entry, chain + [name])
 
     for name in groups:
-        walk(name, [])
+        walk_group(name, [])
     return cyclic

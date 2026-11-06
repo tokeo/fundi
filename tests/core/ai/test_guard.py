@@ -69,7 +69,7 @@ def test_tool_policy_allowlist_restricts_to_its_members():
         assert denied_invocation.decision == Invocation.DENY
 
 
-def _files_config():
+def _make_files_config():
     """An ai config with the group filesystem of read_file and append_file."""
     echo = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
     tools = {'read_file': echo, 'append_file': echo, 'filesystem': ['read_file', 'append_file']}
@@ -78,7 +78,7 @@ def _files_config():
 
 def test_tool_policy_deny_resolves_a_group_to_its_members():
     """deny [filesystem] denies append_file, a member of the group."""
-    with AiTest(config_defaults=_files_config()) as app:
+    with AiTest(config_defaults=_make_files_config()) as app:
         guard = TokeoAiToolPolicyGuard(app)
         guard._setup(app, 'policy', {'options': {'deny': ['filesystem']}})
         invocation = Invocation(id='t1', name='append_file', arguments={})
@@ -88,7 +88,7 @@ def test_tool_policy_deny_resolves_a_group_to_its_members():
 
 def test_tool_policy_allow_resolves_a_group_to_its_members():
     """allow [filesystem] keeps read_file and denies calc."""
-    with AiTest(config_defaults=_files_config()) as app:
+    with AiTest(config_defaults=_make_files_config()) as app:
         guard = TokeoAiToolPolicyGuard(app)
         guard._setup(app, 'policy', {'options': {'allow': ['filesystem']}})
         permitted = Invocation(id='t1', name='read_file', arguments={})
@@ -163,7 +163,7 @@ def test_abort_policy_raises_at_every_stage():
                 pass
 
 
-def _redact(app):
+def _make_redact_guard(app):
     """A regex_redact guard set up with one pattern for password=… spans."""
     guard = TokeoAiRegexRedactGuard(app)
     guard._setup(app, 'redact', {'options': {'patterns': [r'password=\S+']}})
@@ -174,7 +174,7 @@ def test_redact_masks_nested_arguments():
     """password=hunter2 inside a list inside a dict reaches the tool masked."""
     with AiTest() as app:
         invocation = Invocation(id='t1', name='append_file', arguments={'content': {'lines': ['password=hunter2']}})
-        _redact(app).on_call(ctx=None, invocation=invocation)
+        _make_redact_guard(app).on_call(ctx=None, invocation=invocation)
         assert invocation.arguments == {'content': {'lines': ['[redacted]']}}
 
 
@@ -187,7 +187,7 @@ def test_redact_masks_error_and_streams_of_a_failed_call():
             value=None,
             state=ToolStates(stdout='password=a', stderr='password=b', exception='Error: password=c'),
         )
-        _redact(app).on_return(ctx=None, invocation=invocation)
+        _make_redact_guard(app).on_return(ctx=None, invocation=invocation)
         assert invocation.error == 'cannot connect: [redacted]'
         state = invocation.result.state
         assert (state.stdout, state.stderr, state.exception) == ('[redacted]', '[redacted]', 'Error: [redacted]')

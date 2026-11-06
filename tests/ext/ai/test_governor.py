@@ -1,7 +1,7 @@
 """
 Tests for how the ai extension resolves and runs governors.
 
-Driven through ```app.ai._governors_by_stage``` and the deny path: the flat
+Driven through ```app.ai._get_governors_by_stage``` and the deny path: the flat
 governor list turning into per-stage lists in order, and the actor being stamped
 into a reason the governor left unnamed.
 """
@@ -71,12 +71,13 @@ class PromptAndCallGovernor(TokeoAiGovernor):
         pass
 
 
-def _by_stage(app, governors):
-    """Return _governors_by_stage for a fixed flat list of governor objects."""
-    # drive _governors_by_stage with a fixed flat governor list, so the test
+def _get_governors_by_stage(app, governors):
+    """Return _get_governors_by_stage for a fixed flat list of governor objects."""
+    # drive _get_governors_by_stage with a fixed flat governor list, so the test
     # targets the ordering logic (flat list -> per-stage lists), not agent
-    # resolution. _governors_by_stage consumes resolved GovernorConfigEntry items
-    # (config_name + the stages it runs at) and looks each one up via _governor;
+    # resolution. _get_governors_by_stage consumes resolved
+    # GovernorConfigEntry items (config_name + the stages it runs at) and
+    # looks each one up via _get_governor;
     # here each governor object is its own config_name, its stages are the class
     # stages it implements
     from tokeo.core.ai.config.governors import GovernorConfigEntry
@@ -88,8 +89,8 @@ def _by_stage(app, governors):
         stages = frozenset(stage for stage in GOVERNOR_STAGES if governor.has_stage(stage))
         entries.append(GovernorConfigEntry(config_name, stages, 'agent'))
     app.ai._resolve_governors = lambda agent_obj: entries
-    app.ai._governor = lambda config_name: objs[config_name]
-    return app.ai._governors_by_stage(agent_obj=object())
+    app.ai._get_governor = lambda config_name: objs[config_name]
+    return app.ai._get_governors_by_stage(agent_obj=object())
 
 
 def test_each_stage_gets_its_own_ordered_list():
@@ -97,7 +98,7 @@ def test_each_stage_gets_its_own_ordered_list():
     with AiTest() as app:
         a = OnCallGovernor(app)
         b = OnReturnGovernor(app)
-        by_stage = _by_stage(app, [a, b])
+        by_stage = _get_governors_by_stage(app, [a, b])
         assert by_stage[GOVERNOR_STAGE_ON_CALL] == [a]
         assert by_stage[GOVERNOR_STAGE_ON_RETURN] == [b]
         # every stage has a list, empty where no governor participates
@@ -110,10 +111,10 @@ def test_order_within_a_stage_follows_the_flat_list():
     with AiTest() as app:
         first = OnCallGovernor(app)
         second = OnCallGovernor(app)
-        by_stage = _by_stage(app, [first, second])
+        by_stage = _get_governors_by_stage(app, [first, second])
         assert by_stage[GOVERNOR_STAGE_ON_CALL] == [first, second]
         # reversing the flat list reverses the stage order
-        by_stage = _by_stage(app, [second, first])
+        by_stage = _get_governors_by_stage(app, [second, first])
         assert by_stage[GOVERNOR_STAGE_ON_CALL] == [second, first]
 
 
@@ -122,7 +123,7 @@ def test_a_governor_with_several_stages_appears_in_each():
     with AiTest() as app:
         both = CallAndReturnGovernor(app)
         only_call = OnCallGovernor(app)
-        by_stage = _by_stage(app, [only_call, both])
+        by_stage = _get_governors_by_stage(app, [only_call, both])
         assert by_stage[GOVERNOR_STAGE_ON_CALL] == [only_call, both]
         assert by_stage[GOVERNOR_STAGE_ON_RETURN] == [both]
 
@@ -133,7 +134,7 @@ def test_stage_lists_are_independent_views_of_the_flat_order():
         pc = PromptAndCallGovernor(app)
         c = OnCallGovernor(app)
         # flat order [c, pc]: at on_call, c is before pc; at on_prompt, pc alone
-        by_stage = _by_stage(app, [c, pc])
+        by_stage = _get_governors_by_stage(app, [c, pc])
         assert by_stage[GOVERNOR_STAGE_ON_CALL] == [c, pc]
         assert by_stage[GOVERNOR_STAGE_ON_PROMPT] == [pc]
 
@@ -141,7 +142,7 @@ def test_stage_lists_are_independent_views_of_the_flat_order():
 def test_no_governors_gives_empty_lists_for_every_stage():
     """No governors give an empty list per stage, so the loop runs ungoverned."""
     with AiTest() as app:
-        by_stage = _by_stage(app, [])
+        by_stage = _get_governors_by_stage(app, [])
         assert all(by_stage[stage] == [] for stage in GOVERNOR_STAGES)
 
 
@@ -237,13 +238,13 @@ def test_governor_label_reads_class_character_and_config_name():
     with AiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'truncate')
-        assert app.ai._governor_label(governor) == "transformer 'truncate'"
+        assert app.ai._format_governor_label(governor) == "transformer 'truncate'"
         stray = DenyingOnReturn(app)
         # computed, not hard-coded: the module of a class defined inside a
         # test file depends on how pytest imported it; the rule under test is
         # the FORM (module:Class), not one specific path
         path = f'{type(stray).__module__}:{type(stray).__name__}'
-        assert app.ai._governor_label(stray) == f'conductor {path!r}'
+        assert app.ai._format_governor_label(stray) == f'conductor {path!r}'
 
 
 # ---- a no always wins, only a guard decides ---------------------------------

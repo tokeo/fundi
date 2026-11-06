@@ -33,7 +33,7 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
         # no configurable options; empty per the config_defaults rule
         config_defaults = {}
 
-    def _log(self, message):
+    def _write_line(self, message):
         """
         Write one audit line, prefixed with a UTC timestamp.
 
@@ -48,44 +48,44 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
 
     def on_begin(self, ctx):
         """Log the start of the run (the raw incoming request)."""
-        self._log(f'begin, {len(ctx.messages)} message(s)')
+        self._write_line(f'begin, {len(ctx.messages)} message(s)')
 
     def on_prompt(self, ctx):
         """Log a model call about to be made, with the outgoing message count."""
-        self._log(f'prompt, {len(ctx.messages)} message(s) to the model')
+        self._write_line(f'prompt, {len(ctx.messages)} message(s) to the model')
 
     def on_answer(self, ctx, result):
         """Log the model's answer (text and/or tool calls)."""
         calls = len(result.tool_calls) if result.tool_calls else 0
-        self._log(f'answer, {calls} tool call(s) requested')
+        self._write_line(f'answer, {calls} tool call(s) requested')
 
     def on_call(self, ctx, invocation):
         """Log a tool call about to run, and whether a guard already denied it."""
         if invocation.decision == invocation.DENY:
-            self._log(f'call {invocation.name!r} denied: {invocation.reason}')
+            self._write_line(f'call {invocation.name!r} denied: {invocation.reason}')
         else:
-            self._log(f'call {invocation.name!r} arguments={invocation.arguments!r}')
+            self._write_line(f'call {invocation.name!r} arguments={invocation.arguments!r}')
 
     def on_return(self, ctx, invocation):
         """Log a completed tool call's outcome (denied, errored, raised, result)."""
         if invocation.decision == invocation.DENY:
-            self._log(f'return {invocation.name!r} denied: {invocation.reason}')
+            self._write_line(f'return {invocation.name!r} denied: {invocation.reason}')
         elif invocation.error is not None:
             # a sandbox-machinery failure (timeout, transport); name WHERE it ran
             # when a sandbox was reached (a denied call never reaches one, so
             # sandbox stays None there)
             sandbox_str = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
-            self._log(f'return {invocation.name!r} errored{sandbox_str}: {invocation.error}')
+            self._write_line(f'return {invocation.name!r} errored{sandbox_str}: {invocation.error}')
         elif invocation.result and invocation.result.state.exception is not None:
             # a tool that raised: caught by the sandbox, carried in its state,
             # distinct from the machinery error above, so the log tells them apart
             where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
-            self._log(f'return {invocation.name!r} raised{where}: {invocation.result.state.exception}')
+            self._write_line(f'return {invocation.name!r} raised{where}: {invocation.result.state.exception}')
         else:
             where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
             text = invocation.result.value.as_str if invocation.result and invocation.result.value else ''
-            self._log(f'return {invocation.name!r} ran{where}, returned: {text!r}')
+            self._write_line(f'return {invocation.name!r} ran{where}, returned: {text!r}')
 
     def on_close(self, ctx, result):
         """Log the final result of the run."""
-        self._log(f'close, final answer of {len(result.text or "")} char(s)')
+        self._write_line(f'close, final answer of {len(result.text or "")} char(s)')

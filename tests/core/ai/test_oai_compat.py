@@ -22,17 +22,17 @@ from tokeo.core.ai.providers.oai_compat import TokeoAiOaiCompatProvider
 _PROFILE = {'type': 'oai_compat', 'model': 'qwen2.5', 'options': {'base_url': 'http://localhost:11434/v1'}}
 
 
-def _provider_with(handler, monkeypatch):
+def _make_provider(handler, monkeypatch):
     # patch httpx.Client so the provider's per-call client routes through a
     # MockTransport running ```handler```; the real .post path is exercised,
     # only the socket is replaced
     original = httpx.Client
 
-    def factory(*args, **kw):
+    def make_client(*args, **kw):
         kw['transport'] = httpx.MockTransport(handler)
         return original(*args, **kw)
 
-    monkeypatch.setattr(httpx, 'Client', factory)
+    monkeypatch.setattr(httpx, 'Client', make_client)
     return TokeoAiOaiCompatProvider(None)
 
 
@@ -48,7 +48,7 @@ def test_oai_compat_maps_text_and_usage(monkeypatch):
             },
         )
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
     assert result.text == 'hello there'
     assert result.finish_reason == 'stop'
@@ -81,7 +81,7 @@ def test_oai_compat_maps_tool_calls_with_json_string_args(monkeypatch):
             },
         )
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'calc'}], tools=[{'name': 'calc'}])
     assert len(result.tool_calls) == 1
     call = result.tool_calls[0]
@@ -99,7 +99,7 @@ def test_oai_compat_tolerates_malformed_tool_arguments(monkeypatch):
             json={'choices': [{'message': {'tool_calls': [{'id': 'x', 'function': {'name': 't', 'arguments': 'not json'}}]}}]},
         )
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'x'}])
     # a malformed argument string degrades to an empty dict, not a crash
     assert result.tool_calls[0].arguments == 'not json'
@@ -111,7 +111,7 @@ def test_oai_compat_keeps_reasoning_apart(monkeypatch):
     def handler(request):
         return httpx.Response(200, json={'choices': [{'message': {'content': 'answer', 'reasoning': 'because'}}]})
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
     assert result.text == 'answer' and result.reasoning == 'because'
 
@@ -127,7 +127,7 @@ def test_oai_compat_sends_tools_and_auth_only_when_present(monkeypatch):
 
     # with a key and tools, both must travel
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1', 'key': 'secret-token'}}
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     provider.chat(profile, [{'role': 'user', 'content': 'hi'}], tools=[{'name': 'calc'}])
     assert seen['auth'] == 'Bearer secret-token'
     assert seen['body']['tools'] == [{'name': 'calc'}]
@@ -143,7 +143,7 @@ def test_oai_compat_omits_auth_and_tools_when_absent(monkeypatch):
         seen['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
     assert seen['auth'] is None
     assert 'tools' not in seen['body']
@@ -155,7 +155,7 @@ def test_oai_compat_unreachable_endpoint_raises_clear_error(monkeypatch):
     def handler(request):
         raise httpx.ConnectError('connection refused')
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     with pytest.raises(TokeoAiError) as exc:
         provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
     assert 'not reachable' in str(exc.value)
@@ -167,7 +167,7 @@ def test_oai_compat_http_error_status_raises_with_excerpt(monkeypatch):
     def handler(request):
         return httpx.Response(401, text='unauthorized: bad key')
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     with pytest.raises(TokeoAiError) as exc:
         provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
     assert 'HTTP 401' in str(exc.value)
@@ -191,7 +191,7 @@ def test_oai_compat_sends_profile_model_params(monkeypatch):
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     provider.chat(profile, [{'role': 'user', 'content': 'hi'}])
     assert seen['body']['temperature'] == 0.2
     assert seen['body']['top_p'] == 0.9
@@ -208,7 +208,7 @@ def test_oai_compat_call_params_override_profile(monkeypatch):
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     # the call override wins key by key; unset keys keep the profile value
     provider.chat(profile, [{'role': 'user', 'content': 'hi'}], model_params={'temperature': 0.9})
     assert seen['body']['temperature'] == 0.9
@@ -224,7 +224,7 @@ def test_oai_compat_model_param_overrides_profile_model(monkeypatch):
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     profile = {'model': 'from-profile', 'options': {'base_url': 'http://x/v1'}}
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     # a model key in model_params targets a different model on the same endpoint
     provider.chat(profile, [{'role': 'user', 'content': 'hi'}], model_params={'model': 'override-model'})
     assert seen['body']['model'] == 'override-model'
@@ -238,7 +238,7 @@ def test_oai_compat_maps_refusal(monkeypatch):
     def handler(request):
         return httpx.Response(200, json={'choices': [{'message': {'refusal': 'I cannot help with that'}, 'finish_reason': 'stop'}]})
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
     # a refusal is kept apart from text, which stays empty
     assert result.refusal == 'I cannot help with that'
@@ -251,6 +251,6 @@ def test_oai_compat_maps_system_fingerprint(monkeypatch):
     def handler(request):
         return httpx.Response(200, json={'system_fingerprint': 'fp_abc123', 'choices': [{'message': {'content': 'ok'}}]})
 
-    provider = _provider_with(handler, monkeypatch)
+    provider = _make_provider(handler, monkeypatch)
     result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
     assert result.system_fingerprint == 'fp_abc123'

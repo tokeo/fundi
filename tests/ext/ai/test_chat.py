@@ -48,7 +48,7 @@ def test_chat_drops_a_turn_that_ctrl_c_ended(monkeypatch):
             raise KeyboardInterrupt
         return TokeoAiResult(answer=ChatResult(text='ok'), loopdata=None, trace=[])
 
-    monkeypatch.setattr(AiController, '_chat_session', lambda self, history, completer: _Lines(['first', 'second']))
+    monkeypatch.setattr(AiController, '_build_chat_session', lambda self, history, completer: _Lines(['first', 'second']))
     monkeypatch.setattr(TokeoAi, 'chat', chat)
     cfg = init_defaults('ai')
     cfg['ai']['license_acknowledged'] = False

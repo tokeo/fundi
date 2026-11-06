@@ -54,7 +54,7 @@ def terminal_channel(read, write):
         t=TokeoAiConfirmAnswer.NO_RETRY,
     )
 
-    def channel(app, request):
+    def ask_on_terminal(app, request):
         subject = request.subject
         if isinstance(subject, Invocation):
             shown = f'{subject.name} {json.dumps(subject.arguments, default=str)}'
@@ -78,4 +78,4 @@ def terminal_channel(read, write):
             who = None
         return TokeoAiConfirmAnswer(answer, by=TokeoAiConfirmAnswer.BY_HUMAN, who=who, note=note)
 
-    return channel
+    return ask_on_terminal

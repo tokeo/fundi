@@ -71,7 +71,7 @@ class IsolatedPytest:
         self.result = None
 
     @classmethod
-    def inside(cls):
+    def is_inside(cls):
         """True inside the fresh pytest."""
         return os.environ.get(cls.ENVIRON) == '1'
 

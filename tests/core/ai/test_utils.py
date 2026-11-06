@@ -76,14 +76,14 @@ def test_parse_none_input_is_empty():
 # ---- add_tool_call / drop_tool_calls (the conductor originate helpers) ------
 
 
-def _blank_result():
+def _make_blank_result():
     return ChatResult(text='', reasoning='', refusal='', tool_calls=[], usage=None, finish_reason=None)
 
 
 def test_add_tool_call_appends_with_a_counted_id():
     """Two calls append in order with their ids inj_a, inj_b and arguments."""
     # a governor originates a call; the id is inj_<n> from loopdata, unique per turn
-    result = add_tool_call(_blank_result(), 'load_report', 'inj_a', quarter='Q1')
+    result = add_tool_call(_make_blank_result(), 'load_report', 'inj_a', quarter='Q1')
     result = add_tool_call(result, 'load_report', 'inj_b', quarter='Q2')
     assert [c.id for c in result.tool_calls] == ['inj_a', 'inj_b']
     assert [c.arguments for c in result.tool_calls] == [{'quarter': 'Q1'}, {'quarter': 'Q2'}]
@@ -91,14 +91,14 @@ def test_add_tool_call_appends_with_a_counted_id():
 
 def test_add_tool_call_returns_a_new_object():
     """add_tool_call returns a new object, the only change supersede sees."""
-    before = _blank_result()
+    before = _make_blank_result()
     after = add_tool_call(before, 'x', 'inj_1')
     assert after is not before
 
 
 def test_drop_tool_calls_by_name_and_all():
     """drop_tool_calls with 'a' keeps only b; without a name it drops all."""
-    result = add_tool_call(_blank_result(), 'a', 'inj_1')
+    result = add_tool_call(_make_blank_result(), 'a', 'inj_1')
     result = add_tool_call(result, 'b', 'inj_2')
     # by name: only a goes
     only_b = drop_tool_calls(result, 'a')

@@ -36,7 +36,7 @@ import subprocess
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError
 from tokeo.core.ai.sandbox import SANDBOX_OUTPUT_MAX_MB
 from tokeo.core.ai.sandboxes._common import (
-    _importable_path,
+    _get_importable_path,
     expand_env,
     result_from_reply,
     output_bytes,
@@ -106,7 +106,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
         # WHY canonical path: the child imports by module path. deriving it
         # from the loaded class (not the config string) lets a registry
         # alias cross the boundary too; the parent already resolved it
-        class_path = _importable_path(type(tool), 'tool')
+        class_path = _get_importable_path(type(tool), 'tool')
         timeout = self._config('timeout')
         memory_mb = self._config('memory_mb')
         output_mb = self._config('output_mb')

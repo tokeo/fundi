@@ -15,7 +15,7 @@ import json
 from tokeo.core.ai import TokeoAiError, ToolResult, ToolValue, ToolStates
 
 
-def _importable_path(cls, what):
+def _get_importable_path(cls, what):
     # the canonical import path of a loaded class; a sandbox that rebuilds the
     # tool in another interpreter needs it reachable by module path there
     module = cls.__module__

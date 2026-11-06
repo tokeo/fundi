@@ -32,18 +32,18 @@ class _CallStream:
         self._stream = stream
         self._index = index
 
-    def _target(self):
+    def _get_target(self):
         buffers = _call_buffers.get()
         return buffers[self._index] if buffers is not None else self._stream
 
     def write(self, text):
-        return self._target().write(text)
+        return self._get_target().write(text)
 
     def flush(self):
-        return self._target().flush()
+        return self._get_target().flush()
 
     def __getattr__(self, name):
-        return getattr(self._target(), name)
+        return getattr(self._get_target(), name)
 
 
 class TokeoAiInProcessSandbox(TokeoAiSandbox):
@@ -108,7 +108,7 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
         # same run states a process-boundary sandbox reports, for consistency.
         # the buffers belong to this call only, also when calls run in parallel,
         # and hold output a tool emitted before raising
-        self._stand_in_streams()
+        self._install_stand_ins()
         output_mb = self._config('output_mb')
         out_buf = OutputBuffer(output_bytes(output_mb), f'{output_mb:g} MB')
         err_buf = OutputBuffer(output_bytes(output_mb), f'{output_mb:g} MB')
@@ -141,7 +141,7 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
         class_path = f'{type(tool).__module__}.{type(tool).__qualname__}'
         return check_output(output, output_bytes(output_mb), f'{output_mb:g} MB', class_path, 'in_process')
 
-    def _stand_in_streams(self):
+    def _install_stand_ins(self):
         # put the stand-ins in place of sys.stdout and sys.stderr, once; again
         # only when other code replaced them since (e.g. a capture of a test)
         with _install_lock:

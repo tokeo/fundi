@@ -171,7 +171,7 @@ from tests.ext.ai.lib.ai_tests_helper import EchoTool           # own subject
 
 # never from another subject, a conftest.py or a test file, never by a bare name
 from tests.ext.ai.lib.ai_tests_helper import EchoTool           # wrong in tests/core/ai
-from tests.ext.ai.test_ai import ai_config                      # wrong
+from tests.ext.ai.test_ai import make_ai_config                 # wrong
 from ai_tests_helper import EchoTool                            # wrong
 ```
 

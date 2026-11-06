@@ -14,7 +14,7 @@ linter draw from the same source for "which profile" and "which agent".
 from tokeo.core.ai.exc import TokeoAiError
 
 
-def _enabled(profile):
+def _is_enabled(profile):
     # a profile counts only when it is a mapping and not disabled; a disabled
     # profile is skipped everywhere, so it is also not found by its name
     return isinstance(profile, dict) and bool(profile.get('enabled', True))
@@ -44,11 +44,11 @@ def find_profile(profiles, key, value):
     """
     if key in ('profile', 'name'):
         profile = profiles.get(value)
-        if _enabled(profile):
+        if _is_enabled(profile):
             return value, profile
         raise TokeoAiError(f'no enabled ai profile named {value!r}')
     for name, profile in profiles.items():
-        if not _enabled(profile):
+        if not _is_enabled(profile):
             continue
         if profile.get(key) == value:
             return name, profile
@@ -141,7 +141,7 @@ def selectable_names(profiles, agent_names):
         'purpose': [...]}```, only enabled profiles contributing
 
     """
-    enabled = [(name, profile) for name, profile in profiles.items() if _enabled(profile)]
+    enabled = [(name, profile) for name, profile in profiles.items() if _is_enabled(profile)]
     return {
         'profile': [name for name, _ in enabled],
         'agent': list(agent_names),

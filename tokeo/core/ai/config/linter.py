@@ -161,18 +161,18 @@ class TokeoAiLinter:
 
         """
         self.issues = []
-        tools = self._value('tools') or {}
-        profiles = self._value('profiles') or {}
-        defaults = self._value('defaults')
-        agents = self._value('agents') or {}
-        self._lint_keys('ai', self._section_keys(), _AI_KEYS)
-        self._lint_max_values('ai', {key: self._value(key) for key in ('max_steps', 'max_loops')})
-        trace = self._value('trace')
+        tools = self._get_value('tools') or {}
+        profiles = self._get_value('profiles') or {}
+        defaults = self._get_value('defaults')
+        agents = self._get_value('agents') or {}
+        self._lint_keys('ai', self._get_section_keys(), _AI_KEYS)
+        self._lint_max_values('ai', {key: self._get_value(key) for key in ('max_steps', 'max_loops')})
+        trace = self._get_value('trace')
         if trace is not None and not isinstance(trace, bool):
-            self._add('ai.trace', 'must be true or false')
+            self._add_issue('ai.trace', 'must be true or false')
         # required: someone must have set it, any value counts
-        if 'license_acknowledged' not in self._section_keys():
-            self._add('ai.license_acknowledged', 'is required, set it to true once you have read LICENSE.md of tokeo-fundi')
+        if 'license_acknowledged' not in self._get_section_keys():
+            self._add_issue('ai.license_acknowledged', 'is required, set it to true once you have read LICENSE.md of tokeo-fundi')
         self._lint_tools(tools)
         self._lint_profiles(profiles, tools)
         self._lint_defaults(defaults, profiles, agents)
@@ -184,9 +184,9 @@ class TokeoAiLinter:
     def _run_validators(self, section):
         # run the registered validators over every element of one section; a
         # non-mapping section is reported once instead of being walked
-        entries = self._value(section) or {}
+        entries = self._get_value(section) or {}
         if not isinstance(entries, dict):
-            self._add(f'ai.{section}', 'must be a mapping of name to item')
+            self._add_issue(f'ai.{section}', 'must be a mapping of name to item')
             return
         for name, value in entries.items():
             for validator in self._validators.get(section, []):
@@ -197,10 +197,10 @@ class TokeoAiLinter:
                 try:
                     issues = validator(section, name, value)
                 except TokeoAiError as err:
-                    self._add(f'ai.{section}.{name}', str(err))
+                    self._add_issue(f'ai.{section}.{name}', str(err))
                     continue
                 except Exception as err:
-                    self._add(f'ai.{section}.{name}', f'validator failed: {type(err).__name__}: {err}')
+                    self._add_issue(f'ai.{section}.{name}', f'validator failed: {type(err).__name__}: {err}')
                     continue
                 self.issues.extend(issues or [])
 
@@ -235,19 +235,19 @@ class TokeoAiLinter:
                     stage_entry = dict(type=value.get('type'), options=block.get('options'))
                     self._validate_options_via_class('governor', f'{path}.{stage}', stage_entry)
                 elif block is not None:
-                    self._add(f'{path}.{stage}', 'must be a mapping with "options"')
+                    self._add_issue(f'{path}.{stage}', 'must be a mapping with "options"')
             self._lint_governor_purity(section, path, value.get('type'))
             self._lint_tool_name_options(path, value)
         else:
-            self._add(path, 'must be an item (mapping), a short form (string), or a chain (list)')
+            self._add_issue(path, 'must be an item (mapping), a short form (string), or a chain (list)')
 
-    def _governors_merged(self):
+    def _merge_governors(self):
         # the one governor registry the handler builds at load: the three
         # sections merged by name. a name duplicated across sections is reported
         # by _lint_governor_uniqueness; here a plain merge resolves references
         merged = {}
         for section in _GOVERNOR_SECTIONS:
-            merged.update(self._value(section) or {})
+            merged.update(self._get_value(section) or {})
         return merged
 
     def _lint_governor_uniqueness(self):
@@ -256,12 +256,12 @@ class TokeoAiLinter:
         # than one section, so the collision is caught before the merge
         seen = {}
         for section in _GOVERNOR_SECTIONS:
-            for name in self._value(section) or {}:
+            for name in self._get_value(section) or {}:
                 seen.setdefault(name, []).append(section)
         for name, sections in seen.items():
             if len(sections) > 1:
                 where = ', '.join(sections)
-                self._add(
+                self._add_issue(
                     f'ai.{sections[-1]}.{name}',
                     f'governor name {name!r} is configured in more than one section ({where}); '
                     'names are unique across guards/transformers/conductors',
@@ -284,7 +284,7 @@ class TokeoAiLinter:
             return
         if not issubclass(cls, expected):
             class_path = f'{cls.__module__}:{cls.__qualname__}'
-            self._add(path, f'class {class_path} can not be used as {_GOVERNOR_ROLE_NAME[section]}')
+            self._add_issue(path, f'class {class_path} can not be used as {_GOVERNOR_ROLE_NAME[section]}')
 
     def _lint_tool_name_options(self, path, item):
         # a governor class that decides by tool names declares which of its
@@ -298,7 +298,7 @@ class TokeoAiLinter:
         except TokeoAiError:
             return
         meta = getattr(cls, 'Meta', None)
-        tool_names = set(self._value('tools') or {})
+        tool_names = set(self._get_value('tools') or {})
         for key in getattr(meta, 'tool_name_options', ()):
             self._lint_names(f'{path}.options.{key}', options.get(key), tool_names, 'tool or group')
 
@@ -321,10 +321,10 @@ class TokeoAiLinter:
         path = f'ai.{section}.{name}'
         # a yaml key null is None; a leading __ belongs to the framework
         if not isinstance(name, str):
-            self._add(path, 'an agent name must be a string')
+            self._add_issue(path, 'an agent name must be a string')
             return
         if name.startswith('__'):
-            self._add(path, 'a name starting with __ is reserved for the framework, choose another name')
+            self._add_issue(path, 'a name starting with __ is reserved for the framework, choose another name')
             return
         if not isinstance(item, dict):
             return
@@ -332,12 +332,12 @@ class TokeoAiLinter:
         path = f'{path}.options'
         # governors are required, [] is a deliberate choice
         if not isinstance(options, dict) or 'governors' not in options:
-            self._add(f'{path}.governors', 'must list governors (an empty list is allowed)')
+            self._add_issue(f'{path}.governors', 'must list governors (an empty list is allowed)')
         elif options.get('governors') == []:
-            self._add(f'{path}.governors', 'is empty, the agent runs without governors', level='note')
+            self._add_issue(f'{path}.governors', 'is empty, the agent runs without governors', level='note')
         if not isinstance(options, dict):
             return
-        tool_names = set(self._value('tools') or {})
+        tool_names = set(self._get_value('tools') or {})
         self._lint_names(f'{path}.tools', options.get('tools'), tool_names, 'tool or group')
         # the guards composition: each entry is a bare name or a one-key
         # {name: [stages]} mapping; chains (a list value under ai.guards) may be
@@ -345,7 +345,7 @@ class TokeoAiLinter:
         self._lint_guard_composition(f'{path}.governors', options.get('governors'))
         self._lint_guard_omit(f'{path}.omit', options.get('omit'))
         self._lint_max_values(path, options)
-        self._lint_names(f'{path}.sandboxes', options.get('sandboxes'), set(self._value('sandboxes') or {}), 'sandbox')
+        self._lint_names(f'{path}.sandboxes', options.get('sandboxes'), set(self._get_value('sandboxes') or {}), 'sandbox')
         self._lint_names(f'{path}.deny', options.get('deny'), tool_names, 'tool or group')
         # union/conflict: run the one resolver so the linter reports exactly
         # what a run would do. a not-decidable conflict raises (caught as an
@@ -358,7 +358,7 @@ class TokeoAiLinter:
         for key in ('max_steps', 'max_loops'):
             value = values.get(key)
             if value is not None and not is_int_ge(value, 0):
-                self._add(f'{path}.{key}', 'must be a whole number of 0 or more (0 = unlimited)')
+                self._add_issue(f'{path}.{key}', 'must be a whole number of 0 or more (0 = unlimited)')
 
     def _lint_guard_resolution(self, path, options):
         # drive the resolver with a note-collecting logger, so the override
@@ -370,28 +370,28 @@ class TokeoAiLinter:
         class _NoteLogger:
 
             def warning(self, message):
-                notes._add(f'{path}.governors', message, level='note')
+                notes._add_issue(f'{path}.governors', message, level='note')
 
         try:
             resolve_governors(
-                self._governors_merged(),
+                self._merge_governors(),
                 as_list(options.get('governors')),
                 as_list(options.get('omit')),
-                self._guard_class_stages_or_empty,
+                self._get_class_stages_or_empty,
                 logger=_NoteLogger(),
             )
         except TokeoAiError as err:
             # a not-decidable conflict (or a chain cycle): an error issue
-            self._add(f'{path}.governors', str(err))
+            self._add_issue(f'{path}.governors', str(err))
 
-    def _guard_class_stages_or_empty(self, config_name):
+    def _get_class_stages_or_empty(self, config_name):
         # the resolver's stages_of: the class stages, or empty when the class
         # cannot be resolved (the unknown name is reported by the form check, so
         # here an empty set just yields an empty participation, no second error)
-        stages = self._guard_class_stages(config_name)
+        stages = self._get_class_stages(config_name)
         return stages or set()
 
-    def _guard_class_stages(self, config_name):
+    def _get_class_stages(self, config_name):
         # the stages a governor's class can do, by reflection over the resolved
         # class (its on_* methods vs the base). an alias resolves through its
         # ai.guards entry type; a class path resolves directly. returns
@@ -400,7 +400,7 @@ class TokeoAiLinter:
             if ':' in config_name:
                 cls = self.app.ai.resolve('governor', config_name)
             else:
-                governor_entry = self._governors_merged().get(config_name)
+                governor_entry = self._merge_governors().get(config_name)
                 type_value = governor_entry.get('type') if isinstance(governor_entry, dict) else governor_entry
                 if not isinstance(type_value, str):
                     return None
@@ -415,48 +415,48 @@ class TokeoAiLinter:
         # ai.guards) is walked too. a named stage must be one the guard's class
         # can do; an unknown alias (not a class path, not configured) is an
         # error; an empty/null/[] stage list is an error
-        known = set(self._governors_merged())
+        known = set(self._merge_governors())
         chain_path = chain_path or []
         for entry in as_list(guards):
             try:
                 config_name, stages = parse_entry(entry)
             except TokeoAiError as err:
-                self._add(path, str(err))
+                self._add_issue(path, str(err))
                 continue
-            value = self._governors_merged().get(config_name) if isinstance(config_name, str) else None
+            value = self._merge_governors().get(config_name) if isinstance(config_name, str) else None
             # a list value under ai.guards is a chain: walk it (a chain entry
             # carries no stage list of its own)
             if isinstance(value, list):
                 if stages is not None:
-                    self._add(path, f'chain {config_name!r} cannot take a stage list; stages belong to its guards')
+                    self._add_issue(path, f'chain {config_name!r} cannot take a stage list; stages belong to its guards')
                     continue
                 if config_name in chain_path:
-                    self._add(path, f'guard chain {config_name!r} imports itself (cycle)')
+                    self._add_issue(path, f'guard chain {config_name!r} imports itself (cycle)')
                     continue
                 self._lint_guard_composition(path, value, chain_path + [config_name])
                 continue
             # a config name must be a configured name or a class path
             if '.' not in config_name and config_name not in known:
-                self._add(path, _unknown('governor', config_name, known))
+                self._add_issue(path, _format_unknown('governor', config_name, known))
                 continue
             # a named stage must be one the class can do
             if stages is not None:
-                class_stages = self._guard_class_stages(config_name)
+                class_stages = self._get_class_stages(config_name)
                 if class_stages is not None:
                     for stage in stages:
                         if stage != GOVERNOR_STAGE_ANY and stage not in class_stages:
-                            self._add(path, f'guard {config_name!r} cannot run at stage {stage!r} (its class does not)')
+                            self._add_issue(path, f'guard {config_name!r} cannot run at stage {stage!r} (its class does not)')
 
     def _lint_guard_omit(self, path, omit):
         # omit is a list of governor config names to drop from the composition;
         # it is a sibling field, not a list entry, so it never collides with a
         # guard or chain name. each name should be a known guard or chain
-        known = set(self._governors_merged())
+        known = set(self._merge_governors())
         for entry in as_list(omit):
             if not isinstance(entry, str):
-                self._add(path, f'omit entry must be a guard name, got {entry!r}')
+                self._add_issue(path, f'omit entry must be a guard name, got {entry!r}')
             elif '.' not in entry and entry not in known:
-                self._add(path, _unknown('governor', entry, known))
+                self._add_issue(path, _format_unknown('governor', entry, known))
 
     def _validate_sandbox(self, section, name, item):
         # option values are checked by the class in validate_options
@@ -467,14 +467,14 @@ class TokeoAiLinter:
         self._lint_options(path, item)
         self._lint_type('sandbox', path, item)
         self._lint_option_keys('sandbox', f'{path}.options', item.get('type'), item.get('options'))
-        tool_names = set(self._value('tools') or {})
+        tool_names = set(self._get_value('tools') or {})
         # tools is required: the tool/group names from ai.tools; there is no
         # catch-all, a new tool runs nowhere until a sandbox names it
         listed = item.get('tools')
         if listed is None:
-            self._add(f'{path}.tools', 'is required (a list of tool/group names)')
+            self._add_issue(f'{path}.tools', 'is required (a list of tool/group names)')
         elif '_all' in as_list(listed):
-            self._add(f'{path}.tools', "has no catch-all '_all', name the tools and groups it runs")
+            self._add_issue(f'{path}.tools', "has no catch-all '_all', name the tools and groups it runs")
         else:
             self._lint_names(f'{path}.tools', listed, tool_names, 'tool or group')
         # except excludes members from THIS sandbox only (single or list)
@@ -503,7 +503,7 @@ class TokeoAiLinter:
         except Exception:
             return
         for message in errors or []:
-            self._add(f'{path}.options', message)
+            self._add_issue(f'{path}.options', message)
 
     def _lint_names(self, path, selection, known, what):
         # a single name or a list of names from ```known```; None is allowed
@@ -511,12 +511,12 @@ class TokeoAiLinter:
         # ```except```/```tools```, which all accept one entry or many
         for entry in as_list(selection):
             if entry not in known:
-                self._add(path, _unknown(what, entry, known))
+                self._add_issue(path, _format_unknown(what, entry, known))
 
-    def _add(self, path, message, level='error'):
+    def _add_issue(self, path, message, level='error'):
         self.issues.append(AiLintIssue(path, message, level))
 
-    def _value(self, key):
+    def _get_value(self, key):
         # read one ```ai``` config value; a missing key raises in cement, so
         # swallow that and treat it as unset
         try:
@@ -524,7 +524,7 @@ class TokeoAiLinter:
         except Exception:
             return None
 
-    def _section_keys(self):
+    def _get_section_keys(self):
         # the top-level keys present in the ```ai``` section, to spot typos
         try:
             return list(self.app.config.keys('ai'))
@@ -535,7 +535,7 @@ class TokeoAiLinter:
         # a key nobody reads is a typo, never silently ignored
         for key in keys:
             if key not in allowed:
-                self._add(f'{path}.{key}', _unknown(what, key, allowed))
+                self._add_issue(f'{path}.{key}', _format_unknown(what, key, allowed))
 
     def _lint_option_keys(self, kind, path, type_value, options):
         # the allowed options are the config_defaults of the nearest Meta in
@@ -557,35 +557,35 @@ class TokeoAiLinter:
         if isinstance(item, dict):
             return True
         if isinstance(item, str):
-            self._add(path, f'a {what} has no short form, write it as a mapping: {{type: {item}, ...}}')
+            self._add_issue(path, f'a {what} has no short form, write it as a mapping: {{type: {item}, ...}}')
         else:
-            self._add(path, f'a {what} must be a mapping with a "type"')
+            self._add_issue(path, f'a {what} must be a mapping with a "type"')
         return False
 
     def _lint_options(self, path, item):
         # ```options``` may be omitted or {}, null is an error
         if 'options' in item and not isinstance(item['options'], dict):
-            self._add(f'{path}.options', 'must be a mapping, write {} or omit it')
+            self._add_issue(f'{path}.options', 'must be a mapping, write {} or omit it')
 
     def _lint_type(self, kind, path, item):
         # every item names a class by ```type```; resolving it on ```app.ai```
         # imports a class path or looks up a built-in alias
         type_value = item.get('type')
         if not type_value:
-            self._add(path, f'missing {kind} "type"')
+            self._add_issue(path, f'missing {kind} "type"')
             return
         if not isinstance(type_value, str):
-            self._add(f'{path}.type', 'must be an alias or a class path module:Class')
+            self._add_issue(f'{path}.type', 'must be an alias or a class path module:Class')
             return
         try:
             self.app.ai.resolve(kind, type_value)
         except TokeoAiError as err:
-            self._add(f'{path}.type', str(err))
+            self._add_issue(f'{path}.type', str(err))
 
     def _lint_tools(self, tools):
         if not isinstance(tools, dict):
             if tools:
-                self._add('ai.tools', 'must be a mapping of name to item or group')
+                self._add_issue('ai.tools', 'must be a mapping of name to item or group')
             return
         # a dict is an item, a string its short form, a list a group
         items, groups = {}, {}
@@ -597,7 +597,7 @@ class TokeoAiLinter:
             elif isinstance(value, dict):
                 items[name] = value
             else:
-                self._add(f'ai.tools.{name}', 'must be an item (mapping), a short form (string), or a group (list)')
+                self._add_issue(f'ai.tools.{name}', 'must be an item (mapping), a short form (string), or a group (list)')
         for name, item in items.items():
             path = f'ai.tools.{name}'
             self._lint_keys(path, item, _ITEM_KEYS)
@@ -608,11 +608,11 @@ class TokeoAiLinter:
         for name, entries in groups.items():
             path = f'ai.tools.{name}'
             if not all(isinstance(entry, str) for entry in entries):
-                self._add(path, 'a group must be a list of tool or group names')
+                self._add_issue(path, 'a group must be a list of tool or group names')
                 continue
             for entry in entries:
                 if entry not in known:
-                    self._add(path, _unknown('tool or group', entry, known))
+                    self._add_issue(path, _format_unknown('tool or group', entry, known))
         self._lint_cycles(groups)
 
     def _lint_cycles(self, groups):
@@ -621,14 +621,14 @@ class TokeoAiLinter:
         # is the shared one (config.tools.find_cycles), so the linter and the
         # handler's expansion agree on what a cycle is
         for group_name in sorted(find_cycles(groups)):
-            self._add(f'ai.tools.{group_name}', 'group has a cyclic membership')
+            self._add_issue(f'ai.tools.{group_name}', 'group has a cyclic membership')
 
     def _lint_profiles(self, profiles, tools):
         if not isinstance(profiles, dict):
             if profiles:
-                self._add('ai.profiles', 'must be a mapping of name to profile')
+                self._add_issue('ai.profiles', 'must be a mapping of name to profile')
             return
-        agent_names = set(self._value('agents') or {})
+        agent_names = set(self._get_value('agents') or {})
         tool_names = set(tools) if isinstance(tools, dict) else set()
         for name, profile in profiles.items():
             path = f'ai.profiles.{name}'
@@ -640,15 +640,15 @@ class TokeoAiLinter:
             # model_params is passed through unchecked
             self._lint_option_keys('provider', f'{path}.options', profile.get('type'), profile.get('options'))
             if profile.get('model_params') is not None and not isinstance(profile['model_params'], dict):
-                self._add(f'{path}.model_params', 'must be a mapping')
+                self._add_issue(f'{path}.model_params', 'must be a mapping')
             if 'enabled' in profile and not isinstance(profile['enabled'], bool):
-                self._add(f'{path}.enabled', 'must be true or false')
+                self._add_issue(f'{path}.enabled', 'must be true or false')
             # a profile binds the agent (composition); null opts out on
             # purpose, a name must exist. a profile may ```deny``` tools/groups
             # to carve out its own subset of a shared agent's tools
             agent = profile.get('agent')
             if agent is not None and agent not in agent_names:
-                self._add(f'{path}.agent', _unknown('agent', agent, agent_names))
+                self._add_issue(f'{path}.agent', _format_unknown('agent', agent, agent_names))
             self._lint_names(f'{path}.deny', profile.get('deny'), tool_names, 'tool or group')
 
     def _lint_defaults(self, defaults, profiles, agents):
@@ -656,25 +656,25 @@ class TokeoAiLinter:
         # (composition) used when a call selects none. both are optional, but
         # when set must name an existing entry; a missing block is a warning
         if not defaults:
-            self._add('ai.defaults', 'no default profile or agent configured', 'warning')
+            self._add_issue('ai.defaults', 'no default profile or agent configured', 'warning')
             return
         if not isinstance(defaults, dict):
-            self._add('ai.defaults', 'must be a mapping')
+            self._add_issue('ai.defaults', 'must be a mapping')
             return
         self._lint_keys('ai.defaults', defaults, _DEFAULTS_KEYS)
         profile = defaults.get('profile')
         if profile:
             known = set(profiles) if isinstance(profiles, dict) else set()
             if profile not in known:
-                self._add('ai.defaults.profile', _unknown('profile', profile, known))
+                self._add_issue('ai.defaults.profile', _format_unknown('profile', profile, known))
         agent = defaults.get('agent')
         if agent:
             known = set(agents) if isinstance(agents, dict) else set()
             if agent not in known:
-                self._add('ai.defaults.agent', _unknown('agent', agent, known))
+                self._add_issue('ai.defaults.agent', _format_unknown('agent', agent, known))
 
 
-def _unknown(what, name, known):
+def _format_unknown(what, name, known):
     # build an "unknown X 'name'; did you mean 'closest'?" message
     match = difflib.get_close_matches(str(name), [str(k) for k in known], n=1)
     suggestion = f'; did you mean {match[0]!r}?' if match else ''

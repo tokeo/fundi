@@ -59,7 +59,7 @@ from tokeo.core.utils.validate import is_int_ge
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError
 from tokeo.core.ai.sandbox import SANDBOX_OUTPUT_MAX_MB
 from tokeo.core.ai.sandboxes._common import (
-    _importable_path,
+    _get_importable_path,
     expand_env,
     result_from_reply,
     output_bytes,
@@ -174,7 +174,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         image = self._config('image')
         if not image:
             raise TokeoAiError(f'the docker sandbox {self.config_name!r} needs an image')
-        class_path = _importable_path(type(tool), 'tool')
+        class_path = _get_importable_path(type(tool), 'tool')
         job = json.dumps(
             dict(
                 tool=class_path,
@@ -190,21 +190,21 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         if self._config('reuse'):
             with self._lock:
                 if self._container is None:
-                    name = self._name()
+                    name = self._build_container_name()
                     idle_cmd = ['--entrypoint', python, image, '-c', 'import signal; signal.pause()']
-                    self._call(self._run_args(name, detach=True) + idle_cmd, None, class_path)
+                    self._run_client(self._build_run_args(name, detach=True) + idle_cmd, None, class_path)
                     self._container = name
                     atexit.register(self.close)
                 name = self._container
             args = [self._config('command'), 'exec', '-i', name, python] + runner
         else:
-            name = self._name()
-            args = self._run_args(name, detach=False) + ['--entrypoint', python, image] + runner
+            name = self._build_container_name()
+            args = self._build_run_args(name, detach=False) + ['--entrypoint', python, image] + runner
         try:
-            out, err = self._call(args, job, class_path)
+            out, err = self._run_client(args, job, class_path)
         except TokeoAiError:
             # a timed out or broken container goes, reused or not
-            self._kill(name)
+            self._kill_container(name)
             with self._lock:
                 if self._container == name:
                     self._container = None
@@ -217,15 +217,15 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         """Remove the container of ```reuse```, if one is running."""
         with self._lock:
             if self._container is not None:
-                self._kill(self._container)
+                self._kill_container(self._container)
                 self._container = None
 
-    def _name(self):
+    def _build_container_name(self):
         # a unique container name, so a timeout can remove exactly this one
         label = re.sub(r'[^a-zA-Z0-9_.-]', '-', self.config_name or 'docker')
         return f'tokeo-ai-{label}-{os.getpid()}-{uuid.uuid4().hex[:8]}'
 
-    def _run_args(self, name, detach):
+    def _build_run_args(self, name, detach):
         # the hardening: fixed flags first, then the configured limits
         args = [self._config('command'), 'run', '--rm', '-d' if detach else '-i', '--name', name]
         args += ['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges']
@@ -244,7 +244,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             args += ['-e', f'{key}={value}']
         return args
 
-    def _call(self, args, job, class_path):
+    def _run_client(self, args, job, class_path):
         # run the client, stdin carries the job; a timeout is a failure. stdout
         # and stderr go to files and are read at most output_mb, so a reply
         # without end cannot fill the memory of the host
@@ -270,7 +270,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             raise TokeoAiError(f'the docker sandbox cannot start its container: {err.strip()[:200]}')
         return out, err
 
-    def _kill(self, name):
+    def _kill_container(self, name):
         # remove the container; it may be gone already (--rm)
         try:
             kill_cmd = [self._config('command'), 'kill', name]

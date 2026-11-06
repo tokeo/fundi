@@ -46,26 +46,26 @@ def test_hooks_default_to_noops():
     tool = _BareTool.__new__(_BareTool)
     td = {}
 
-    def noop(message):
+    def track_nothing(message):
         return None
 
-    assert tool.prepare(td, {'a': 1}, noop) is None
-    assert tool.before(td, {'a': 1}, noop) is None
-    assert tool.after(td, {'a': 1}, ToolResult(value='x'), noop) is None
-    assert tool.teardown(td, {'a': 1}, ToolResult(value='x'), noop) is None
+    assert tool.prepare(td, {'a': 1}, track_nothing) is None
+    assert tool.before(td, {'a': 1}, track_nothing) is None
+    assert tool.after(td, {'a': 1}, ToolResult(value='x'), track_nothing) is None
+    assert tool.teardown(td, {'a': 1}, ToolResult(value='x'), track_nothing) is None
     assert td == {}
 
 
 def test_hook_signatures_match_the_contract():
     """prepare, before: (turndata, arguments, track); after, teardown add result."""
 
-    def sig(m):
+    def get_signature(m):
         return str(inspect.signature(getattr(TokeoAiTool, m)))
 
-    assert sig('prepare') == '(self, turndata, arguments, track)'
-    assert sig('before') == '(self, turndata, arguments, track)'
-    assert sig('after') == '(self, turndata, arguments, result, track)'
-    assert sig('teardown') == '(self, turndata, arguments, result, track)'
+    assert get_signature('prepare') == '(self, turndata, arguments, track)'
+    assert get_signature('before') == '(self, turndata, arguments, track)'
+    assert get_signature('after') == '(self, turndata, arguments, result, track)'
+    assert get_signature('teardown') == '(self, turndata, arguments, result, track)'
 
 
 def test_before_may_reshape_and_return_a_dict():
@@ -121,31 +121,31 @@ class _LoggingTool(TokeoAiTool):
         self.fail = fail
         self.ran = []
 
-    def _step(self, name):
+    def _log_step(self, name):
         self.ran.append(name)
         if self.fail == name:
             raise ValueError(f'boom-{name}')
 
     def prepare(self, turndata, arguments, track):
         track('prepared')
-        self._step('prepare')
+        self._log_step('prepare')
 
     def before(self, turndata, arguments, track):
-        self._step('before')
+        self._log_step('before')
         return {**arguments, 'path': 'safe/' + arguments['path']}
 
     def exec(self, path):
-        self._step('exec')
+        self._log_step('exec')
         return ToolResult(value=f'ran {path}')
 
     def after(self, turndata, arguments, result, track):
-        self._step('after')
+        self._log_step('after')
 
     def teardown(self, turndata, arguments, result, track):
-        self._step('teardown')
+        self._log_step('teardown')
 
 
-def _run(tool, ctx=None):
+def _run_tool(tool, ctx=None):
     """Run the tool through _exec_lifecycle with path 'x' behind a _Sandbox."""
     handler = TokeoAi.__new__(TokeoAi)
     return handler._exec_lifecycle(tool, _Sandbox(), {'path': 'x'}, ctx or TokeoAiContext(messages=[]))
@@ -154,7 +154,7 @@ def _run(tool, ctx=None):
 def test_happy_path_runs_all_hooks_and_before_reaches_exec():
     """All five steps run in order and exec gets the reshaped path: 'ran safe/x'."""
     tool = _LoggingTool()
-    result = _run(tool)
+    result = _run_tool(tool)
     assert tool.ran == ['prepare', 'before', 'exec', 'after', 'teardown']
     # the arguments before reshaped are the ones exec got
     assert result.value == 'ran safe/x'
@@ -163,7 +163,7 @@ def test_happy_path_runs_all_hooks_and_before_reaches_exec():
 def test_prepare_raising_skips_everything_including_teardown():
     """A raising prepare runs nothing else, not even teardown; its error returns."""
     tool = _LoggingTool(fail='prepare')
-    result = _run(tool)
+    result = _run_tool(tool)
     assert tool.ran == ['prepare']
     assert 'boom-prepare' in result.state.exception
 
@@ -171,7 +171,7 @@ def test_prepare_raising_skips_everything_including_teardown():
 def test_before_raising_short_circuits_to_teardown():
     """A raising before skips exec and after, teardown runs; its error returns."""
     tool = _LoggingTool(fail='before')
-    result = _run(tool)
+    result = _run_tool(tool)
     assert tool.ran == ['prepare', 'before', 'teardown']
     assert 'boom-before' in result.state.exception
 
@@ -179,7 +179,7 @@ def test_before_raising_short_circuits_to_teardown():
 def test_exec_raising_still_runs_teardown():
     """A raising exec skips after, teardown still runs; its error is the result."""
     tool = _LoggingTool(fail='exec')
-    result = _run(tool)
+    result = _run_tool(tool)
     assert tool.ran == ['prepare', 'before', 'exec', 'teardown']
     assert 'boom-exec' in result.state.exception
 
@@ -187,7 +187,7 @@ def test_exec_raising_still_runs_teardown():
 def test_after_raising_becomes_the_result():
     """A raising after still gets teardown, and its error replaces the result."""
     tool = _LoggingTool(fail='after')
-    result = _run(tool)
+    result = _run_tool(tool)
     assert tool.ran == ['prepare', 'before', 'exec', 'after', 'teardown']
     assert 'boom-after' in result.state.exception
 
@@ -196,7 +196,7 @@ def test_teardown_raising_is_noted_and_keeps_the_result():
     """A raising teardown keeps 'ran safe/x' and is traced as 'teardown failed'."""
     ctx = TokeoAiContext(messages=[])
     tool = _LoggingTool(fail='teardown')
-    result = _run(tool, ctx)
+    result = _run_tool(tool, ctx)
     # the settled result survives a failing teardown
     assert result.value == 'ran safe/x'
     assert result.state.exception is None
@@ -208,7 +208,7 @@ def test_track_binds_origin_and_stage():
     """A note tracked in prepare has the tool as origin and stage 'prepare'."""
     ctx = TokeoAiContext(messages=[])
     tool = _LoggingTool()
-    _run(tool, ctx)
+    _run_tool(tool, ctx)
     step = next(s for s in ctx.trace if getattr(s.object, 'content', None) == 'prepared')
     assert step.origin is tool
     assert step.stage == 'prepare'

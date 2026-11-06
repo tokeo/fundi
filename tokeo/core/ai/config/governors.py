@@ -186,7 +186,7 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
         # so a note can say "bare entry (all stages)" vs an explicit list
         appearances[config_name].append((source, resolved, stages is None))
 
-    def walk(entries, source, chain_path):
+    def walk_entries(entries, source, chain_path):
         for entry in entries or []:
             config_name, stages = parse_entry(entry)
             value = governors_section.get(config_name) if isinstance(config_name, str) else None
@@ -197,22 +197,22 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
                     raise TokeoAiError(f'chain {config_name!r} cannot take a stage list; stages belong to its guards')
                 if config_name in chain_path:
                     raise TokeoAiError(f'guard chain {config_name!r} imports itself (cycle)')
-                walk(value, 'chain', chain_path + [config_name])
+                walk_entries(value, 'chain', chain_path + [config_name])
             else:
                 add_appearance(config_name, stages, source)
 
-    walk(agent_governors, 'agent', [])
+    walk_entries(agent_governors, 'agent', [])
 
     omit = set(agent_omit or [])
     resolved = []
     for config_name in order:
         if config_name in omit:
             continue
-        resolved.append(_decide(config_name, appearances[config_name], logger))
+        resolved.append(_decide_stages(config_name, appearances[config_name], logger))
     return resolved
 
 
-def _decide(config_name, appears, logger):
+def _decide_stages(config_name, appears, logger):
     # resolve the union/conflict for one config_name from all its appearances.
     # each appearance is (source, stages, bare); an agent appearance is the
     # nearer form and wins over a chain one. within one level, differing stages
@@ -229,13 +229,13 @@ def _decide(config_name, appears, logger):
         if chain_forms:
             chain_stages, _ = chain_forms[0]
             if logger is not None and frozenset(agent_stages) != frozenset(chain_stages):
-                agent_desc = 'bare entry (all stages)' if agent_bare else _fmt(agent_stages)
-                logger.warning(f"guard {config_name!r}: the agent's {agent_desc} overrides the chain's {_fmt(chain_stages)}")
+                agent_desc = 'bare entry (all stages)' if agent_bare else _format_stages(agent_stages)
+                logger.warning(f"guard {config_name!r}: the agent's {agent_desc} overrides the chain's {_format_stages(chain_stages)}")
         return GovernorConfigEntry(config_name, agent_stages, 'agent')
     return GovernorConfigEntry(config_name, chain_forms[0][0], 'chain')
 
 
-def _fmt(stages):
+def _format_stages(stages):
     # a stage set as a stable, readable list for a note; the bare-name case
     # (all the class's stages) reads as "bare entry (all stages)"
     return f'[{", ".join(sorted(stages))}]' if stages else '[]'

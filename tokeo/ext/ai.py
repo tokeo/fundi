@@ -291,7 +291,7 @@ class TokeoAi(MetaMixin):
             elif isinstance(value, dict):
                 self._tool_items[name] = value
 
-    def _license_notice(self):
+    def _log_license_notice(self):
         # once per process until acknowledged; a race may log it twice
         if self._show_license_notice:
             self._show_license_notice = False
@@ -410,12 +410,12 @@ class TokeoAi(MetaMixin):
         """
         return selectable_names(self._profiles, self._agents.keys())
 
-    def _resolve(self, profile=None, model=None, purpose=None):
+    def _resolve_profile(self, profile=None, model=None, purpose=None):
         # pick the profile via the shared resolver (config.profiles): at most one
         # selector, else the configured default; no default at all raises
         return resolve_profile(self._profiles, self._defaults.get('profile'), profile=profile, model=model, purpose=purpose)
 
-    def _provider(self, provider_type):
+    def _get_provider(self, provider_type):
         # instantiate the registered provider class with the application once
         # and reuse it; providers are stateless, so a racing double build is
         # harmless and needs no lock
@@ -426,7 +426,7 @@ class TokeoAi(MetaMixin):
             self._provider_objs[provider_type] = obj
         return obj
 
-    def _governor_label(self, governor):
+    def _format_governor_label(self, governor):
         # the class carries the character (guard secures, transformer
         # reshapes, conductor directs); config_name is the name as written, or
         # the class path for a governor never set up
@@ -435,7 +435,7 @@ class TokeoAi(MetaMixin):
                 return f'{role} {governor.config_name!r}'
         return f'governor {governor.config_name!r}'
 
-    def _tool(self, config_name):
+    def _get_tool(self, config_name):
         # instantiate the tool configured under ```ai.tools[config_name]``` once
         # and reuse it; ```type``` (a built-in alias or a class path) resolves
         # to a class, built with the application and set up with its key and
@@ -485,14 +485,14 @@ class TokeoAi(MetaMixin):
         """
         return self._resolve_tools(as_list(names))
 
-    def _tool_specs(self, config_names):
+    def _build_tool_specs(self, config_names):
         # build openai-style function specs from the tools' Meta; the model-
         # facing function name IS the config name (that is what comes back as
         # ToolCall.name); unknown names are skipped, an empty list yields none
         specs = []
         for config_name in config_names or []:
             try:
-                tool = self._tool(config_name)
+                tool = self._get_tool(config_name)
             except TokeoAiError:
                 continue
             specs.append(
@@ -507,7 +507,7 @@ class TokeoAi(MetaMixin):
             )
         return specs
 
-    def _agent(self, config_name):
+    def _get_agent(self, config_name):
         # build the agent configured under ```ai.agents[config_name]``` once and
         # reuse it; ```type``` (a built-in alias or a class path) resolves to
         # an agent class, built with the application and set up with its key
@@ -522,18 +522,18 @@ class TokeoAi(MetaMixin):
             self._agent_objs[config_name] = obj
         return obj
 
-    def _agent_or_default(self, agent, profile=None):
+    def _resolve_agent(self, agent, profile=None):
         # call, then profile, then ai.defaults.agent; none results: the
         # implicit agent, a fundi agent with an empty config
         name = resolve_agent_name(agent, profile, self._defaults.get('agent'))
         if name is not None:
-            return self._agent(name)
+            return self._get_agent(name)
         if self._agent_implicit is None:
             self._agent_implicit = TokeoAiFundiAgent(self.app)
             self._agent_implicit._setup(self.app, AGENT_IMPLICIT_NAME, {})
         return self._agent_implicit
 
-    def _deny_set(self, agent_obj, profile, call_deny=None):
+    def _get_deny_set(self, agent_obj, profile, call_deny=None):
         # the resolved set of denied tools, shared by the spec-trimming and the
         # exec-time defence line so both always agree: the agent's deny, the
         # profile's deny, and the call's deny, each a single name or a group
@@ -542,16 +542,16 @@ class TokeoAi(MetaMixin):
         denied |= set(self._resolve_tools(as_list(call_deny)))
         return denied
 
-    def _tools_minus_deny(self, agent_obj, profile, call_deny=None):
+    def _get_active_tools(self, agent_obj, profile, call_deny=None):
         # the active tool set: the agent's tools minus the shared deny set. a
         # call can only narrow the set, never extend it; there is no way to
         # add a tool the agent does not carry. tools resolve to concrete names
         # first (so a denied group removes all its members), order is kept
         active = self._resolve_tools(as_list(agent_obj._config('tools')))
-        denied = self._deny_set(agent_obj, profile, call_deny)
+        denied = self._get_deny_set(agent_obj, profile, call_deny)
         return [name for name in active if name not in denied]
 
-    def _governor(self, config_name):
+    def _get_governor(self, config_name):
         # build the governor for a config name (the name as written) once and
         # reuse it; governors hold no per-call state, so one cached instance is
         # fine. two forms: a class path at the point of use (a ':' in the
@@ -575,11 +575,11 @@ class TokeoAi(MetaMixin):
             self._governor_objs[config_name] = obj
         return obj
 
-    def _stages_of(self, config_name):
+    def _get_class_stages(self, config_name):
         # the stages a governor's class can do, by reflection (the governor's
         # own has_stage over its on_* methods). used by the composition resolver
         # to intersect a configured stage list with what the class implements
-        governor = self._governor(config_name)
+        governor = self._get_governor(config_name)
         return [stage for stage in GOVERNOR_STAGES if governor.has_stage(stage)]
 
     def _resolve_governors(self, agent_obj):
@@ -590,10 +590,10 @@ class TokeoAi(MetaMixin):
             self._governors,
             as_list(agent_obj._config('governors')),
             as_list(agent_obj._config('omit')),
-            self._stages_of,
+            self._get_class_stages,
         )
 
-    def _governors_by_stage(self, agent_obj):
+    def _get_governors_by_stage(self, agent_obj):
         # build the per-stage running order: one ordered guard list per stage.
         # the stage is the fixed band; within a stage the guards run in agent
         # list order. each resolved entry (GovernorConfigEntry) carries the stages
@@ -606,9 +606,9 @@ class TokeoAi(MetaMixin):
         # round), the guard instances are already cached in _governor_objs, and the
         # build is microseconds against an LLM call's hundreds of milliseconds
         entries = self._resolve_governors(agent_obj)
-        return {stage: [self._governor(entry.config_name) for entry in entries if stage in entry.stages] for stage in GOVERNOR_STAGES}
+        return {stage: [self._get_governor(entry.config_name) for entry in entries if stage in entry.stages] for stage in GOVERNOR_STAGES}
 
-    def _sandbox(self, config_name):
+    def _get_sandbox(self, config_name):
         # build the sandbox configured under ```ai.sandboxes[config_name]``` once
         # and reuse it; ```type``` (a built-in alias or a class path) resolves
         # to a sandbox class, built with the application and set up with its key
@@ -625,31 +625,31 @@ class TokeoAi(MetaMixin):
             self._sandbox_objs[config_name] = obj
         return obj
 
-    def _sandbox_tools_contain(self, name, tool_name):
+    def _has_sandbox_tool(self, name, tool_name):
         # do the tools of sandbox ```name``` contain ```tool_name```? delegates
         # to the shared resolver (config.sandboxes), which knows ```except```;
         # tool/group names are expanded through _resolve_tools
         return sandbox_contains_tool(self._sandboxes.get(name), tool_name, self._resolve_tools)
 
-    def _sandbox_for(self, tool_name, agent_obj):
+    def _find_sandbox(self, tool_name, agent_obj):
         # choose the sandbox a tool runs in: walk the agent's ordered chain via
         # the shared resolver and take the first sandbox whose tools contain the
         # tool. None means the chain is exhausted, which the caller turns into a
         # deny (deny-by-default). where a sandbox name points is the config's
         # choice, e.g. per environment file, never a switch in the process
         name = sandbox_for(tool_name, as_list(agent_obj._config('sandboxes')), self._sandboxes.get, self._resolve_tools)
-        return self._sandbox(name) if name is not None else None
+        return self._get_sandbox(name) if name is not None else None
 
-    def _denies(self, tool_name, agent_obj, profile, call_deny=None):
+    def _is_denied(self, tool_name, agent_obj, profile, call_deny=None):
         # the exec-time defence line: refuse a tool that is in the shared deny
         # set before any sandbox lookup, the same set used to trim the specs,
         # so a model calling a carved-out tool is refused here too
-        return tool_name in self._deny_set(agent_obj, profile, call_deny)
+        return tool_name in self._get_deny_set(agent_obj, profile, call_deny)
 
-    def _offers(self, tool_name, agent_obj, profile, call_deny=None):
+    def _is_offered(self, tool_name, agent_obj, profile, call_deny=None):
         # a tool runs only when the agent offers it: its tools minus every deny,
         # the same set the model was shown
-        return tool_name in self._tools_minus_deny(agent_obj, profile, call_deny)
+        return tool_name in self._get_active_tools(agent_obj, profile, call_deny)
 
     def _exec_lifecycle(self, tool, sandbox, arguments, ctx):
         # run the tool's own frame around the sandboxed call: prepare/teardown
@@ -657,27 +657,27 @@ class TokeoAi(MetaMixin):
         # all four run in-process; only ```exec``` crosses into the sandbox
         turndata = ctx.turndata if ctx is not None else TokeoAiTurndata()
 
-        def _track(stage):
+        def _build_track(stage):
             # bind origin and stage here, so a hook cannot name itself wrong
             if ctx is None:
                 return lambda content: None
             return lambda content: ctx.track(tool, content, stage=stage)
 
-        def _error_result(err):
+        def _build_error_result(err):
             return ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
 
         try:
-            tool.prepare(turndata, arguments, _track('prepare'))
+            tool.prepare(turndata, arguments, _build_track('prepare'))
         except Exception as err:
             # nothing was set up, so nothing is owed a teardown
-            return _error_result(err)
+            return _build_error_result(err)
         result = None
         try:
             try:
-                arguments = tool.before(turndata, arguments, _track('before')) or arguments
+                arguments = tool.before(turndata, arguments, _build_track('before')) or arguments
             except Exception as err:
                 # before runs outside the sandbox: its throw is the tool's own
-                result = _error_result(err)
+                result = _build_error_result(err)
             else:
                 # the sandbox already turns a tool throw into a result, so what
                 # comes out here is machinery (a timeout, a denial) and rises;
@@ -685,21 +685,21 @@ class TokeoAi(MetaMixin):
                 try:
                     result = sandbox.exec(tool, arguments)
                 except Exception as err:
-                    result = _error_result(err)
+                    result = _build_error_result(err)
                     raise
                 # a failed call has no result to reshape, so after is skipped
                 if getattr(result.state, 'exception', None) is None:
                     try:
-                        result = tool.after(turndata, arguments, result, _track('after')) or result
+                        result = tool.after(turndata, arguments, result, _build_track('after')) or result
                     except Exception as err:
-                        result = _error_result(err)
+                        result = _build_error_result(err)
         finally:
             # owed once prepare succeeded, even while a machinery error rises
             try:
-                tool.teardown(turndata, arguments, result, _track('teardown'))
+                tool.teardown(turndata, arguments, result, _build_track('teardown'))
             except Exception as err:
                 # a failed teardown is noted, it does not overturn the result
-                _track('teardown')(f'teardown failed: {type(err).__name__}: {err}')
+                _build_track('teardown')(f'teardown failed: {type(err).__name__}: {err}')
         return result
 
     def _exec_in_sandbox(self, tool_name, arguments, agent_obj, profile, call_deny, invocation, ctx):
@@ -709,12 +709,12 @@ class TokeoAi(MetaMixin):
         # chosen sandbox contains the ```tool.exec```. when an invocation is
         # passed, record WHERE it ran (the configured sandbox name) so the
         # trace and audit can show it
-        if self._denies(tool_name, agent_obj, profile, call_deny):
+        if self._is_denied(tool_name, agent_obj, profile, call_deny):
             raise TokeoAiError(f'tool {tool_name!r} is denied')
-        if not self._offers(tool_name, agent_obj, profile, call_deny):
+        if not self._is_offered(tool_name, agent_obj, profile, call_deny):
             raise TokeoAiError(f'tool {tool_name!r} is not offered by the agent')
-        tool = self._tool(tool_name)
-        sandbox = self._sandbox_for(tool_name, agent_obj)
+        tool = self._get_tool(tool_name)
+        sandbox = self._find_sandbox(tool_name, agent_obj)
         if sandbox is None:
             raise TokeoAiError(f'tool {tool_name!r} has no sandbox in the agent chain (denied)')
         if invocation is not None:
@@ -747,7 +747,7 @@ class TokeoAi(MetaMixin):
         # the arguments; an unknown tool leaves it None and still errors at
         # exec below, exactly as without guards
         try:
-            invocation.parameters = self._tool(invocation.name)._meta.parameters
+            invocation.parameters = self._get_tool(invocation.name)._meta.parameters
         except TokeoAiError:
             pass
         # each guard runs and its step is recorded through supersede: a guard
@@ -759,12 +759,12 @@ class TokeoAi(MetaMixin):
             # only a guard decides: a transformer or conductor that changes the
             # decision breaks its role, an error of the app that ends the run
             if invocation.decision != previous_decision and not isinstance(governor, TokeoAiGuard):
-                raise TokeoAiError(f'{self._governor_label(governor)} changed the decision at {stage}, only a guard decides')
+                raise TokeoAiError(f'{self._format_governor_label(governor)} changed the decision at {stage}, only a guard decides')
             if invocation.decision == Invocation.DENY and not invocation.reason:
-                invocation.reason = f'{self._governor_label(governor)} gave no reason'
+                invocation.reason = f'{self._format_governor_label(governor)} gave no reason'
             return invocation
 
-        def on_call(governor, invocation):
+        def run_on_call(governor, invocation):
             # after a no only a confirm guard runs: it confirms the no, or a
             # no_retry lets the guards of the stage judge anew
             if invocation.decision == Invocation.DENY and not isinstance(governor, TokeoAiConfirmGuard):
@@ -773,7 +773,7 @@ class TokeoAi(MetaMixin):
             invocation = ctx.supersede(governor, governor.on_call(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_CALL)
             return check_decision(governor, previous_decision, invocation, GOVERNOR_STAGE_ON_CALL)
 
-        def on_return(governor, invocation):
+        def run_on_return(governor, invocation):
             # every governor runs, so the record is complete; a no stays a no
             previous_decision, previous_reason = invocation.decision, invocation.reason
             invocation = ctx.supersede(governor, governor.on_return(ctx, invocation), invocation, stage=GOVERNOR_STAGE_ON_RETURN)
@@ -782,7 +782,7 @@ class TokeoAi(MetaMixin):
                 invocation.decision, invocation.reason = previous_decision, previous_reason
             return invocation
 
-        invocation = self._govern(call_governors, on_call, invocation)
+        invocation = self._govern(call_governors, run_on_call, invocation)
         # a no at on_call stays, whatever a retry at on_return does
         call_decision = invocation.decision, invocation.reason
         if invocation.decision != Invocation.DENY:
@@ -804,7 +804,7 @@ class TokeoAi(MetaMixin):
                 # the pipeline is resilient: a failing tool is recorded and the
                 # loop continues, instead of crashing the whole call
                 invocation.error = f'{type(err).__name__}: {err}'
-        invocation = self._govern(return_governors, on_return, invocation)
+        invocation = self._govern(return_governors, run_on_return, invocation)
         if call_decision[0] == Invocation.DENY:
             invocation.decision, invocation.reason = call_decision
         # the text fed back to the model for this call; the invocation is
@@ -895,11 +895,11 @@ class TokeoAi(MetaMixin):
             or when a limit aborts the execution
 
         """
-        self._license_notice()
+        self._log_license_notice()
         # proceed with chat
-        name, profile = self._resolve(profile=profile, model=model, purpose=purpose)
+        name, profile = self._resolve_profile(profile=profile, model=model, purpose=purpose)
         provider_type = provider_type_of(name, profile)
-        provider = self._provider(provider_type)
+        provider = self._get_provider(provider_type)
         # the agent is the composition root: it supplies the tools and the
         # guards and sets the limits and the sandbox chain, while the profile
         # selects only the model. the active tools are the agent's tools, minus
@@ -907,8 +907,8 @@ class TokeoAi(MetaMixin):
         # a call can only narrow the set, never extend it. so several profiles
         # (and calls) share one agent and each carve out a subset. the agent is
         # resolved call > profile.agent > defaults.agent
-        agent_obj = self._agent_or_default(agent, profile)
-        requested = self._tools_minus_deny(agent_obj, profile, deny)
+        agent_obj = self._resolve_agent(agent, profile)
+        requested = self._get_active_tools(agent_obj, profile, deny)
         if max_steps is None:
             # the agent's own limits win; without one (None) the handler's
             # base defaults (config_defaults max_steps / max_loops) apply
@@ -917,12 +917,12 @@ class TokeoAi(MetaMixin):
         if max_loops is None:
             agent_max_loops = agent_obj._config('max_loops')
             max_loops = agent_max_loops if agent_max_loops is not None else self._config('max_loops', fallback=3)
-        specs = self._tool_specs(requested)
+        specs = self._build_tool_specs(requested)
         # guards (selected on the agent) are positioned steps in the loop; each
         # participates at the stages whose method it overrides. partition once
         # the per-stage running order: each stage's ordered guard list. the loop
         # asks each stage for its list and runs the guards in that order
-        by_stage = self._governors_by_stage(agent_obj)
+        by_stage = self._get_governors_by_stage(agent_obj)
         at_begin = by_stage[GOVERNOR_STAGE_ON_BEGIN]
         at_prompt = by_stage[GOVERNOR_STAGE_ON_PROMPT]
         at_answer = by_stage[GOVERNOR_STAGE_ON_ANSWER]
@@ -939,20 +939,20 @@ class TokeoAi(MetaMixin):
         # stages and tracked, not a context field
         ctx = TokeoAiContext(messages=messages, turndata=turndata, userdata=userdata, trace=self._trace_enabled, notes=notes)
 
-        def on_messages(stage):
+        def build_messages_step(stage):
             # begin and prompt refine the conversation, no work object
-            def step(governor, subject):
+            def run_step(governor, subject):
                 ctx.refine_messages(governor, getattr(governor, stage)(ctx), stage=stage)
                 return subject
 
-            return step
+            return run_step
 
-        def on_result(stage):
+        def build_result_step(stage):
             # answer and close work on the model answer
-            def step(governor, result):
+            def run_step(governor, result):
                 return ctx.supersede(governor, getattr(governor, stage)(ctx, result), result, stage=stage)
 
-            return step
+            return run_step
 
         # a governor may decline the run: it ends in order, the decline goes on
         # to the caller with the run so far
@@ -962,19 +962,19 @@ class TokeoAi(MetaMixin):
             # work object), so they refine the messages: a guard may mutate
             # ctx.messages in place (returning None) or hand back a fresh
             # conversation, and refine_messages records the step either way
-            self._govern(at_begin, on_messages(GOVERNOR_STAGE_ON_BEGIN), None)
+            self._govern(at_begin, build_messages_step(GOVERNOR_STAGE_ON_BEGIN), None)
             # on_prompt: before each model call, on the outgoing messages
-            self._govern(at_prompt, on_messages(GOVERNOR_STAGE_ON_PROMPT), None)
+            self._govern(at_prompt, build_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)
             result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
             # on_answer: after each model call, on the model answer; the result is
             # the handed-in work object, so the step is recorded through supersede
-            result = self._govern(at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
+            result = self._govern(at_answer, build_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
             while result.tool_calls:
                 # max_steps limits the tool rounds of one request; 0 is unlimited.
                 # reaching it aborts loudly: a silent empty answer hides the cause
                 if max_steps and ctx.loopdata.steps >= max_steps:
                     raise TokeoAiError(f'ai max_steps ({max_steps}) reached, execution aborted')
-                ctx.track(self, ChatMessage(self._assistant_turn(result)))
+                ctx.track(self, ChatMessage(self._build_assistant_turn(result)))
                 succeeded = False
                 for call in result.tool_calls:
                     if call.arguments is not None and not isinstance(call.arguments, dict):
@@ -1030,12 +1030,12 @@ class TokeoAi(MetaMixin):
                 if max_loops and ctx.loopdata.failed_loops >= max_loops:
                     raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
                 # on_prompt again before the follow-up model call
-                self._govern(at_prompt, on_messages(GOVERNOR_STAGE_ON_PROMPT), None)
+                self._govern(at_prompt, build_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)
                 result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
                 # on_answer again after the follow-up model call
-                result = self._govern(at_answer, on_result(GOVERNOR_STAGE_ON_ANSWER), result)
+                result = self._govern(at_answer, build_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
             # on_close: once, on the final result, after the loop
-            result = self._govern(at_close, on_result(GOVERNOR_STAGE_ON_CLOSE), result)
+            result = self._govern(at_close, build_result_step(GOVERNOR_STAGE_ON_CLOSE), result)
             # the run result: the final answer (a ChatResult), plus the run's
             # history, counters and confirmations lifted off the context (which
             # ends here). the answer is just the model answer
@@ -1047,7 +1047,7 @@ class TokeoAi(MetaMixin):
             err.result = TokeoAiResult(loopdata=ctx.loopdata, trace=ctx.trace, confirmations=ctx.confirmations)
             raise
 
-    def _assistant_turn(self, result):
+    def _build_assistant_turn(self, result):
         # rebuild the assistant message that requested the tool calls, in the
         # openai shape, so a real provider keeps a valid conversation
         return {
@@ -1254,7 +1254,7 @@ class AiController(Controller):
             # a declined run shows its trace on request, then the decline
             if self.app.pargs.as_trace or self.app.pargs.as_trace_compact:
                 self._print_trace(declined.result)
-            self.app.print(self._declined(declined))
+            self.app.print(self._format_decline(declined))
             return
         # --trace prints the whole result with the full trace; --trace-compact
         # prints it with a compact trace (unchanged steps drop their repeated
@@ -1268,9 +1268,9 @@ class AiController(Controller):
         # the whole result with the full or the compact trace
         self.app.print(json_dump(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.as_trace_compact), indent=2))
 
-    def _declined(self, declined):
+    def _format_decline(self, err):
         # the line for a run a governor declined
-        return f'declined at {declined.stage}: {declined.reason} (by {declined.by or "-"})'
+        return f'declined at {err.stage}: {err.reason} (by {err.by or "-"})'
 
     @ex(
         help='start an interactive, multi-turn chat session',
@@ -1313,11 +1313,11 @@ class AiController(Controller):
             'model_params': parse_model_params(self.app.pargs.model_param),
         }
         messages = []
-        completer = self._chat_completer()
+        completer = self._build_chat_completer()
         # one prompt session for the whole chat, reused across turns (it
         # carries the history, the selector completer, auto-suggest, and
         # history-prefix search) instead of being rebuilt every turn
-        editor = self._chat_session(InMemoryHistory(), completer)
+        editor = self._build_chat_session(InMemoryHistory(), completer)
         # a person in a terminal answers a confirm in the same session
         if sys.stdin.isatty():
             self.app.hook.register(GOVERNOR_CONFIRM_CHANNEL_HOOK, terminal_channel(editor.prompt, self.app.print))
@@ -1335,7 +1335,7 @@ class AiController(Controller):
                         break
                     # apply any inline selector switches (validated against
                     # the running config); keep the rest as this turn's prompt
-                    text, changed, error = self._chat_switches(line, session)
+                    text, changed, error = self._apply_chat_switches(line, session)
                     if error:
                         # a bad --profile/--agent/--model/--purpose value:
                         # report it with the configured options and re-prompt
@@ -1371,7 +1371,7 @@ class AiController(Controller):
                     except TokeoAiRunDeclinedError as declined:
                         # a declined turn stays out of the conversation
                         messages.pop()
-                        self.app.print(f'ai chat - {self._declined(declined)}')
+                        self.app.print(f'ai chat - {self._format_decline(declined)}')
                         continue
                     except TokeoAiError as err:
                         # a selector or provider problem from the handler
@@ -1407,7 +1407,7 @@ class AiController(Controller):
                     # shell stays alive for the next turn
                     self.app.print(f'ai chat - error: {err}')
 
-    def _chat_session(self, history, completer):
+    def _build_chat_session(self, history, completer):
         # the reusable prompt_toolkit session for the chat shell. complete-
         # while-typing must stay on so the selector menu pops up as you type;
         # note that enable_history_search would silently turn it off (they are
@@ -1426,14 +1426,14 @@ class AiController(Controller):
     _CHAT_SWITCHES = {'--profile': 'profile', '--agent': 'agent', '--model': 'model', '--purpose': 'purpose'}
     _CHAT_EXCLUSIVE = ('profile', 'model', 'purpose')
 
-    def _chat_completer(self):
+    def _build_chat_completer(self):
         # a position-independent completer built from the running config, so
         # "--" offers the four switches and a switch then offers its values
         # no matter where in the line they are typed. --model_param is offered
         # as a free-value switch (its key=value has no configured names)
         return _ChatCompleter(self.app.ai.selectors(), self._CHAT_SWITCHES, ['--model_param'])
 
-    def _chat_switches(self, line, session):
+    def _apply_chat_switches(self, line, session):
         # pull any "--flag value" pairs out of the line, validate each value
         # against the running config, and apply them to the session selectors
         # only if all are valid. returns (residual_prompt, changed, error);
@@ -1512,7 +1512,7 @@ class AiController(Controller):
         # report every form and reference problem at once, each with its
         # ```ai.<section>.<name>``` path; exit non-zero on errors, and on
         # warnings too when --strict is given
-        self.app.ai._license_notice()
+        self.app.ai._log_license_notice()
         issues = TokeoAiLinter(self.app).lint()
         for issue in issues:
             self.app.print(f'{issue.level}: {issue.path}: {issue.message}')
