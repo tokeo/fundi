@@ -57,7 +57,7 @@ def test_any_token_means_all_class_stages():
 
 def test_named_stage_the_class_cannot_do_is_dropped():
     """on_begin, which the class cannot do, is dropped and only on_call is left."""
-    # the linter flags such a stage; the resolver does not block the run
+    # the linter flags such a stage; the resolver does not fail the run
     entries = _resolve_governors({}, [{'alpha': ['on_call', 'on_begin']}])
     assert entries[0].stages == frozenset({'on_call'})
 

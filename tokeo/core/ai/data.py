@@ -313,8 +313,8 @@ class TraceStep:
     #: Whether this step introduced a new object
     changed: bool = True
     # WHY a default factory: each step stamps its own creation time, so a
-    # field default (shared) would be wrong; utc_now is tz-aware UTC, and the
-    # json encoder formats it via to_utc_timestring
+    # field default (shared) would be wrong; datetime_type.now(timezone.utc)
+    # is tz-aware UTC, and the json encoder formats it via to_utc_timestring
     #: (datetime) When the step was recorded, in UTC
     at: object = field(default_factory=lambda: datetime_type.now(timezone.utc))
     #: (str|None) The stage that recorded this step; ```None``` for a loop

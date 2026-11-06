@@ -3,8 +3,8 @@ The ```audit``` guard *type*.
 
 ```TokeoAiAuditGuard``` is the type for audit guards: a guard that only observes
 the run and never changes it. It does nothing on its own; it is the class you
-derive from to write an audit guard, so the agent's guard list and the trace can
-say "this is an audit step" while your subclass decides what to record.
+derive from to write an audit guard, so the agent's governor list and the trace
+can say "this is an audit step" while your subclass decides what to record.
 
 Ready-to-use audit implementations live beside this module in the ```audit```
 package (e.g. ```trace.py```'s ```TokeoAiTraceAuditGuard```).
@@ -20,8 +20,8 @@ class TokeoAiAuditGuard(TokeoAiGuard):
     A pass-through base that does nothing by itself. It exists so a guard can be
     *typed* as an audit guard (recording, transparency, observation) without
     carrying any behaviour of its own. Registering this class directly on an
-    agent does nothing but make an audit step visible on the stack; it is not
-    registered under a config name on purpose, because it is meant to be
+    agent does nothing but make an audit step visible on the governor list; it
+    is not registered under a config name on purpose, because it is meant to be
     *derived from* in Python, not selected as-is.
 
     Derive from it when you want a guard whose job is to *watch*: write a log

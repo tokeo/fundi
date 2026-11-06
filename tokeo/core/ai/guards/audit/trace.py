@@ -20,7 +20,7 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
     stages) the call's outcome. So the whole pipeline becomes visible in the
     log: each model round, each tool call, each guard that ran before it. It
     changes nothing; registered as ```trace_audit```, an agent opts in via its
-    guard list.
+    governor list.
 
     It is both the standard transparency layer and a worked example of an audit
     guard that acts at many stages.

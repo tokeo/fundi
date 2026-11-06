@@ -247,7 +247,7 @@ profile, not a refactor.
 | In 2.2.0 | Short horizon | Horizon |
 |---|---|---|
 | typed contracts, registry, one loop in ```app.ai``` | ```delegate```: a sub-run of another agent | gRPC and dramatiq worker sandboxes |
-| six stages, three roles, section purity | skills, configured in the config | MCP and SSH as handing-over sandboxes |
+| six stages, three roles, section purity | skills, named in the config | MCP and SSH as handing-over sandboxes |
 | guards: audit, policy, redact, validate, confirm | RAG with embeddings and vector navigation | compressor for long histories |
 | tool hooks, turndata, trace notes | ```redact``` at ```on_prompt```, debug mode ```reveal``` | sessions |
 | sandboxes ```in_process```, ```subprocess```, ```docker```, ```wasm``` | soft denial at the stages without a tool | loop variants such as plan-then-act |
@@ -270,7 +270,7 @@ demand.
   handing-over sandbox, and its call is governed like any tool.
 - **AGENTS.md** concerns coding agents, not the runtime. A generated project may
   one day carry an ```AGENTS.md``` of its own.
-- **Skills** follow the open Agent Skills format but are configured in the config,
+- **Skills** follow the open Agent Skills format but are named in the config,
   not discovered (5.2).
 
 ### 5.2 The skills decision as an example of the stance

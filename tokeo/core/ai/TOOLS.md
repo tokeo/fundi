@@ -142,7 +142,7 @@ argument sanitizing, its result format. It lives in the tool's class, needs no
 config entry, and cannot be forgotten when the tool is used.
 
 Use a governor when the policy spans tools: a limit, an allowlist, an
-idempotence rule across several calls. It is configured in the config, sees every
+idempotence rule across several calls. It lives in the config, sees every
 call, and decides by name which ones it cares about.
 
 Rule of thumb: if you would have to ask "is this call mine?", write a governor.

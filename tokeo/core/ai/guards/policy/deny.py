@@ -2,8 +2,8 @@
 A policy guard that denies unconditionally, wherever it runs.
 
 ```TokeoAiDenyPolicyGuard``` refuses to let the run continue past it, with no
-check at all: a debugging tool you drop into a guard list to see the denial
-take effect at a given position.
+check at all: a debugging tool you drop into a governor list to see the
+denial take effect at a given position.
 
 At the tool stages (```on_call```/```on_return```) "deny" has a defined,
 *soft* meaning: set ```invocation.decision = DENY```; the call is skipped and

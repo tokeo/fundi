@@ -4,8 +4,8 @@ The ```validate``` guard *type*.
 ```TokeoAiValidateGuard``` is the type for validate guards: a guard that checks
 a tool call against some contract before it runs and flags or denies a call that
 does not hold up. It does nothing on its own; it is the class you derive from
-to write a validation guard, so the agent's guard list and the trace can say
-"this is a validate step" while your subclass decides what to check.
+to write a validation guard, so the agent's governor list and the trace can
+say "this is a validate step" while your subclass decides what to check.
 
 Ready-to-use validate implementations live beside this module in the
 ```validate``` package (e.g. ```tool_schema.py``` with its
@@ -24,8 +24,8 @@ class TokeoAiValidateGuard(TokeoAiGuard):
     *typed* as a validate guard (argument checking, contract enforcement, input
     sanity) without carrying any behaviour of its own. Registering this class
     directly on an agent does nothing but make a validate step visible on the
-    stack; it is not registered under a config name on purpose, because it is
-    meant to be *derived from* in Python, not selected as-is.
+    governor list; it is not registered under a config name on purpose, because
+    it is meant to be *derived from* in Python, not selected as-is.
 
     Derive from it when you want a guard whose job is to *check a tool call*:
     confirm the arguments match a schema, enforce a value range, reject a shape

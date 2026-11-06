@@ -3,8 +3,8 @@ A policy guard that aborts the run hard, wherever it runs.
 
 ```TokeoAiAbortPolicyGuard``` raises ```TokeoAiPolicyGuardError``` at every
 stage: the same hard, unambiguous "the run ends here" at any position. A
-debugging tool you drop into a guard list to stop the run reliably at a chosen
-point, with no soft/hard ambiguity: it never continues.
+debugging tool you drop into a governor list to stop the run reliably at a
+chosen point, with no soft/hard ambiguity: it never continues.
 """
 
 from tokeo.core.ai.guards.policy.base import TokeoAiPolicyGuard

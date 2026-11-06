@@ -23,7 +23,7 @@ How it reacts is the ```strict``` option:
     the model sees the ```denied: ...``` feedback, so it can correct the call
     (deny-and-continue).
 
-Place it early in the agent's guard list so broken calls are flagged or caught
+Place it early in the agent's governor list so broken calls are flagged or caught
 before the other ```on_call``` guards run.
 
 ```yaml

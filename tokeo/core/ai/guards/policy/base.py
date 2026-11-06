@@ -4,7 +4,7 @@ The ```policy``` guard *type*.
 ```TokeoAiPolicyGuard``` is the type for policy guards: a guard that governs
 *what an agent may do*: allowing, denying, or stopping an action. It does
 nothing on its own; it is the class you derive from to write a policy guard,
-so the agent's guard list and the trace can say "this is a policy step".
+so the agent's governor list and the trace can say "this is a policy step".
 
 Ready-to-use policy implementations live beside this module in the ```policy```
 package (```tool.py```'s name-based allow/deny, ```deny.py```'s soft denial,
@@ -21,9 +21,9 @@ class TokeoAiPolicyGuard(TokeoAiGuard):
     A pass-through base that does nothing by itself. It exists so a guard can be
     *typed* as a policy guard (action-level governance) without carrying any
     behaviour of its own. Registering this class directly on an agent does
-    nothing but make a policy step visible on the stack; it is not registered
-    under a config name on purpose, because it is meant to be *derived from* in
-    Python, not selected as-is.
+    nothing but make a policy step visible on the governor list; it is not
+    registered under a config name on purpose, because it is meant to be
+    *derived from* in Python, not selected as-is.
 
     Derive from it when you want a guard that allows, denies, or stops an action
     at a stage. A tool call can be softly denied via

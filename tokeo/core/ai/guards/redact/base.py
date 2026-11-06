@@ -4,8 +4,8 @@ The ```redact``` guard *type*.
 ```TokeoAiRedactGuard``` is the type for redact guards: a guard that masks
 secret-looking content so a value does not flow on into the message history, the
 trace, or a log line. It does nothing on its own; it is the class you derive
-from to write a redact guard, so the agent's guard list and the trace can say
-"this is a redact step" while your subclass decides what and how to mask.
+from to write a redact guard, so the agent's governor list and the trace can
+say "this is a redact step" while your subclass decides what and how to mask.
 
 Ready-to-use redact implementations live beside this module in the ```redact```
 package (e.g. ```regex.py```'s ```TokeoAiRegexRedactGuard```).
@@ -21,9 +21,9 @@ class TokeoAiRedactGuard(TokeoAiGuard):
     A pass-through base that does nothing by itself. It exists so a guard can be
     *typed* as a redact guard (masking, not deciding) without carrying any
     behaviour of its own. Registering this class directly on an agent does
-    nothing but make a redact step visible on the stack; it is not registered
-    under a config name on purpose, because it is meant to be *derived from* in
-    Python, not selected as-is.
+    nothing but make a redact step visible on the governor list; it is not
+    registered under a config name on purpose, because it is meant to be
+    *derived from* in Python, not selected as-is.
 
     Derive from it when you want a guard that rewrites content to hide secrets:
     by pattern, by an external classifier, by field name. A redact guard

@@ -10,7 +10,7 @@ note. What is specific to a *role* (the guard's denial, the transformer's
 reshape-only rule, the conductor's steering) is in that role's own documentation
 (```TokeoAiGuard```, ```TokeoAiTransformer```, ```TokeoAiConductor```).
 
-A governor is a positioned, state-refining step. It is configured on an agent, the
+A governor is a positioned, state-refining step. It is listed on an agent, the
 loop runs it at the stages it overrides, and every run of it is recorded on the
 trace, so a governor is both an actor (it may reshape the state) and a matter of
 record (what it did is attributable).

@@ -6,8 +6,8 @@ the run to ask for a human decision before something happens (a prompt about to
 be sent, a tool about to run) and lets the answer confirm the decision the guards
 reached or turn it into a no, never a no into a yes. It
 does nothing on its own; it is the class you derive from to write a confirm
-guard, so the agent's guard list and the trace can say "this is a confirm step"
-while your subclass decides what to ask and how to apply the answer.
+guard, so the agent's governor list and the trace can say "this is a confirm
+step" while your subclass decides what to ask and how to apply the answer.
 
 The ready-to-use confirm is ```TokeoAiChannelConfirmGuard``` (the ```confirm```
 alias) in ```channel.py```, built on this type.
@@ -23,9 +23,9 @@ class TokeoAiConfirmGuard(TokeoAiGuard):
     A pass-through base that does nothing by itself. It exists so a guard can be
     *typed* as a confirm guard (a human-in-the-loop gate) without carrying
     any behaviour of its own. Registering this class directly on an agent does
-    nothing but make a confirm step visible on the stack; it is not registered
-    under a config name on purpose, because it is meant to be *derived from* in
-    Python, not selected as-is.
+    nothing but make a confirm step visible on the governor list; it is not
+    registered under a config name on purpose, because it is meant to be
+    *derived from* in Python, not selected as-is.
 
     Derive from it when you want a guard that stops at a stage (typically
     ```on_prompt``` or ```on_call```) and asks a human to confirm what is about
