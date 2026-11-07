@@ -16,7 +16,7 @@ those names so such a framework can be imported in the guest; anything that
 would need a real process raises a clear error.
 
 The wasm sandbox copies it ahead of the stdlib into the guest of the trusted
-path when ```shim_wasi_stdlib``` is on (the default), so a framework-backed
+path when ```wasi_shims``` is on (the default), so a framework-backed
 tool can be rebuilt there. The untrusted path never gets it.
 
 See ```WASM.md``` in the parent ```sandboxes``` directory for the full wasm

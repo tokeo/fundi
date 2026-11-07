@@ -100,7 +100,8 @@ prebuilt WASI releases, which the Python core developers point to.
 The examples below install the build into a ```./wasm``` directory at your project
 root, the paths the examples and the ramani template use
 (```./wasm/python.wasm``` and ```./wasm/lib/python3.13```). The options
-```runtime``` and ```stdlib``` have no default; a call without them fails.
+```runtime_path``` and ```stdlib_dir``` have no default; a call without them
+fails.
 
 ### 1. Install the runtime
 
@@ -138,14 +139,14 @@ directory with the standard library:
 
 ```
 wasm/
-  python.wasm            <- the interpreter (the runtime option)
+  python.wasm            <- the interpreter (the runtime_path option)
   lib/
-    python3.13/          <- the standard library (the stdlib option)
+    python3.13/          <- the standard library (the stdlib_dir option)
       ...
 ```
 
-The interpreter does not embed the standard library, which is why ```stdlib```
-is a separate read-only mount.
+The interpreter does not embed the standard library, which is why
+```stdlib_dir``` is a separate read-only mount.
 
 ### 3. Keep the build out of version control
 
@@ -165,8 +166,8 @@ project root):
 
 ```yaml
 options:
-  runtime: ./wasm/python.wasm
-  stdlib: ./wasm/lib/python3.13
+  runtime_path: ./wasm/python.wasm
+  stdlib_dir: ./wasm/lib/python3.13
 ```
 
 To run the wasm end-to-end tests, point the two environment variables at the
@@ -177,7 +178,7 @@ export TOKEO_TEST_PYTHON_WASM="$(pwd)/wasm/python.wasm"
 export TOKEO_TEST_WASI_STDLIB="$(pwd)/wasm/lib/python3.13"
 ```
 
-The ```stdlib``` directory name must match the interpreter's version: a 3.13
+The directory name of ```stdlib_dir``` must match the interpreter's version: a 3.13
 ```python.wasm``` needs ```lib/python3.13```. A mismatched stdlib will not boot.
 
 
@@ -212,8 +213,8 @@ ai:
       tools:
         - run_untrusted
       options:
-        runtime: ./wasm/python.wasm
-        stdlib: ./wasm/lib/python3.13
+        runtime_path: ./wasm/python.wasm
+        stdlib_dir: ./wasm/lib/python3.13
         max_memory_mb: 256
         timeout: 10
 
@@ -224,8 +225,8 @@ ai:
       tools:
         - run_trusted
       options:
-        runtime: ./wasm/python.wasm
-        stdlib: ./wasm/lib/python3.13
+        runtime_path: ./wasm/python.wasm
+        stdlib_dir: ./wasm/lib/python3.13
         max_memory_mb: 256
         timeout: 10
         mounts:
@@ -274,16 +275,16 @@ matters beyond the table:
 - ```max_disk_mb``` counts what the guest adds to ```/io``` and ```/work``` and what it
   writes to stdout and stderr. What is in ```/work``` before the run does not
   count.
-- ```watch_interval```: each check walks ```/io```, ```/work``` and the captured
-  output, so a large ```/work``` costs more per check; a longer interval lets
-  the guest write more past the limit before it is stopped. A check after the
+- ```watch_interval_seconds```: each check walks ```/io```, ```/work``` and the
+  captured output, so a large ```/work``` costs more per check; a longer
+  interval lets the guest write more past the limit before it is stopped. A check after the
   run catches what is left.
 - ```max_output_mb``` cuts stdout and stderr at that size (with a mark) and makes a
   larger value an error.
-- ```cache```: the first run compiles ```python.wasm``` (about 2 s) and stores it
-  there, later runs of any process load it in milliseconds. A file in it is
+- ```cache_dir```: the first run compiles ```python.wasm``` (about 2 s) and stores
+  it there, later runs of any process load it in milliseconds. A file in it is
   native code the host runs, so only the operator may write the directory.
-- ```shim_wasi_stdlib``` puts the bundled ```multiprocessing``` shim ahead of the
+- ```wasi_shims``` puts the bundled ```multiprocessing``` shim ahead of the
   stdlib, so a framework that imports it at load can be rebuilt in the guest.
   Only on the trusted path; the untrusted guest never gets it.
 
@@ -574,7 +575,7 @@ values of several kinds through both to show the encodings match.
 
 .. warning::
 
-    The ```cache``` directory holds native code the host runs. Only the
+    The ```cache_dir``` holds native code the host runs. Only the
     operator may write to it, like to the virtual environment; whoever can
     write there can run code in the app. A cache file is named by the hash of
     ```python.wasm```; one compiled by another wasmtime is compiled anew.
@@ -590,7 +591,7 @@ framework in the guest fails with ```ModuleNotFoundError```.
 The sandbox ships a minimal shim (```wasi_shims/multiprocessing.py```) that
 provides that name; any attempt to start a real ```Process``` raises a clear
 error. On the trusted path, and only there, it is copied to ```/io/_shims``` and
-placed first on ```PYTHONPATH```, controlled by ```shim_wasi_stdlib``` (on by
+placed first on ```PYTHONPATH```, controlled by ```wasi_shims``` (on by
 default). The untrusted guest imports no framework and never gets it.
 ```threading``` needs no shim: the WASI builds bring it themselves.
 
@@ -606,8 +607,8 @@ The guest cannot:
   ```/io``` and ```/work```.
 
 A timer stops the guest when its timeout is up; a watcher thread checks the
-bytes and the files every ```watch_interval``` (default 1 s, at least 0.1 s).
-Both stop the guest through Wasmtime's epoch interruption, which is always on.
+bytes and the files every ```watch_interval_seconds``` (default 1 s, at least
+0.1 s). Both stop the guest through Wasmtime's epoch interruption, which is always on.
 A guest that broke a limit and ended before the next check fails all the same:
 a last check runs after the guest has ended. Epoch interruption makes CPU-bound
 guest code about 30 % slower; it is the only way to stop a running guest from
@@ -630,9 +631,9 @@ proportionate tool.
 
 ## Troubleshooting
 
-"the wasm sandbox needs a runtime ... and a stdlib path": the ```runtime```
-or ```stdlib``` option is unset. Point them at your ```./wasm/python.wasm``` and
-```./wasm/lib/python3.x```.
+"the wasm sandbox needs a runtime ... and a stdlib path": the
+```runtime_path``` or ```stdlib_dir``` option is unset. Point them at your
+```./wasm/python.wasm``` and ```./wasm/lib/python3.x```.
 
 "the wasm ... path does not exist or is not a directory": a mount points
 at a missing host path. The message names which path and role failed. Check the
@@ -641,14 +642,14 @@ build was unpacked where the options expect, and that the trusted mounts
 
 A crash mentioning Py_ExitStatusException with no clearer detail: usually
 the interpreter could not find its standard library at boot. Confirm the
-```stdlib``` path exists and its version matches the interpreter.
+```stdlib_dir``` path exists and its version matches the interpreter.
 
 "No module named cement" (trusted path): the dependency tree is not
 mounted. Add a ```/deps``` mount for the ```site-packages``` root and put it on
 ```PYTHONPATH```.
 
 "No module named multiprocessing" (trusted path): the WASI stdlib shim is off.
-Leave ```shim_wasi_stdlib``` at its default (```True```).
+Leave ```wasi_shims``` at its default (```True```).
 
 "No module named tokeo" or your app (trusted path): the tokeo or app
 source root is not mounted. The trusted tool is rebuilt from

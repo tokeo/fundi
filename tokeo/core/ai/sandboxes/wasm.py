@@ -2,10 +2,10 @@
 The wasm sandbox: real isolation against untrusted code, not just cleanup.
 
 It runs a tool call inside a WebAssembly guest under Wasmtime. The guest is a
-user-supplied CPython-WASI build (the ```runtime```/```stdlib``` options). Per
-call the host writes the task, a small entry script and copies of the
-stdlib-only ```WASM_GUEST_MODULE_COPIES``` into a fresh scratch dir mounted
-read-write at ```/io```. The guest has no network (the syscalls do not exist
+user-supplied CPython-WASI build (the ```runtime_path```/```stdlib_dir```
+options). Per call the host writes the task, a small entry script and copies
+of the stdlib-only ```WASM_GUEST_MODULE_COPIES``` into a fresh scratch dir
+mounted read-write at ```/io```. The guest has no network (the syscalls do not exist
 in its world), sees no host file outside the explicit ```mounts```, and runs
 under a hard memory limit (Wasmtime store limits, the same on every platform)
 and an epoch timeout. This is deny-by-default: a tool that needs a path or the
@@ -140,8 +140,9 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
     Deny-by-default isolation: no network at all, only the explicitly mounted
     host paths are visible, a hard memory limit and an epoch timeout. The guest
-    is a user-supplied CPython-WASI build named by the ```runtime```/```stdlib```
-    options; the tool runs across a file bridge in a private scratch dir.
+    is a user-supplied CPython-WASI build named by the
+    ```runtime_path```/```stdlib_dir``` options; the tool runs across a file
+    bridge in a private scratch dir.
 
     ### Args
 
@@ -161,9 +162,9 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # runtime via _config
         config_defaults = dict(
             # required: the CPython-WASI interpreter, python.wasm
-            runtime=None,
+            runtime_path=None,
             # required: its stdlib, mounted read-only at /lib
-            stdlib=None,
+            stdlib_dir=None,
             # {guest_path: host_path}, mounted read-only
             mounts=None,
             # a host dir mounted read-write at /work, created on demand
@@ -179,11 +180,11 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             # files and dirs the guest may add to /io and /work
             max_files=1000,
             # seconds between two checks of max_disk_mb and max_files, at least 0.1
-            watch_interval=1.0,
+            watch_interval_seconds=1.0,
             # a dir only the operator can write, for the compiled runtime
-            cache=None,
+            cache_dir=None,
             # a multiprocessing stand-in, only on the trusted path
-            shim_wasi_stdlib=True,
+            wasi_shims=True,
             # MB of stdout and stderr kept, and the largest value read
             max_output_mb=SANDBOX_MAX_OUTPUT_MB,
         )
@@ -212,8 +213,8 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # super first: builds the view the _config below reads
         super(TokeoAiWasmSandbox, self)._setup(app, config_name, item)
         # proxied: runtime and stdlib are each used at more than one place
-        self._runtime = self._config('runtime')
-        self._stdlib = self._config('stdlib')
+        self._runtime = self._config('runtime_path')
+        self._stdlib = self._config('stdlib_dir')
 
     def lint_options(self, options):
         """
@@ -225,13 +226,13 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         ### Returns
 
-        - **list[str]**: An error for a watch_interval below 0.1 seconds or a
-            max_output_mb not above 0
+        - **list[str]**: An error for a watch_interval_seconds below 0.1
+            seconds or a max_output_mb not above 0
 
         """
         errors = TokeoAiSandbox.lint_options(self, options)
-        if not is_number_ge((options or {}).get('watch_interval', 1.0), 0.1):
-            errors.append('watch_interval must be a number of seconds, at least 0.1')
+        if not is_number_ge((options or {}).get('watch_interval_seconds', 1.0), 0.1):
+            errors.append('watch_interval_seconds must be a number of seconds, at least 0.1')
         return errors
 
     def exec(self, tool, arguments):
@@ -294,7 +295,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                 if spec is None or not spec.origin or not os.path.isfile(spec.origin):
                     raise TokeoAiError(f'the wasm guest module {name!r} has no source file')
                 shutil.copyfile(spec.origin, os.path.join(guest_dir, name.rpartition('.')[2] + '.py'))
-            shims = trusted and self._config('shim_wasi_stdlib')
+            shims = trusted and self._config('wasi_shims')
             if shims:
                 source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wasi_shims')
                 os.makedirs(os.path.join(io_dir, '_shims'))
@@ -401,7 +402,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # disk of the host as well
         watch_dirs = [io_dir, capture_dir] + ([work] if work else [])
         max_disk_mb, max_files, timeout = self._config('max_disk_mb'), self._config('max_files'), self._config('timeout')
-        interval = self._config('watch_interval')
+        interval = self._config('watch_interval_seconds')
 
         def get_usage(stop=None):
             # bytes and entries under the watched dirs, counting stops past stop
@@ -484,10 +485,10 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # the host runs, so the dir must be writable only by the operator
         with open(self._runtime, 'rb') as f:
             wasm = f.read()
-        cache = self._config('cache')
-        if not cache:
+        cache_dir = self._config('cache_dir')
+        if not cache_dir:
             return wasmtime.Module(engine, wasm)
-        path = os.path.join(cache, f'python-{hashlib.sha256(wasm).hexdigest()[:32]}.cwasm')
+        path = os.path.join(cache_dir, f'python-{hashlib.sha256(wasm).hexdigest()[:32]}.cwasm')
         if os.path.isfile(path):
             try:
                 return wasmtime.Module.deserialize_file(engine, path)
@@ -495,7 +496,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                 # compiled by another wasmtime or config: compile it anew
                 pass
         module = wasmtime.Module(engine, wasm)
-        os.makedirs(cache, exist_ok=True)
+        os.makedirs(cache_dir, exist_ok=True)
         part = f'{path}.{os.getpid()}.part'
         with open(part, 'wb') as f:
             f.write(module.serialize())

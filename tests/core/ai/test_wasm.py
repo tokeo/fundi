@@ -180,6 +180,6 @@ def test_wasm_refuses_a_guest_module_without_source(tmp, monkeypatch):
     pytest.importorskip('wasmtime')
     monkeypatch.setattr(wasm, 'WASM_GUEST_MODULE_COPIES', ('no.such.module',))
     sandbox = TokeoAiWasmSandbox(None)
-    sandbox._setup(None, 'wasm', dict(options=dict(runtime=os.path.join(tmp.dir, 'python.wasm'), stdlib=tmp.dir)))
+    sandbox._setup(None, 'wasm', dict(options=dict(runtime_path=os.path.join(tmp.dir, 'python.wasm'), stdlib_dir=tmp.dir)))
     with pytest.raises(TokeoAiError, match="guest module 'no.such.module' has no source file"):
         sandbox.exec(TokeoAiPythonUntrustedExecTool(None), dict(code='1'))

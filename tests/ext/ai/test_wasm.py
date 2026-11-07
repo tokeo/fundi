@@ -35,8 +35,8 @@ def test_wasm_missing_mount_path_names_the_path(tmp):
         'wasm_untrusted',
         dict(
             options=dict(
-                runtime=runtime,
-                stdlib=stdlib,
+                runtime_path=runtime,
+                stdlib_dir=stdlib,
                 mounts={'/app': '/no/such/host/path'},
             )
         ),
@@ -115,15 +115,15 @@ def make_wasm_ai_config():
             wasm_untrusted=dict(
                 type='tokeo.core.ai.sandboxes:TokeoAiWasmSandbox',
                 tools=['run_untrusted'],
-                options=dict(runtime=_RUNTIME, stdlib=_STDLIB, max_memory_mb=256, timeout=10),
+                options=dict(runtime_path=_RUNTIME, stdlib_dir=_STDLIB, max_memory_mb=256, timeout=10),
             ),
             # trusted: the app is mounted so the tool can be rebuilt in the guest
             wasm_trusted=dict(
                 type='tokeo.core.ai.sandboxes:TokeoAiWasmSandbox',
                 tools=['run_trusted'],
                 options=dict(
-                    runtime=_RUNTIME,
-                    stdlib=_STDLIB,
+                    runtime_path=_RUNTIME,
+                    stdlib_dir=_STDLIB,
                     max_memory_mb=256,
                     timeout=10,
                     # the tool's base class needs tokeo, tokeo-fundi AND cement (a
@@ -375,18 +375,18 @@ def test_the_watcher_stops_a_guest_at_the_timeout():
 
 @needs_build
 def test_the_timeout_does_not_wait_for_the_watch_interval():
-    """timeout 1 with watch_interval 30 stops the guest after about 1 second."""
+    """timeout 1 with watch_interval_seconds 30 stops the guest after about 1 s."""
     start = time.monotonic()
     with pytest.raises(TokeoAiError, match=r'timed out after 1s'):
-        run_untrusted('while True:\n    pass', timeout=1, watch_interval=30)
+        run_untrusted('while True:\n    pass', timeout=1, watch_interval_seconds=30)
     assert time.monotonic() - start < 10
 
 
 @needs_build
 def test_a_quick_guest_does_not_wait_for_the_watch_interval():
-    """A guest that ends at once returns without waiting for watch_interval 30."""
+    """A guest that ends at once does not wait for watch_interval_seconds 30."""
     start = time.monotonic()
-    assert run_untrusted('1', watch_interval=30).value.as_str == '1'
+    assert run_untrusted('1', watch_interval_seconds=30).value.as_str == '1'
     assert time.monotonic() - start < 10
 
 
@@ -395,13 +395,13 @@ def test_a_quick_guest_does_not_wait_for_the_watch_interval():
     [(1.0, True), (0.1, True), (5, True), (0.05, False), (0, False), (None, False), (True, False), ('fast', False)],
 )
 def test_the_linter_checks_the_watch_interval(value, valid):
-    """watch_interval is a number of seconds of at least 0.1."""
+    """watch_interval_seconds is a number of seconds of at least 0.1."""
     cfg = make_wasm_ai_config()
-    cfg['ai']['sandboxes']['wasm_untrusted']['options']['watch_interval'] = value
+    cfg['ai']['sandboxes']['wasm_untrusted']['options']['watch_interval_seconds'] = value
     with WasmTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
     message = errors.get('ai.sandboxes.wasm_untrusted.options')
-    assert message is None if valid else message == 'watch_interval must be a number of seconds, at least 0.1'
+    assert message is None if valid else message == 'watch_interval_seconds must be a number of seconds, at least 0.1'
 
 
 @needs_build
@@ -452,10 +452,10 @@ def test_the_watcher_counts_only_what_the_guest_adds_to_work(tmp):
 
 @needs_build
 def test_the_cache_dir_keeps_the_compiled_runtime(tmp, monkeypatch):
-    """The first run stores the compiled runtime in cache, the next loads it."""
+    """The first run stores the compiled runtime in cache_dir, the next loads it."""
     import wasmtime
 
-    assert run_untrusted('1', cache=tmp.dir).value.as_str == '1'
+    assert run_untrusted('1', cache_dir=tmp.dir).value.as_str == '1'
     assert [name for name in os.listdir(tmp.dir) if name.endswith('.cwasm')]
 
     def fail_compile(*args, **kw):
@@ -463,4 +463,4 @@ def test_the_cache_dir_keeps_the_compiled_runtime(tmp, monkeypatch):
 
     cached = type('Module', (), dict(__init__=fail_compile, deserialize_file=wasmtime.Module.deserialize_file))
     monkeypatch.setattr(wasmtime, 'Module', cached)
-    assert run_untrusted('2', cache=tmp.dir).value.as_str == '2'
+    assert run_untrusted('2', cache_dir=tmp.dir).value.as_str == '2'

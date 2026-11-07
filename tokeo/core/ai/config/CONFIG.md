@@ -559,8 +559,8 @@ guest works is in the guide ```WASM.md``` of the sandboxes.
 
 | Option | Default | Values | Enforced by |
 |---|---|---|---|
-| ```runtime``` | ```null``` | required, path to ```python.wasm``` | the host |
-| ```stdlib``` | ```null``` | required, path to its stdlib, read-only at ```/lib``` | the host |
+| ```runtime_path``` | ```null``` | required, path to ```python.wasm``` | the host |
+| ```stdlib_dir``` | ```null``` | required, path to its stdlib, read-only at ```/lib``` | the host |
 | ```mounts``` | ```null``` | ```{guest_path: host_path}```, read-only | the host |
 | ```cwd``` | ```null``` | a host directory, read-write at ```/work``` | the host |
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | the host, nothing else is set |
@@ -568,9 +568,9 @@ guest works is in the guide ```WASM.md``` of the sandboxes.
 | ```max_memory_mb``` | ```null``` | MB, ```null``` = no limit | Wasmtime, store limits |
 | ```max_disk_mb``` | ```64``` | MB the guest adds to ```/io```, ```/work```, stdout and stderr; ```null``` = no limit | the host, the watcher |
 | ```max_files``` | ```1000``` | files and dirs the guest adds to ```/io``` and ```/work```; ```null``` = no limit | the host, the watcher |
-| ```watch_interval``` | ```1.0``` | seconds between two checks of ```max_disk_mb``` and ```max_files```, at least ```0.1``` | the host |
-| ```cache``` | ```null``` | a directory only the operator can write | the host |
-| ```shim_wasi_stdlib``` | ```true``` | ```true```, ```false``` | the host, trusted path only |
+| ```watch_interval_seconds``` | ```1.0``` | seconds between two checks of ```max_disk_mb``` and ```max_files```, at least ```0.1``` | the host |
+| ```cache_dir``` | ```null``` | a directory only the operator can write | the host |
+| ```wasi_shims``` | ```true``` | ```true```, ```false``` | the host, trusted path only |
 | ```max_output_mb``` | ```1``` | a number above 0 | the host |
 
 ```yaml
@@ -579,13 +579,13 @@ sandboxes:
     type: tokeo.core.ai.sandboxes:TokeoAiWasmSandbox
     tools: [coding]
     options:
-      runtime: ./wasm/python.wasm
-      stdlib: ./wasm/lib/python3.13
+      runtime_path: ./wasm/python.wasm
+      stdlib_dir: ./wasm/lib/python3.13
       max_memory_mb: 256        # hard limit, the same on every platform
       timeout: 10               # seconds
       max_disk_mb: 64           # what the guest may write
       max_files: 1000           # what the guest may create
-      watch_interval: 1.0       # seconds between the disk and file checks
+      watch_interval_seconds: 1.0  # seconds between the disk and file checks
       max_output_mb: 1          # stdout and stderr kept, largest value
 ```
 

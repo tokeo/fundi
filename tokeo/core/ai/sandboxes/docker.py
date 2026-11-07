@@ -190,7 +190,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         if self._config('reuse'):
             with self._lock:
                 if self._container is None:
-                    name = self._build_container_name()
+                    name = self._format_container_name()
                     idle_cmd = ['--entrypoint', python, image, '-c', 'import signal; signal.pause()']
                     self._run_client(self._build_run_args(name, detach=True) + idle_cmd, None, class_path)
                     self._container = name
@@ -198,7 +198,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 name = self._container
             args = [self._config('command'), 'exec', '-i', name, python] + runner
         else:
-            name = self._build_container_name()
+            name = self._format_container_name()
             args = self._build_run_args(name, detach=False) + ['--entrypoint', python, image] + runner
         try:
             out, err = self._run_client(args, job, class_path)
@@ -220,7 +220,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 self._kill_container(self._container)
                 self._container = None
 
-    def _build_container_name(self):
+    def _format_container_name(self):
         # a unique container name, so a timeout can remove exactly this one
         label = re.sub(r'[^a-zA-Z0-9_.-]', '-', self.config_name or 'docker')
         return f'tokeo-ai-{label}-{os.getpid()}-{uuid.uuid4().hex[:8]}'
