@@ -36,15 +36,17 @@ class TokeoAiMockProvider(TokeoAiProvider):
 
     """
 
-    def chat(self, profile, messages, tools=None, model_params=None):
+    def chat(self, messages, profile, tools=None, model_params=None):
         """
         Return a deterministic reply, tool call, or final answer.
 
         ### Args
 
-        - **profile** (dict): The resolved profile (ignored beyond its type)
         - **messages** (list): Chat messages as plain OpenAI-style dicts
+        - **profile** (dict): The resolved profile (ignored beyond its type)
         - **tools** (list|None): Tool definitions the mock may call
+        - **model_params** (dict|None): Per-call model parameters; the mock
+            drives no configurable model and ignores them
 
         ### Returns
 
@@ -55,7 +57,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # a tool result on top closes the loop: answer with that result
         last = messages[-1] if messages else {}
         if isinstance(last, dict) and last.get('role') == 'tool':
-            return self._build_result(f'Done. The tool returned: {last.get("content") or ""}')
+            return self._create_result(f'Done. The tool returned: {last.get("content") or ""}')
         # the most recent user turn drives the reply
         prompt = ''
         for message in messages:
@@ -65,9 +67,9 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # SYNTHESIZE python that computes the value and call the untrusted exec
         # tool with it; the model writes code, the sandbox runs it. only
         # active when that tool is actually offered to this agent
-        synth = self._build_codeact_call(prompt, tools)
+        synth = self._create_codeact_call(prompt, tools)
         if synth is not None:
-            return self._build_result('', tool_calls=[synth], finish_reason='tool_calls')
+            return self._create_result('', tool_calls=[synth], finish_reason='tool_calls')
         # if the prompt names an available tool, request that tool with its
         # first declared parameter filled from the rest of the prompt
         match = self._match_tool(prompt, tools)
@@ -78,11 +80,11 @@ class TokeoAiMockProvider(TokeoAiProvider):
                 name=self._get_tool_name(spec),
                 arguments=self._build_tool_arguments(spec, argument),
             )
-            return self._build_result('', tool_calls=[call], finish_reason='tool_calls')
+            return self._create_result('', tool_calls=[call], finish_reason='tool_calls')
         # plain reply: a canned answer for ping, an echo otherwise
         if prompt.strip().lower() == 'ping':
-            return self._build_result('pong')
-        return self._build_result(f'[mock] {prompt}' if prompt else '[mock] (no prompt)')
+            return self._create_result('pong')
+        return self._create_result(f'[mock] {prompt}' if prompt else '[mock] (no prompt)')
 
     # the codeact keyword: ```text``` plus an operation word, then the sentence.
     # each operation maps (with a few language synonyms) to a python expression
@@ -100,7 +102,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         'länge': 'len({s!r})',
     }
 
-    def _build_codeact_call(self, prompt, tools):
+    def _create_codeact_call(self, prompt, tools):
         # recognise ```text <op> <sentence>``` and, when a code-running tool is
         # on offer, build a tool call whose code computes the value. returns a
         # ToolCall or None (so the normal tool/echo paths still apply). the tool
@@ -176,7 +178,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         key = required[0] if required else (names[0] if names else None)
         return {key: value} if key else {}
 
-    def _build_result(self, text, tool_calls=None, finish_reason='stop'):
+    def _create_result(self, text, tool_calls=None, finish_reason='stop'):
         # build a ChatResult with deterministic, faked token usage
         return ChatResult(
             text=text,

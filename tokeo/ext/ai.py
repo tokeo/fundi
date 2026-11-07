@@ -965,7 +965,7 @@ class TokeoAi(MetaMixin):
             self._govern(at_begin, create_messages_step(GOVERNOR_STAGE_ON_BEGIN), None)
             # on_prompt: before each model call, on the outgoing messages
             self._govern(at_prompt, create_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)
-            result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
+            result = ctx.track(self, provider.chat(ctx.messages, profile, tools=specs, model_params=model_params))
             # on_answer: after each model call, on the model answer; the result is
             # the handed-in work object, so the step is recorded through supersede
             result = self._govern(at_answer, create_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
@@ -1031,7 +1031,7 @@ class TokeoAi(MetaMixin):
                     raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
                 # on_prompt again before the follow-up model call
                 self._govern(at_prompt, create_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)
-                result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
+                result = ctx.track(self, provider.chat(ctx.messages, profile, tools=specs, model_params=model_params))
                 # on_answer again after the follow-up model call
                 result = self._govern(at_answer, create_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
             # on_close: once, on the final result, after the loop

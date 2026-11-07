@@ -49,7 +49,7 @@ def test_oai_compat_maps_text_and_usage(monkeypatch):
         )
 
     provider = _make_provider(handler, monkeypatch)
-    result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
+    result = provider.chat([{'role': 'user', 'content': 'hi'}], _PROFILE)
     assert result.text == 'hello there'
     assert result.finish_reason == 'stop'
     assert result.usage.total_tokens == 7
@@ -82,7 +82,7 @@ def test_oai_compat_maps_tool_calls_with_json_string_args(monkeypatch):
         )
 
     provider = _make_provider(handler, monkeypatch)
-    result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'calc'}], tools=[{'name': 'calc'}])
+    result = provider.chat([{'role': 'user', 'content': 'calc'}], _PROFILE, tools=[{'name': 'calc'}])
     assert len(result.tool_calls) == 1
     call = result.tool_calls[0]
     assert call.id == 'call_abc' and call.name == 'calc'
@@ -100,7 +100,7 @@ def test_oai_compat_tolerates_malformed_tool_arguments(monkeypatch):
         )
 
     provider = _make_provider(handler, monkeypatch)
-    result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'x'}])
+    result = provider.chat([{'role': 'user', 'content': 'x'}], _PROFILE)
     # a malformed argument string degrades to an empty dict, not a crash
     assert result.tool_calls[0].arguments == 'not json'
 
@@ -112,7 +112,7 @@ def test_oai_compat_keeps_reasoning_apart(monkeypatch):
         return httpx.Response(200, json={'choices': [{'message': {'content': 'answer', 'reasoning': 'because'}}]})
 
     provider = _make_provider(handler, monkeypatch)
-    result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
+    result = provider.chat([{'role': 'user', 'content': 'hi'}], _PROFILE)
     assert result.text == 'answer' and result.reasoning == 'because'
 
 
@@ -128,7 +128,7 @@ def test_oai_compat_sends_tools_and_auth_only_when_present(monkeypatch):
     # with a key and tools, both must travel
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1', 'key': 'secret-token'}}
     provider = _make_provider(handler, monkeypatch)
-    provider.chat(profile, [{'role': 'user', 'content': 'hi'}], tools=[{'name': 'calc'}])
+    provider.chat([{'role': 'user', 'content': 'hi'}], profile, tools=[{'name': 'calc'}])
     assert seen['auth'] == 'Bearer secret-token'
     assert seen['body']['tools'] == [{'name': 'calc'}]
     assert seen['body']['model'] == 'm'
@@ -144,7 +144,7 @@ def test_oai_compat_omits_auth_and_tools_when_absent(monkeypatch):
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     provider = _make_provider(handler, monkeypatch)
-    provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
+    provider.chat([{'role': 'user', 'content': 'hi'}], _PROFILE)
     assert seen['auth'] is None
     assert 'tools' not in seen['body']
 
@@ -157,7 +157,7 @@ def test_oai_compat_unreachable_endpoint_raises_clear_error(monkeypatch):
 
     provider = _make_provider(handler, monkeypatch)
     with pytest.raises(TokeoAiError) as err_info:
-        provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
+        provider.chat([{'role': 'user', 'content': 'hi'}], _PROFILE)
     assert 'not reachable' in str(err_info.value)
 
 
@@ -169,7 +169,7 @@ def test_oai_compat_http_error_status_raises_with_excerpt(monkeypatch):
 
     provider = _make_provider(handler, monkeypatch)
     with pytest.raises(TokeoAiError) as err_info:
-        provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
+        provider.chat([{'role': 'user', 'content': 'hi'}], _PROFILE)
     assert 'HTTP 401' in str(err_info.value)
 
 
@@ -177,9 +177,9 @@ def test_oai_compat_requires_base_url_and_model():
     """Without options.base_url, or with model only under options, it raises."""
     provider = TokeoAiOaiCompatProvider(None)
     with pytest.raises(TokeoAiError, match='needs model and options.base_url'):
-        provider.chat({'model': 'm'}, [{'role': 'user', 'content': 'hi'}])
+        provider.chat([{'role': 'user', 'content': 'hi'}], {'model': 'm'})
     with pytest.raises(TokeoAiError, match='needs model and options.base_url'):
-        provider.chat({'options': {'base_url': 'http://x/v1', 'model': 'm'}}, [{'role': 'user', 'content': 'hi'}])
+        provider.chat([{'role': 'user', 'content': 'hi'}], {'options': {'base_url': 'http://x/v1', 'model': 'm'}})
 
 
 def test_oai_compat_sends_profile_model_params(monkeypatch):
@@ -192,7 +192,7 @@ def test_oai_compat_sends_profile_model_params(monkeypatch):
 
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
     provider = _make_provider(handler, monkeypatch)
-    provider.chat(profile, [{'role': 'user', 'content': 'hi'}])
+    provider.chat([{'role': 'user', 'content': 'hi'}], profile)
     assert seen['body']['temperature'] == 0.2
     assert seen['body']['top_p'] == 0.9
     # the fixed keys are never shadowed by a param
@@ -210,7 +210,7 @@ def test_oai_compat_call_params_override_profile(monkeypatch):
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
     provider = _make_provider(handler, monkeypatch)
     # the call override wins key by key; unset keys keep the profile value
-    provider.chat(profile, [{'role': 'user', 'content': 'hi'}], model_params={'temperature': 0.9})
+    provider.chat([{'role': 'user', 'content': 'hi'}], profile, model_params={'temperature': 0.9})
     assert seen['body']['temperature'] == 0.9
     assert seen['body']['top_p'] == 0.9
 
@@ -226,7 +226,7 @@ def test_oai_compat_model_param_overrides_profile_model(monkeypatch):
     profile = {'model': 'from-profile', 'options': {'base_url': 'http://x/v1'}}
     provider = _make_provider(handler, monkeypatch)
     # a model key in model_params targets a different model on the same endpoint
-    provider.chat(profile, [{'role': 'user', 'content': 'hi'}], model_params={'model': 'override-model'})
+    provider.chat([{'role': 'user', 'content': 'hi'}], profile, model_params={'model': 'override-model'})
     assert seen['body']['model'] == 'override-model'
     # model appears once, not duplicated, and messages stay intact
     assert seen['body']['messages'] == [{'role': 'user', 'content': 'hi'}]
@@ -239,7 +239,7 @@ def test_oai_compat_maps_refusal(monkeypatch):
         return httpx.Response(200, json={'choices': [{'message': {'refusal': 'I cannot help with that'}, 'finish_reason': 'stop'}]})
 
     provider = _make_provider(handler, monkeypatch)
-    result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
+    result = provider.chat([{'role': 'user', 'content': 'hi'}], _PROFILE)
     # a refusal is kept apart from text, which stays empty
     assert result.refusal == 'I cannot help with that'
     assert result.text == ''
@@ -252,5 +252,5 @@ def test_oai_compat_maps_system_fingerprint(monkeypatch):
         return httpx.Response(200, json={'system_fingerprint': 'fp_abc123', 'choices': [{'message': {'content': 'ok'}}]})
 
     provider = _make_provider(handler, monkeypatch)
-    result = provider.chat(_PROFILE, [{'role': 'user', 'content': 'hi'}])
+    result = provider.chat([{'role': 'user', 'content': 'hi'}], _PROFILE)
     assert result.system_fingerprint == 'fp_abc123'

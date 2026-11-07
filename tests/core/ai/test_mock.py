@@ -24,7 +24,7 @@ _OTHER_TOOL = {'type': 'function', 'function': {'name': 'calc', 'parameters': {'
 
 def _find_codeact_code(prompt, tools=(_CODE_TOOL,)):
     provider = TokeoAiMockProvider(None)
-    call = provider._build_codeact_call(prompt, list(tools))
+    call = provider._create_codeact_call(prompt, list(tools))
     return call.arguments['code'] if call is not None else None
 
 
@@ -53,7 +53,7 @@ def test_mock_codeact_len_and_synonyms():
 def test_mock_codeact_targets_the_code_tool_by_shape():
     """The call names the offered code tool, here 'coding', whatever its name."""
     provider = TokeoAiMockProvider(None)
-    call = provider._build_codeact_call('text upper hi', [_CODE_TOOL])
+    call = provider._create_codeact_call('text upper hi', [_CODE_TOOL])
     assert call is not None and call.name == 'coding'
 
 

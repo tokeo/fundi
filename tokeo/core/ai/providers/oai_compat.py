@@ -61,16 +61,16 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
             timeout=120,
         )
 
-    def chat(self, profile, messages, tools=None, model_params=None):
+    def chat(self, messages, profile, tools=None, model_params=None):
         """
         Post the messages to the endpoint and return a normalized result.
 
         ### Args
 
+        - **messages** (list): Chat messages as plain OpenAI-style dicts
         - **profile** (dict): The resolved profile; carries ```model``` and,
             under ```options```, ```base_url```, optional ```key``` and
             ```timeout```
-        - **messages** (list): Chat messages as plain OpenAI-style dicts
         - **tools** (list|None): OpenAI-style function specs to offer; sent
             only when non-empty
         - **model_params** (dict|None): Per-call model parameters; merged over
@@ -140,9 +140,9 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         except ValueError as err:
             raise TokeoAiError(f'oai_compat endpoint returned non-JSON body: {err}')
 
-        return self._build_result(data)
+        return self._create_result(data)
 
-    def _build_result(self, data):
+    def _create_result(self, data):
         # map a chat-completions reply into a ChatResult; missing fields degrade
         # to sensible empties rather than raising, so an odd-but-valid reply is
         # still usable and fully visible on ```raw```

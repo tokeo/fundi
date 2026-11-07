@@ -51,7 +51,7 @@ class ScriptProvider(TokeoAiProvider):
         super().__init__(app, *args, **kw)
         self.seen = []
 
-    def chat(self, profile, messages, tools=None, model_params=None):
+    def chat(self, messages, profile, tools=None, model_params=None):
         """Play the next turn of the script, record the messages."""
         self.seen.append(list(messages))
         script = profile['options']['script']

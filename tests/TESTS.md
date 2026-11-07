@@ -322,7 +322,7 @@ A test that reads the raised error names it ```err_info```:
 
 ```python
 with pytest.raises(TokeoAiError) as err_info:
-    provider.chat(PROFILE, [{'role': 'user', 'content': 'hi'}])
+    provider.chat([{'role': 'user', 'content': 'hi'}], PROFILE)
 assert 'HTTP 401' in str(err_info.value)
 ```
 

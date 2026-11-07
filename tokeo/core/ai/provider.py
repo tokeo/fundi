@@ -71,16 +71,16 @@ class TokeoAiProvider:
         if config_name:
             self._config_name = config_name
 
-    def chat(self, profile, messages, tools=None, model_params=None):
+    def chat(self, messages, profile, tools=None, model_params=None):
         """
         Send messages to the model and return a normalized result.
 
         ### Args
 
+        - **messages** (list): Chat messages as plain OpenAI-style dicts
         - **profile** (dict): The resolved profile; carries ```model``` and,
             under ```options```, the provider's own keys (its
             ```Meta.config_defaults```, such as ```base_url``` and ```key```)
-        - **messages** (list): Chat messages as plain OpenAI-style dicts
         - **tools** (list|None): Optional tool definitions for the call
         - **model_params** (dict|None): Per-call model parameters that override
             the profile's ```model_params``` (temperature, top_p, ...); a hook
