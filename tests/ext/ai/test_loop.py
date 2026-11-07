@@ -275,7 +275,7 @@ def test_a_decline_at_on_prompt_raises_with_the_run_so_far():
             app.ai.chat([dict(role='user', content='hi')], agent='declining')
         assert app.ai._get_provider(SCRIPT).seen == []
     assert (err_info.value.stage, err_info.value.reason, err_info.value.by) == ('on_prompt', 'not today', 'human')
-    assert err_info.value.result.trace[-1].object.content == dict(declined=dict(stage='on_prompt', reason='not today', by='human'))
+    assert err_info.value.result.trace[-1].object.content == dict(decline=dict(stage='on_prompt', reason='not today', by='human'))
 
 
 def test_a_decline_at_on_answer_keeps_the_declined_answer_off_the_result():

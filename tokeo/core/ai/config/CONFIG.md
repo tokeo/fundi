@@ -739,20 +739,20 @@ Common keys and what they do:
 
 ### 8.1 Overriding parameters per call (CLI)
 
-```ai ask``` and ```ai chat``` take repeatable ```--model_param key=value``` flags
+```ai ask``` and ```ai chat``` take repeatable ```--model-param key=value``` flags
 that override the profile's ```model_params``` for that one call. The value is
 coerced like a YAML scalar; ```key=null``` *removes* a key, falling back to the
 profile's value.
 
 ```bash
 # more focused for one question
-myapp ai ask "summarise this" --model_param temperature=0.1
+myapp ai ask "summarise this" --model-param temperature=0.1
 
 # several at once
-myapp ai ask "be creative" --model_param temperature=1.2 --model_param top_p=0.95
+myapp ai ask "be creative" --model-param temperature=1.2 --model-param top_p=0.95
 
 # drop a profile-set key for this call
-myapp ai ask "..." --model_param seed=null
+myapp ai ask "..." --model-param seed=null
 ```
 
 ## 9. Using the loop from your own code
@@ -816,9 +816,10 @@ The call arguments and where each is resolved:
 |----------|---------|------------|
 | ```profile``` / ```model``` / ```purpose``` | select the profile (the model) | one of them, or ```ai.defaults.profile``` |
 | ```agent``` | select the composition | the arg, else profile's agent, else ```ai.defaults.agent``` |
-| ```model_params``` | per-call model tuning | overlays the profile's ```model_params``` |
 | ```deny``` | narrow the toolset | added to agent + profile deny |
+| ```model_params``` | per-call model tuning | overlays the profile's ```model_params``` |
 | ```max_steps``` / ```max_loops``` | per-call limits | nearest wins: call → agent → ```ai:``` base |
+| ```turndata``` | starting values for the run's turndata | taken 1:1 into ```ctx.turndata``` |
 | ```userdata``` | your own context, carried through | untouched by the framework |
 | ```notes``` | notes of confirm answers from earlier runs | read by the guards as ```ctx.notes``` |
 

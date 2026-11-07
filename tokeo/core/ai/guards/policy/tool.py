@@ -73,10 +73,10 @@ class TokeoAiToolPolicyGuard(TokeoAiPolicyGuard):
         # tool and group names, a single name is a list of one, a group
         # stands for its members as everywhere in the config
         name = invocation.name
-        denied = name in self.app.ai.tool_names(self._config('deny', stage=GOVERNOR_STAGE_ON_CALL))
+        denied = name in self.app.ai.resolve_tool_names(self._config('deny', stage=GOVERNOR_STAGE_ON_CALL))
         allow = self._config('allow', stage=GOVERNOR_STAGE_ON_CALL)
         if not denied and allow is not None:
-            denied = name not in self.app.ai.tool_names(allow)
+            denied = name not in self.app.ai.resolve_tool_names(allow)
         if denied:
             invocation.decision = Invocation.DENY
             invocation.reason = f'tool {name!r} is not permitted by policy'

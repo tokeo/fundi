@@ -394,7 +394,7 @@ class TokeoAi(MetaMixin):
             return deepcopy(self._registry)
         return deepcopy(self._registry.get(kind, {}))
 
-    def selectors(self):
+    def get_selectable_names(self):
         """
         The selectable names for the interactive chat shell.
 
@@ -465,7 +465,7 @@ class TokeoAi(MetaMixin):
         # order preserved, duplicates dropped (see config.tools.resolve_tools)
         return resolve_tools(names, self._tool_groups)
 
-    def tool_names(self, names):
+    def resolve_tool_names(self, names):
         """
         Expand tool and group names to the names of the tools.
 
@@ -657,27 +657,27 @@ class TokeoAi(MetaMixin):
         # all four run in-process; only ```exec``` crosses into the sandbox
         turndata = ctx.turndata if ctx is not None else TokeoAiTurndata()
 
-        def _build_track(stage):
+        def _create_track(stage):
             # bind origin and stage here, so a hook cannot name itself wrong
             if ctx is None:
                 return lambda content: None
             return lambda content: ctx.track(tool, content, stage=stage)
 
-        def _build_error_result(err):
+        def _create_error_result(err):
             return ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
 
         try:
-            tool.prepare(turndata, arguments, _build_track('prepare'))
+            tool.prepare(turndata, arguments, _create_track('prepare'))
         except Exception as err:
             # nothing was set up, so nothing is owed a teardown
-            return _build_error_result(err)
+            return _create_error_result(err)
         result = None
         try:
             try:
-                arguments = tool.before(turndata, arguments, _build_track('before')) or arguments
+                arguments = tool.before(turndata, arguments, _create_track('before')) or arguments
             except Exception as err:
                 # before runs outside the sandbox: its throw is the tool's own
-                result = _build_error_result(err)
+                result = _create_error_result(err)
             else:
                 # the sandbox already turns a tool throw into a result, so what
                 # comes out here is machinery (a timeout, a denial) and rises;
@@ -685,21 +685,21 @@ class TokeoAi(MetaMixin):
                 try:
                     result = sandbox.exec(tool, arguments)
                 except Exception as err:
-                    result = _build_error_result(err)
+                    result = _create_error_result(err)
                     raise
                 # a failed call has no result to reshape, so after is skipped
                 if getattr(result.state, 'exception', None) is None:
                     try:
-                        result = tool.after(turndata, arguments, result, _build_track('after')) or result
+                        result = tool.after(turndata, arguments, result, _create_track('after')) or result
                     except Exception as err:
-                        result = _build_error_result(err)
+                        result = _create_error_result(err)
         finally:
             # owed once prepare succeeded, even while a machinery error rises
             try:
-                tool.teardown(turndata, arguments, result, _build_track('teardown'))
+                tool.teardown(turndata, arguments, result, _create_track('teardown'))
             except Exception as err:
                 # a failed teardown is noted, it does not overturn the result
-                _build_track('teardown')(f'teardown failed: {type(err).__name__}: {err}')
+                _create_track('teardown')(f'teardown failed: {type(err).__name__}: {err}')
         return result
 
     def _exec_in_sandbox(self, tool_name, arguments, agent_obj, profile, call_deny, invocation, ctx):
@@ -824,12 +824,12 @@ class TokeoAi(MetaMixin):
     def chat(
         self,
         messages,
-        deny=None,
         profile=None,
         model=None,
-        model_params=None,
         purpose=None,
         agent=None,
+        deny=None,
+        model_params=None,
         max_steps=None,
         max_loops=None,
         turndata=None,
@@ -854,19 +854,19 @@ class TokeoAi(MetaMixin):
         ### Args
 
         - **messages** (list): Chat messages as plain OpenAI-style dicts
-        - **deny** (list|str|None): Tools or groups this call forbids, on
-            top of the agent's and the profile's deny. A call may only narrow
-            the agent's tool set, never extend it
         - **profile** (str|None): Select a profile by name
         - **model** (str|None): Select the first enabled profile by model
-        - **model_params** (dict|None): Per-call model parameters (temperature,
-            top_p, ...) that override the profile's ```model_params``` for this
-            request only; passed to the provider, which spreads them into the
-            request. Providers without a configurable model ignore them
         - **purpose** (str|None): Select the first enabled profile by purpose
         - **agent** (str|None): Select an agent by name; without it the
             profile's ```agent``` (```null``` is none), then
             ```ai.defaults.agent```, then the implicit agent without tools
+        - **deny** (list|str|None): Tools or groups this call forbids, on
+            top of the agent's and the profile's deny. A call may only narrow
+            the agent's tool set, never extend it
+        - **model_params** (dict|None): Per-call model parameters (temperature,
+            top_p, ...) that override the profile's ```model_params``` for this
+            request only; passed to the provider, which spreads them into the
+            request. Providers without a configurable model ignore them
         - **max_steps** (int|None): Maximum tool rounds, 0 for unlimited;
             defaults to the agent's limit, otherwise the framework default
         - **max_loops** (int|None): Maximum consecutive rounds without one
@@ -939,7 +939,7 @@ class TokeoAi(MetaMixin):
         # stages and tracked, not a context field
         ctx = TokeoAiContext(messages=messages, turndata=turndata, userdata=userdata, trace=self._trace_enabled, notes=notes)
 
-        def build_messages_step(stage):
+        def create_messages_step(stage):
             # begin and prompt refine the conversation, no work object
             def run_step(governor, subject):
                 ctx.refine_messages(governor, getattr(governor, stage)(ctx), stage=stage)
@@ -947,7 +947,7 @@ class TokeoAi(MetaMixin):
 
             return run_step
 
-        def build_result_step(stage):
+        def create_result_step(stage):
             # answer and close work on the model answer
             def run_step(governor, result):
                 return ctx.supersede(governor, getattr(governor, stage)(ctx, result), result, stage=stage)
@@ -962,13 +962,13 @@ class TokeoAi(MetaMixin):
             # work object), so they refine the messages: a guard may mutate
             # ctx.messages in place (returning None) or hand back a fresh
             # conversation, and refine_messages records the step either way
-            self._govern(at_begin, build_messages_step(GOVERNOR_STAGE_ON_BEGIN), None)
+            self._govern(at_begin, create_messages_step(GOVERNOR_STAGE_ON_BEGIN), None)
             # on_prompt: before each model call, on the outgoing messages
-            self._govern(at_prompt, build_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)
+            self._govern(at_prompt, create_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)
             result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
             # on_answer: after each model call, on the model answer; the result is
             # the handed-in work object, so the step is recorded through supersede
-            result = self._govern(at_answer, build_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
+            result = self._govern(at_answer, create_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
             while result.tool_calls:
                 # max_steps limits the tool rounds of one request; 0 is unlimited.
                 # reaching it aborts loudly: a silent empty answer hides the cause
@@ -1030,12 +1030,12 @@ class TokeoAi(MetaMixin):
                 if max_loops and ctx.loopdata.failed_loops >= max_loops:
                     raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
                 # on_prompt again before the follow-up model call
-                self._govern(at_prompt, build_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)
+                self._govern(at_prompt, create_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)
                 result = ctx.track(self, provider.chat(profile, ctx.messages, tools=specs, model_params=model_params))
                 # on_answer again after the follow-up model call
-                result = self._govern(at_answer, build_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
+                result = self._govern(at_answer, create_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
             # on_close: once, on the final result, after the loop
-            result = self._govern(at_close, build_result_step(GOVERNOR_STAGE_ON_CLOSE), result)
+            result = self._govern(at_close, create_result_step(GOVERNOR_STAGE_ON_CLOSE), result)
             # the run result: the final answer (a ChatResult), plus the run's
             # history, counters and confirmations lifted off the context (which
             # ends here). the answer is just the model answer
@@ -1043,7 +1043,7 @@ class TokeoAi(MetaMixin):
         except TokeoAiRunDeclinedError as err:
             # the declined answer stays on the trace only, so no caller uses it
             # by mistake
-            ctx.track(self, TokeoAiTraceNote(dict(declined=dict(stage=err.stage, reason=err.reason, by=err.by))))
+            ctx.track(self, TokeoAiTraceNote(dict(decline=dict(stage=err.stage, reason=err.reason, by=err.by))))
             err.result = TokeoAiResult(loopdata=ctx.loopdata, trace=ctx.trace, confirmations=ctx.confirmations)
             raise
 
@@ -1066,12 +1066,12 @@ class TokeoAi(MetaMixin):
     def ask(
         self,
         prompt,
-        deny=None,
         profile=None,
         model=None,
-        model_params=None,
         purpose=None,
         agent=None,
+        deny=None,
+        model_params=None,
         turndata=None,
         userdata=None,
         notes=None,
@@ -1082,17 +1082,17 @@ class TokeoAi(MetaMixin):
         ### Args
 
         - **prompt** (str): The user prompt
-        - **deny** (list|str|None): Tools or groups this call forbids, on
-            top of the agent's and the profile's deny. A call may only narrow
-            the agent's tool set, never extend it
         - **profile** (str|None): Select a profile by name
         - **model** (str|None): Select the first enabled profile by model
-        - **model_params** (dict|None): Per-call model parameters that override
-            the profile's ```model_params``` for this request only
         - **purpose** (str|None): Select the first enabled profile by purpose
         - **agent** (str|None): Select an agent by name; without it the
             profile's ```agent``` (```null``` is none), then
             ```ai.defaults.agent```, then the implicit agent without tools
+        - **deny** (list|str|None): Tools or groups this call forbids, on
+            top of the agent's and the profile's deny. A call may only narrow
+            the agent's tool set, never extend it
+        - **model_params** (dict|None): Per-call model parameters that override
+            the profile's ```model_params``` for this request only
         - **turndata** (dict|None): Starting values for the run's
             ```turndata``` (see ```TokeoAiContext``` for the 1:1 semantics)
         - **userdata**: An opaque value carried through the run on the context,
@@ -1150,7 +1150,7 @@ class _ChatCompleter(Completer):
         # 'purpose': [...]} from the handler; switches: {'--profile':
         # 'profile', ...} mapping the flag to its names key. extra_switches:
         # flag names offered for completion but carrying a free value (no
-        # configured names to suggest), such as --model_param
+        # configured names to suggest), such as --model-param
         self._names = names
         self._switches = switches
         self._extra_switches = list(extra_switches or [])
@@ -1175,7 +1175,7 @@ class _ChatCompleter(Completer):
                     yield Completion(name, start_position=-len(current_word))
         elif current_word.startswith('-'):
             # completing a switch name itself (selectors plus the free-value
-            # switches such as --model_param)
+            # switches such as --model-param)
             for switch in list(self._switches) + self._extra_switches:
                 if switch.startswith(current_word):
                     yield Completion(switch, start_position=-len(current_word))
@@ -1206,7 +1206,7 @@ class AiController(Controller):
             (['--purpose'], dict(help='select an ai profile by purpose', dest='purpose')),
             (['--agent'], dict(help='select an ai agent by name', dest='agent')),
             (
-                ['--model_param'],
+                ['--model-param'],
                 dict(
                     help='per-call model parameter as key=value (repeatable; key=null removes it)',
                     action='append',
@@ -1218,7 +1218,7 @@ class AiController(Controller):
                 dict(
                     help='print the result as json with the full trace (every step keeps its object)',
                     action='store_true',
-                    dest='as_trace',
+                    dest='trace',
                 ),
             ),
             (
@@ -1226,7 +1226,7 @@ class AiController(Controller):
                 dict(
                     help='print the result as json with a compact trace (omit the object on unchanged steps)',
                     action='store_true',
-                    dest='as_trace_compact',
+                    dest='trace_compact',
                 ),
             ),
         ],
@@ -1252,21 +1252,21 @@ class AiController(Controller):
             )
         except TokeoAiRunDeclinedError as declined:
             # a declined run shows its trace on request, then the decline
-            if self.app.pargs.as_trace or self.app.pargs.as_trace_compact:
+            if self.app.pargs.trace or self.app.pargs.trace_compact:
                 self._print_trace(declined.result)
             self.app.print(self._format_decline(declined))
             return
         # --trace prints the whole result with the full trace; --trace-compact
         # prints it with a compact trace (unchanged steps drop their repeated
         # object); otherwise just the answer text
-        if self.app.pargs.as_trace or self.app.pargs.as_trace_compact:
+        if self.app.pargs.trace or self.app.pargs.trace_compact:
             self._print_trace(result)
         else:
             self.app.print(result.answer.text)
 
     def _print_trace(self, result):
         # the whole result with the full or the compact trace
-        self.app.print(dump_json(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.as_trace_compact), indent=2))
+        self.app.print(dump_json(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.trace_compact), indent=2))
 
     def _format_decline(self, err):
         # the line for a run a governor declined
@@ -1280,7 +1280,7 @@ class AiController(Controller):
             (['--purpose'], dict(help='select an ai profile by purpose', dest='purpose')),
             (['--agent'], dict(help='select an ai agent by name', dest='agent')),
             (
-                ['--model_param'],
+                ['--model-param'],
                 dict(
                     help='per-call model parameter as key=value (repeatable; key=null removes it)',
                     action='append',
@@ -1317,7 +1317,7 @@ class AiController(Controller):
         # one prompt session for the whole chat, reused across turns (it
         # carries the history, the selector completer, auto-suggest, and
         # history-prefix search) instead of being rebuilt every turn
-        editor = self._build_chat_session(InMemoryHistory(), completer)
+        editor = self._create_chat_session(InMemoryHistory(), completer)
         # a person in a terminal answers a confirm in the same session
         if sys.stdin.isatty():
             self.app.hook.register(GOVERNOR_CONFIRM_CHANNEL_HOOK, terminal_channel(editor.prompt, self.app.print))
@@ -1407,7 +1407,7 @@ class AiController(Controller):
                     # shell stays alive for the next turn
                     self.app.print(f'ai chat - error: {err}')
 
-    def _build_chat_session(self, history, completer):
+    def _create_chat_session(self, history, completer):
         # the reusable prompt_toolkit session for the chat shell. complete-
         # while-typing must stay on so the selector menu pops up as you type;
         # note that enable_history_search would silently turn it off (they are
@@ -1429,9 +1429,9 @@ class AiController(Controller):
     def _build_chat_completer(self):
         # a position-independent completer built from the running config, so
         # "--" offers the four switches and a switch then offers its values
-        # no matter where in the line they are typed. --model_param is offered
+        # no matter where in the line they are typed. --model-param is offered
         # as a free-value switch (its key=value has no configured names)
-        return _ChatCompleter(self.app.ai.selectors(), self._CHAT_SWITCHES, ['--model_param'])
+        return _ChatCompleter(self.app.ai.get_selectable_names(), self._CHAT_SWITCHES, ['--model-param'])
 
     def _apply_chat_switches(self, line, session):
         # pull any "--flag value" pairs out of the line, validate each value
@@ -1440,7 +1440,7 @@ class AiController(Controller):
         # a normal prompt has none of these tokens and passes through
         # untouched. validation here (plus the completer) is what stops a
         # typo such as "--agent guardedsss" from silently doing nothing.
-        # --model_param is handled apart from the four selectors: it is
+        # --model-param is handled apart from the four selectors: it is
         # repeatable and carries a key=value (not a validated single value), so
         # it merges into the session's model_params (null/empty removes a key)
         try:
@@ -1449,14 +1449,14 @@ class AiController(Controller):
             # an unbalanced quote (an apostrophe in the prompt): fall back to
             # a naive split, used only to spot the switch tokens
             tokens = line.split()
-        names = self.app.ai.selectors()
+        names = self.app.ai.get_selectable_names()
         pending = []
         param_pairs = []
         rest = []
         index = 0
         while index < len(tokens):
             token = tokens[index]
-            if token == '--model_param' and index + 1 < len(tokens):
+            if token == '--model-param' and index + 1 < len(tokens):
                 param_pairs.append(tokens[index + 1])
                 index += 2
                 continue

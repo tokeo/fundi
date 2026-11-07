@@ -234,7 +234,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
     def _confirm_call(self, ctx, stage, invocation):
         # the tool stages: only the configured tools are asked
         tools = self._config('tools', stage=stage)
-        if tools is not None and invocation.name not in self.app.ai.tool_names(tools):
+        if tools is not None and invocation.name not in self.app.ai.resolve_tool_names(tools):
             return
         answer = self._get_answer(ctx, stage, invocation, invocation.decision, invocation.reason, f'{stage}:{invocation.id}')
         if answer.value == TokeoAiConfirmAnswer.NO_RETRY:

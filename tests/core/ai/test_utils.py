@@ -1,5 +1,5 @@
 """
-Tests for the shared --model_param parse+coerce helper.
+Tests for the shared --model-param parse+coerce helper.
 
 The helper turns repeatable ```key=value``` strings into a model_params dict,
 used the same way by ```ai ask```, the ```ai chat``` start flags and the
