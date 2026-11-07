@@ -20,8 +20,8 @@ from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.governor import GOVERNOR_STAGE_ANY
 from tokeo.core.ai.config.governors import resolve_governors, parse_entry
 from tokeo.core.ai.config.tools import resolve_tools, find_cycles
-from tokeo.core.ai.config.sandboxes import sandbox_contains_tool, sandbox_for
-from tokeo.core.ai.config.profiles import resolve_profile, find_profile, resolve_agent_name
+from tokeo.core.ai.config.sandboxes import has_sandbox_tool, find_sandbox
+from tokeo.core.ai.config.profiles import resolve_profile, get_profile, resolve_agent_name
 
 
 # a stub class-stage lookup: every config name can do these three stages, so the
@@ -217,41 +217,41 @@ def _resolve_names(names):
 
 def test_sandbox_has_no_all_keyword():
     """tools: _all is just a name, so a sandbox with it contains no 'anything'."""
-    assert not sandbox_contains_tool({'tools': '_all'}, 'anything', _resolve_names)
+    assert not has_sandbox_tool({'tools': '_all'}, 'anything', _resolve_names)
 
 
 def test_sandbox_listed_tool_is_contained():
     """A sandbox with tools: [calc] contains calc and not other."""
-    assert sandbox_contains_tool({'tools': ['calc']}, 'calc', _resolve_names)
-    assert not sandbox_contains_tool({'tools': ['calc']}, 'other', _resolve_names)
+    assert has_sandbox_tool({'tools': ['calc']}, 'calc', _resolve_names)
+    assert not has_sandbox_tool({'tools': ['calc']}, 'other', _resolve_names)
 
 
 def test_sandbox_except_excludes_from_this_sandbox():
     """except: [calc] takes calc out of a [calc, other] sandbox, other stays in."""
     item = {'tools': ['calc', 'other'], 'except': ['calc']}
-    assert not sandbox_contains_tool(item, 'calc', _resolve_names)
-    assert sandbox_contains_tool(item, 'other', _resolve_names)
+    assert not has_sandbox_tool(item, 'calc', _resolve_names)
+    assert has_sandbox_tool(item, 'other', _resolve_names)
 
 
 def test_sandbox_scalar_tools_and_except_are_one_name():
     """A scalar 'calc' in tools or except is one name, not iterated chars."""
     # as_list does that
-    assert sandbox_contains_tool({'tools': 'calc'}, 'calc', _resolve_names)
-    assert not sandbox_contains_tool({'tools': ['calc'], 'except': 'calc'}, 'calc', _resolve_names)
+    assert has_sandbox_tool({'tools': 'calc'}, 'calc', _resolve_names)
+    assert not has_sandbox_tool({'tools': ['calc'], 'except': 'calc'}, 'calc', _resolve_names)
 
 
-def test_sandbox_for_takes_first_matching_in_chain():
+def test_find_sandbox_takes_first_matching_in_chain():
     """The first containing sandbox wins: calc in jailed, other in allow."""
     items = {'jailed': {'tools': ['calc']}, 'allow': {'tools': ['calc', 'other']}}
     # calc is in jailed (first); other falls through to allow
-    assert sandbox_for('calc', ['jailed', 'allow'], items.get, _resolve_names) == 'jailed'
-    assert sandbox_for('other', ['jailed', 'allow'], items.get, _resolve_names) == 'allow'
+    assert find_sandbox('calc', ['jailed', 'allow'], items.get, _resolve_names) == 'jailed'
+    assert find_sandbox('other', ['jailed', 'allow'], items.get, _resolve_names) == 'allow'
 
 
-def test_sandbox_for_exhausted_chain_returns_none():
-    """No sandbox in the chain contains other: sandbox_for returns None."""
+def test_find_sandbox_exhausted_chain_returns_none():
+    """No sandbox in the chain contains other: find_sandbox returns None."""
     items = {'jailed': {'tools': ['calc']}}
-    assert sandbox_for('other', ['jailed'], items.get, _resolve_names) is None
+    assert find_sandbox('other', ['jailed'], items.get, _resolve_names) is None
 
 
 # ---- profiles: selection and agent binding (config.profiles) ----------------
@@ -289,7 +289,7 @@ def test_profile_no_selector_no_default_is_an_error():
 def test_profile_disabled_is_not_found():
     """The disabled profile off is not found by its name: TokeoAiError."""
     with pytest.raises(TokeoAiError):
-        find_profile(_PROFILES, 'profile', 'off')
+        get_profile(_PROFILES, 'profile', 'off')
 
 
 def test_agent_name_call_argument_wins():

@@ -115,9 +115,9 @@ from tokeo.core.ai.transformer import TokeoAiTransformer
 from tokeo.core.ai.conductor import TokeoAiConductor
 from tokeo.core.ai.config.governors import resolve_governors
 from tokeo.core.ai.config.tools import resolve_tools
-from tokeo.core.ai.config.sandboxes import sandbox_contains_tool, sandbox_for
-from tokeo.core.ai.config.profiles import resolve_profile, resolve_agent_name, selectable_names
-from tokeo.core.ai.config.providers import provider_type_of
+from tokeo.core.ai.config.sandboxes import has_sandbox_tool, find_sandbox
+from tokeo.core.ai.config.profiles import resolve_profile, resolve_agent_name, get_selectable_names
+from tokeo.core.ai.config.providers import get_provider_type
 from tokeo.core.ai.guards.audit import TokeoAiTraceAuditGuard
 from tokeo.core.ai.guards.policy import TokeoAiToolPolicyGuard, TokeoAiDenyPolicyGuard, TokeoAiAbortPolicyGuard
 from tokeo.core.ai.guards.validate import TokeoAiToolSchemaValidator
@@ -408,7 +408,7 @@ class TokeoAi(MetaMixin):
             and ```purpose```
 
         """
-        return selectable_names(self._profiles, self._agents.keys())
+        return get_selectable_names(self._profiles, self._agents.keys())
 
     def _resolve_profile(self, profile=None, model=None, purpose=None):
         # pick the profile via the shared resolver (config.profiles): at most one
@@ -629,7 +629,7 @@ class TokeoAi(MetaMixin):
         # do the tools of sandbox ```name``` contain ```tool_name```? delegates
         # to the shared resolver (config.sandboxes), which knows ```except```;
         # tool/group names are expanded through _resolve_tools
-        return sandbox_contains_tool(self._sandboxes.get(name), tool_name, self._resolve_tools)
+        return has_sandbox_tool(self._sandboxes.get(name), tool_name, self._resolve_tools)
 
     def _find_sandbox(self, tool_name, agent_obj):
         # choose the sandbox a tool runs in: walk the agent's ordered chain via
@@ -637,7 +637,7 @@ class TokeoAi(MetaMixin):
         # tool. None means the chain is exhausted, which the caller turns into a
         # deny (deny-by-default). where a sandbox name points is the config's
         # choice, e.g. per environment file, never a switch in the process
-        name = sandbox_for(tool_name, as_list(agent_obj._config('sandboxes')), self._sandboxes.get, self._resolve_tools)
+        name = find_sandbox(tool_name, as_list(agent_obj._config('sandboxes')), self._sandboxes.get, self._resolve_tools)
         return self._get_sandbox(name) if name is not None else None
 
     def _is_denied(self, tool_name, agent_obj, profile, call_deny=None):
@@ -898,7 +898,7 @@ class TokeoAi(MetaMixin):
         self._log_license_notice()
         # proceed with chat
         name, profile = self._resolve_profile(profile=profile, model=model, purpose=purpose)
-        provider_type = provider_type_of(name, profile)
+        provider_type = get_provider_type(name, profile)
         provider = self._get_provider(provider_type)
         # the agent is the composition root: it supplies the tools and the
         # guards and sets the limits and the sandbox chain, while the profile

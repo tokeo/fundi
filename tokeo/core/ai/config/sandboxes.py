@@ -9,16 +9,16 @@ walks on for them. An exhausted chain means no sandbox lists the tool, which is
 the deny-by-default.
 
 It holds no app state and does no class loading; it works on the raw sandbox
-items plus a ```resolve``` callback (the tool-group expansion) and an
-```item_of``` lookup (name -> sandbox item), so the handler and the linter draw
-from the same source for "does this sandbox contain this tool" and "which
-sandbox runs it".
+items plus a ```resolve``` callback (the tool-group expansion) and a
+```find_sandbox_item``` lookup (name -> sandbox item), so the handler and the
+linter draw from the same source for "does this sandbox contain this tool" and
+"which sandbox runs it".
 """
 
 from tokeo.core.utils.validate import as_list
 
 
-def sandbox_contains_tool(item, tool_name, resolve):
+def has_sandbox_tool(item, tool_name, resolve):
     """
     Does sandbox ```item```'s tools contain ```tool_name```?
 
@@ -48,7 +48,7 @@ def sandbox_contains_tool(item, tool_name, resolve):
     return tool_name not in excepted
 
 
-def sandbox_for(tool_name, chain, item_of, resolve):
+def find_sandbox(tool_name, chain, find_sandbox_item, resolve):
     """
     Return the name of the first sandbox in ```chain``` that runs ```tool_name```.
 
@@ -61,7 +61,7 @@ def sandbox_for(tool_name, chain, item_of, resolve):
 
     - **tool_name** (str): The tool to place
     - **chain** (list): The agent's ordered sandbox names
-    - **item_of** (callable): ```name -> sandbox item``` lookup
+    - **find_sandbox_item** (callable): ```name -> sandbox item``` lookup
     - **resolve** (callable): ```names -> flat item list``` (the tool-group
         expansion)
 
@@ -72,6 +72,6 @@ def sandbox_for(tool_name, chain, item_of, resolve):
 
     """
     for name in chain or []:
-        if sandbox_contains_tool(item_of(name), tool_name, resolve):
+        if has_sandbox_tool(find_sandbox_item(name), tool_name, resolve):
             return name
     return None

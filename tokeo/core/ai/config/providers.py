@@ -13,7 +13,7 @@ the handler and the linter draw from the same source for "which provider type".
 from tokeo.core.ai.exc import TokeoAiError
 
 
-def provider_type_of(name, profile):
+def get_provider_type(name, profile):
     """
     Return the provider ```type``` set on a profile.
 

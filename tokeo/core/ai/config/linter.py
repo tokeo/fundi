@@ -386,9 +386,10 @@ class TokeoAiLinter:
             self._add_issue(f'{path}.governors', str(err))
 
     def _get_class_stages_or_empty(self, config_name):
-        # the resolver's stages_of: the class stages, or empty when the class
-        # cannot be resolved (the unknown name is reported by the form check, so
-        # here an empty set just yields an empty participation, no second error)
+        # the resolver's get_class_stages: the class stages, or empty when the
+        # class cannot be resolved (the unknown name is reported by the form
+        # check, so here an empty set just yields an empty participation, no
+        # second error)
         stages = self._get_class_stages(config_name)
         return stages or set()
 

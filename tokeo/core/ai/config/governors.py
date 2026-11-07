@@ -11,8 +11,8 @@ list of ```(config_name, stages)``` entries the handler can build and run.
 
 It holds no app state and does no class loading; it works on the raw config
 (the merged governor sections and an agent's ```governors```/```omit```) plus a
-```stages_of``` callback that yields a governor's class stages (by reflection),
-so the resolver stays pure and testable. Class loading, building,
+```get_class_stages``` callback that yields a governor's class stages (by
+reflection), so the resolver stays pure and testable. Class loading, building,
 and per-stage running stay in the handler.
 
 The grammar:
@@ -111,13 +111,13 @@ def parse_entry(entry):
     raise TokeoAiError(f'a guard composition entry must be a name or a one-key mapping, got {entry!r}')
 
 
-def _resolve_stages(config_name, stages, stages_of):
+def _resolve_stages(config_name, stages, get_class_stages):
     # turn a parsed stage list (or None for bare) into the concrete stage set,
     # intersected with what the class can do. None or [_any] means all class
     # stages; an explicit list is taken as named (a named stage the class does
     # not implement is dropped here and flagged by the linter, not raised, so a
     # run does not fail on a stale stage name)
-    class_stages = frozenset(stages_of(config_name))
+    class_stages = frozenset(get_class_stages(config_name))
     if stages is None or list(stages) == [GOVERNOR_STAGE_ANY]:
         return class_stages
     named = set()
@@ -129,7 +129,7 @@ def _resolve_stages(config_name, stages, stages_of):
     return frozenset(named) & class_stages
 
 
-def resolve_governors(governors_section, agent_governors, agent_omit, stages_of, logger=None):
+def resolve_governors(governors_section, agent_governors, agent_omit, get_class_stages, logger=None):
     """
     Resolve an agent's governor composition into an ordered participation list.
 
@@ -154,8 +154,9 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
         share this namespace)
     - **agent_governors** (list): The agent's ```governors``` composition list
     - **agent_omit** (list): The agent's ```omit``` list (config names to drop)
-    - **stages_of** (callable): ```config_name -> iterable of stage names``` the
-        class can do (the handler passes a reflection-backed lookup)
+    - **get_class_stages** (callable): ```config_name -> iterable of stage
+        names``` the class can do (the handler passes a reflection-backed
+        lookup)
     - **logger** (optional): A logger; when given, agent-over-chain overrides
         are reported via ```logger.warning```. ```None``` (the default) stays
         silent, so a run (ask/chat) shows no notes while ```ai lint``` can
@@ -178,7 +179,7 @@ def resolve_governors(governors_section, agent_governors, agent_omit, stages_of,
     appearances = {}
 
     def add_appearance(config_name, stages, source):
-        resolved = _resolve_stages(config_name, stages, stages_of)
+        resolved = _resolve_stages(config_name, stages, get_class_stages)
         if config_name not in appearances:
             appearances[config_name] = []
             order.append(config_name)

@@ -20,7 +20,7 @@ def _is_enabled(profile):
     return isinstance(profile, dict) and bool(profile.get('enabled', True))
 
 
-def find_profile(profiles, key, value):
+def get_profile(profiles, key, value):
     """
     Resolve a single enabled profile by name or by a field value.
 
@@ -87,10 +87,10 @@ def resolve_profile(profiles, default_profile, profile=None, model=None, purpose
         raise TokeoAiError('select a profile by only one of profile, model or purpose')
     if active:
         key, value = next(iter(active.items()))
-        return find_profile(profiles, key, value)
+        return get_profile(profiles, key, value)
     if not default_profile:
         raise TokeoAiError('no ai profile selected and no ai.defaults.profile configured')
-    return find_profile(profiles, 'profile', default_profile)
+    return get_profile(profiles, 'profile', default_profile)
 
 
 def resolve_agent_name(agent, profile, default_agent):
@@ -126,7 +126,7 @@ def resolve_agent_name(agent, profile, default_agent):
     return agent
 
 
-def selectable_names(profiles, agent_names):
+def get_selectable_names(profiles, agent_names):
     """
     The names selectable on the command line, grouped by selector.
 
