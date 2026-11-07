@@ -65,7 +65,7 @@ import json
 import traceback
 
 try:
-    from _guest.json import json_dump, TokeoJsonUnknownNoneEncoder
+    from _guest.json import dump_json, TokeoJsonUnknownNoneEncoder
 
     with open('/io/task.json') as f:
         task = json.load(f)
@@ -98,7 +98,7 @@ def deliver(value):
     if value is None:
         return
     encoder = Encoder()
-    as_json = json_dump(value, encoder=encoder)
+    as_json = dump_json(value, encoder=encoder)
     with open('/io/value.json', 'w') as f:
         json.dump(dict(as_str=str(value), as_json=as_json, incomplete=encoder.substituted), f)
 """

@@ -68,7 +68,7 @@ class TodayTransformer(TokeoAiTransformer):
         if ctx.turndata.get(mark):
             return
         ctx.turndata[mark] = True
-        today = utc_now().date().isoformat()
+        today = get_utc_now().date().isoformat()
         ctx.messages.insert(0, dict(role='system', content=f'Today is {today} (UTC).'))
 ```
 

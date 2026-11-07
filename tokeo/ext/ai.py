@@ -85,7 +85,7 @@ from prompt_toolkit.completion import Completer, Completion
 from tokeo.ext.argparse import Controller
 from tokeo.core.utils.validate import as_list
 from tokeo.core.utils.modules import resolve_object, TokeoModulesLoadError
-from tokeo.core.utils.json import json_dump, TokeoJsonUnknownNameEncoder
+from tokeo.core.utils.json import dump_json, TokeoJsonUnknownNameEncoder
 from tokeo.core.ai.utils import parse_model_params, TokeoJsonAiTraceEncoder
 from tokeo.core.ai import (
     TokeoAiError,
@@ -1057,7 +1057,7 @@ class TokeoAi(MetaMixin):
                 {
                     'id': call.id,
                     'type': 'function',
-                    'function': {'name': call.name, 'arguments': json_dump(call.arguments or {}, encoder=TokeoJsonUnknownNameEncoder())},
+                    'function': {'name': call.name, 'arguments': dump_json(call.arguments or {}, encoder=TokeoJsonUnknownNameEncoder())},
                 }
                 for call in result.tool_calls
             ],
@@ -1266,7 +1266,7 @@ class AiController(Controller):
 
     def _print_trace(self, result):
         # the whole result with the full or the compact trace
-        self.app.print(json_dump(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.as_trace_compact), indent=2))
+        self.app.print(dump_json(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.as_trace_compact), indent=2))
 
     def _format_decline(self, err):
         # the line for a run a governor declined

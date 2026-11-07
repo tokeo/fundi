@@ -44,7 +44,7 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
             step records
 
         """
-        self.app.log.info(f'ai trace [{date.to_utc_timestring(date.utc_now())}]: {message}')
+        self.app.log.info(f'ai trace [{date.to_utc_timestring(date.get_utc_now())}]: {message}')
 
     def on_begin(self, ctx):
         """Log the start of the run (the raw incoming request)."""

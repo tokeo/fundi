@@ -283,7 +283,7 @@ def start_worker(tmp_path):
   lower case or the name of its method takes the place of the function,
   e.g. ```test_worker_keeps_a_message_its_handler_failed_on```
 - A file covering several modules prefixes the module, e.g.
-  ```test_extensions_required_names_the_missing_ones```
+  ```test_check_required_extensions_names_the_missing_ones```
 - No path in the name, pytest shows it: ```tests/core/utils/test_date.py::test_...```
 - The tests of one function stand together under a section comment with its
   name, with two blank lines before and after; a file that already uses
@@ -363,7 +363,7 @@ start of the next run, the results stay for a look until then.
 
 ```python
 def test_file_deleted_after_event(tmp_path):     # a directory of the test
-    _run(events, {'spool': str(tmp_path) + '/'})
+    _run(events, {'spool_path_prefix': str(tmp_path) + '/'})
 
 
 def test_temper_acquire_and_release(tmp):        # where a test app takes cement's fs.Tmp

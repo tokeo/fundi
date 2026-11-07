@@ -14,7 +14,7 @@ from cement.core.meta import MetaMixin
 from tokeo.core.utils.dict import deep_merge
 from tokeo.core.ai.exc import TokeoAiError
 from tokeo.core.ai.data import ToolResult, ToolValue, ToolStates
-from tokeo.core.utils.json import json_dump, TokeoJsonUnknownNoneEncoder
+from tokeo.core.utils.json import dump_json, TokeoJsonUnknownNoneEncoder
 
 
 class TokeoAiTool(MetaMixin):
@@ -263,7 +263,7 @@ class TokeoJsonAiToolResultEncoder(TokeoJsonUnknownNoneEncoder):
     def __init__(self):
         super().__init__()
         #: (bool) Flipped the moment the base returns None for an unknown
-        #: object, so after one json_dump it tells whether anything was
+        #: object, so after one dump_json it tells whether anything was
         #: substituted
         self.substituted = False
 
@@ -320,7 +320,7 @@ def create_tool_result(value, as_str=None, state=None):
     # one encode pass: the encoder names every object it has to substitute and
     # flips its flag, so incomplete is observed in the same dump as as_json
     encoder = TokeoJsonAiToolResultEncoder()
-    as_json = json_dump(value, encoder=encoder)
+    as_json = dump_json(value, encoder=encoder)
     # always a fresh states owned by this result (so nothing the caller holds is
     # aliased); incomplete starts from the encoder's finding, then a state dict
     # sets only its named fields onto it; a partial dict keeps the derived
