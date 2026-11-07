@@ -17,7 +17,7 @@ def test_create_tool_result_wraps_a_plain_string():
     assert isinstance(result, ToolResult)
     assert result.value.as_str == 'hello'
     assert result.value.as_data == 'hello'
-    assert result.state.exception is None
+    assert result.state.error is None
 
 
 def test_create_tool_result_fills_three_coherent_views_for_a_dict():
@@ -49,11 +49,11 @@ def test_create_tool_result_explicit_as_str_wins_over_the_value():
 
 
 def test_create_tool_result_carries_state_fields():
-    """state sets only its fields stdout 'logged' and incomplete True."""
-    result = create_tool_result('out', state=dict(stdout='logged', incomplete=True))
+    """state sets only its fields stdout 'logged' and is_incomplete True."""
+    result = create_tool_result('out', state=dict(stdout='logged', is_incomplete=True))
     assert result.state.stdout == 'logged'
-    assert result.state.incomplete is True
-    assert result.state.exception is None
+    assert result.state.is_incomplete is True
+    assert result.state.error is None
 
 
-# ---- the sandbox catches a tool that raises: tool-error A in state.exception ----
+# ---- the sandbox catches a tool that raises: tool-error A in state.error ----

@@ -93,7 +93,7 @@ class TokeoAiSandbox(MetaMixin):
             return self._config_name
         return f'{type(self).__module__}:{type(self).__name__}'
 
-    def _setup(self, app, config_name=None, config=None):
+    def _setup(self, app, config_name=None, item=None):
         """
         Set up the sandbox with its config.
 
@@ -106,7 +106,7 @@ class TokeoAiSandbox(MetaMixin):
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the sandbox is configured
             under (```jailed```)
-        - **config** (dict, optional): The raw ```ai.sandboxes``` item
+        - **item** (dict, optional): The raw ```ai.sandboxes``` item
 
         """
         if config_name:
@@ -114,7 +114,7 @@ class TokeoAiSandbox(MetaMixin):
         # deepcopy keeps the class-level config_defaults untouched
         self._config_options = deep_merge(
             copy.deepcopy(self._meta.config_defaults or {}),
-            copy.deepcopy((config or {}).get('options') or {}),
+            copy.deepcopy((item or {}).get('options') or {}),
         )
 
     def _config(self, key, *, fallback=None):

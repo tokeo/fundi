@@ -664,7 +664,7 @@ class TokeoAi(MetaMixin):
             return lambda content: ctx.track(tool, content, stage=stage)
 
         def _create_error_result(err):
-            return ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
+            return ToolResult(value=None, state=ToolStates(error=f'{type(err).__name__}: {err}'))
 
         try:
             tool.prepare(turndata, arguments, _create_track('prepare'))
@@ -688,7 +688,7 @@ class TokeoAi(MetaMixin):
                     result = _create_error_result(err)
                     raise
                 # a failed call has no result to reshape, so after is skipped
-                if getattr(result.state, 'exception', None) is None:
+                if getattr(result.state, 'error', None) is None:
                     try:
                         result = tool.after(turndata, arguments, result, _create_track('after')) or result
                     except Exception as err:
@@ -718,7 +718,7 @@ class TokeoAi(MetaMixin):
         if sandbox is None:
             raise TokeoAiError(f'tool {tool_name!r} has no sandbox in the agent chain (denied)')
         if invocation is not None:
-            invocation.sandbox = sandbox.config_name
+            invocation.sandbox_name = sandbox.config_name
         return self._exec_lifecycle(tool, sandbox, arguments or {}, ctx)
 
     def _govern(self, governors, step, subject):
@@ -814,9 +814,9 @@ class TokeoAi(MetaMixin):
         elif invocation.error is not None:
             # a sandbox-machinery error (timeout, transport, an exhausted chain)
             content = f'error: {invocation.error}'
-        elif invocation.result and invocation.result.state.exception is not None:
+        elif invocation.result and invocation.result.state.error is not None:
             # a tool that raised: caught by the sandbox, carried in its state
-            content = f'error: {invocation.result.state.exception}'
+            content = f'error: {invocation.result.state.error}'
         else:
             content = invocation.result.value.as_str if invocation.result and invocation.result.value else ''
         return invocation, content
@@ -991,7 +991,7 @@ class TokeoAi(MetaMixin):
                         is_successful = (
                             invocation.decision != Invocation.DENY
                             and invocation.error is None
-                            and (invocation.result is None or invocation.result.state.exception is None)
+                            and (invocation.result is None or invocation.result.state.error is None)
                         )
                     else:
                         # the lean path is as resilient as the guard pipeline: an
@@ -1010,8 +1010,8 @@ class TokeoAi(MetaMixin):
                             )
                             # the sandbox always returns a ToolResult; a tool that
                             # raised is carried in its state, not thrown here
-                            if tool_result.state.exception is not None:
-                                content = f'error: {tool_result.state.exception}'
+                            if tool_result.state.error is not None:
+                                content = f'error: {tool_result.state.error}'
                                 is_successful = False
                             else:
                                 content = tool_result.value.as_str if tool_result.value else ''
@@ -1266,7 +1266,7 @@ class AiController(Controller):
 
     def _print_trace(self, result):
         # the whole result with the full or the compact trace
-        self.app.print(dump_json(result, encoder=TokeoJsonAiTraceEncoder(compact=self.app.pargs.trace_compact), indent=2))
+        self.app.print(dump_json(result, encoder=TokeoJsonAiTraceEncoder(is_compact=self.app.pargs.trace_compact), indent=2))
 
     def _format_decline(self, err):
         # the line for a run a governor declined

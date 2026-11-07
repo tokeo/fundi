@@ -8,7 +8,7 @@ project) mounted and importable; the snippet can then use framework helpers.
 
 ### Notes
 
-: This tool does not set ```wasm_exec_pysnippet```, so the wasm sandbox rebuilds
+: This tool does not set ```is_wasm_snippet```, so the wasm sandbox rebuilds
     it in the guest from its dotted path, which requires the app on the
     guest's import path (mount it read-only, e.g. ```/app```, and add ```/app```
     to ```env.PYTHONPATH```). The snippet delivers the same way: end on an

@@ -211,7 +211,7 @@ Every run leaves a typed trace that can be inspected: the prompts, the calls,
 the governor decisions, the results. A trace is a list of ```TraceStep```
 (origin and object) with typed views (messages, invocations, results).
 
-**Attribution.** ```ctx.supersede(governor, returned, current)``` records a step
+**Attribution.** ```ctx.supersede(governor, result, current)``` records a step
 for *every* governor and replaces the current object only for a freshly
 returned one. Who changed what can be read afterwards.
 

@@ -143,11 +143,11 @@ class TokeoAiGovernor(MetaMixin):
     - ```on_return(ctx, invocation)```: after the tool ran, on the same
         ```Invocation```. Now ```invocation.result``` (a ```ToolResult``` whose
         ```value``` is a ```ToolValue``` with ```as_str```, ```as_json``` and
-        ```as_data```, plus a ```state``` carrying ```incomplete```,
-        ```stdout```, ```stderr``` and ```exception```) is filled, or
+        ```as_data```, plus a ```state``` carrying ```stdout```,
+        ```stderr```, ```error``` and ```is_incomplete```) is filled, or
         ```invocation.error``` holds a sandbox-machinery failure (a tool that
-        raised is not an error here; it rides in ```result.state.exception```).
-        ```invocation.sandbox``` names where it ran. ```value``` is ```None```
+        raised is not an error here; it rides in ```result.state.error```).
+        ```invocation.sandbox_name``` names where it ran. ```value``` is ```None```
         when the tool returned nothing, so guard the access. Reshape the result
         (mask, shorten) by writing the views you change, or replace the whole
         ```value``` via ```create_tool_result``` to keep the three views
@@ -171,7 +171,7 @@ class TokeoAiGovernor(MetaMixin):
     subclass). The handler does *not* catch these, so the raise propagates out of
     ```chat``` and ends the whole run at once: the rest of the chain, the
     remaining loop turns, and the final answer are all abandoned. (The sandbox
-    catches a tool that *raises* and records it in ```result.state.exception```;
+    catches a tool that *raises* and records it in ```result.state.error```;
     the loop's own try/except around the sandbox call only turns a machinery
     failure into ```invocation.error```. Neither catches a governor's raise.)
     Raise a hard abort when proceeding would be wrong, not merely unwanted. A
@@ -231,7 +231,7 @@ class TokeoAiGovernor(MetaMixin):
             return self._config_name
         return f'{type(self).__module__}:{type(self).__name__}'
 
-    def _setup(self, app, config_name=None, config=None):
+    def _setup(self, app, config_name=None, item=None):
         """
         Set up the governor with its config.
 
@@ -244,12 +244,12 @@ class TokeoAiGovernor(MetaMixin):
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the governor is configured
             under (```shredder```), or the class path at the point of use
-        - **config** (dict, optional): The raw registry item
+        - **item** (dict, optional): The raw registry item
 
         """
         if config_name:
             self._config_name = config_name
-        self._stage_config_options = self._build_stage_config_options(config or {})
+        self._stage_config_options = self._build_stage_config_options(item or {})
 
     def _config(self, key, *, stage=None, fallback=None):
         """

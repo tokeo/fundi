@@ -109,33 +109,33 @@ class ToolStates:
 
     In process the surrounding tool code fills them. Behind a process or wasm
     wall they come back with the value and are a hint, not a trusted fact:
-    the wasm guest reports ```incomplete```, and ```exception``` is the last line
+    the wasm guest reports ```is_incomplete```, and ```error``` is the last line
     of its stderr on a failed exit (see the wasm sandbox for what the host
     observes itself).
 
     ### Args
 
-    - **incomplete** (bool): The json form is not faithful to the value (the
-        encoder had to substitute a representation for something it could not
-        render); ```False``` when the json form represents the value faithfully
     - **stdout** (str|None): Informal output of the run: captured print
         output of executed code, or a note the tool set on purpose; ```None```
         when there was none
     - **stderr** (str|None): Informal error output of the run; ```None```
         when there was none
-    - **exception** (str|None): The exception that the executed code raised,
+    - **error** (str|None): The exception that the executed code raised,
         as ```type: message```; ```None``` when the run did not raise
+    - **is_incomplete** (bool): The json form is not faithful to the value (the
+        encoder had to substitute a representation for something it could not
+        render); ```False``` when the json form represents the value faithfully
 
     """
 
-    #: The json form is not faithful to the value
-    incomplete: bool = False
     #: (str|None) Informal output of the run
     stdout: object = None
     #: (str|None) Informal error output of the run
     stderr: object = None
     #: (str|None) The exception the executed code raised, as ```type: message```
-    exception: object = None
+    error: object = None
+    #: The json form is not faithful to the value
+    is_incomplete: bool = False
 
 
 @dataclass
@@ -232,14 +232,14 @@ class Invocation:
     - **decision** (str): ```ALLOW``` or ```DENY``` (the constants below); an
         ```on_call``` guard may set it to deny the call
     - **reason** (str|None): Why a guard denied or flagged the call
-    - **result** (ToolResult|None): The tool's result when it ran
-    - **error** (str|None): The text of a failure of the sandbox machinery
-        (timeout, broken reply); a raise of the tool itself lands in
-        ```result.state.exception```
-    - **sandbox** (str|None): The configured name of the sandbox the tool
+    - **sandbox_name** (str|None): The configured name of the sandbox the tool
         ran in (e.g. ```in_process```, ```jailed```, ```wasm_untrusted```), so
         the trace shows where each call executed, the honest-tier record.
         ```None``` until the call reaches a sandbox (a denied call never does)
+    - **result** (ToolResult|None): The tool's result when it ran
+    - **error** (str|None): The text of a failure of the sandbox machinery
+        (timeout, broken reply); a raise of the tool itself lands in
+        ```result.state.error```
 
     """
 
@@ -263,12 +263,12 @@ class Invocation:
     decision: str = ALLOW
     #: Why a guard denied or flagged the call
     reason: str | None = None
+    #: The configured name of the sandbox the tool ran in
+    sandbox_name: str | None = None
     #: The tool's result when it ran
     result: ToolResult | None = None
     #: The text of a failure of the sandbox machinery
     error: str | None = None
-    #: The configured name of the sandbox the tool ran in
-    sandbox: str | None = None
 
 
 @dataclass
@@ -294,15 +294,15 @@ class TraceStep:
         attributable
     - **object**: The run object as it stood after this step (a ```ChatMessage```,
         ```Invocation```, ```ChatResult```, ...)
-    - **changed** (bool): Whether this step introduced a *new* object (a guard
-        returned a fresh copy) rather than leaving the existing one in place. A
-        ```track``` is always a new object; a ```supersede``` is ```True``` only
-        when the guard handed back a different object
-    - **at** (datetime): When the step was recorded, a UTC timestamp; the json
-        encoder renders it as a UTC time string
+    - **is_changed** (bool): Whether this step introduced a *new* object (a
+        guard returned a fresh copy) rather than leaving the existing one in
+        place. A ```track``` is always a new object; a ```supersede``` is
+        ```True``` only when the guard handed back a different object
     - **stage** (str|None): The guard stage that produced this step
         (```on_begin```, ```on_call```, ...), or ```None``` for a loop ```track```
         that belongs to no stage (a fresh message/result the loop recorded)
+    - **at** (datetime): When the step was recorded, a UTC timestamp; the json
+        encoder renders it as a UTC time string
 
     """
 
@@ -311,15 +311,15 @@ class TraceStep:
     #: The run object as it stood after this step
     object: object
     #: Whether this step introduced a new object
-    changed: bool = True
+    is_changed: bool = True
+    #: (str|None) The stage that recorded this step; ```None``` for a loop
+    #: track (a fresh object the loop added outside any stage)
+    stage: object = None
     # WHY a default factory: each step stamps its own creation time, so a
     # field default (shared) would be wrong; datetime_type.now(timezone.utc)
     # is tz-aware UTC, and the json encoder formats it via to_utc_timestring
     #: (datetime) When the step was recorded, in UTC
     at: object = field(default_factory=lambda: datetime_type.now(timezone.utc))
-    #: (str|None) The stage that recorded this step; ```None``` for a loop
-    #: track (a fresh object the loop added outside any stage)
-    stage: object = None
 
 
 @dataclass
@@ -417,7 +417,7 @@ class TokeoAiResult:
     - **confirmations** (list): Every confirm decision of the run in order,
         each a dict (stage, guard, subject_dict, previous_decision,
         previous_reason, answer, decision, note, by, who, retries, is_recalled,
-        at), for the app to keep and learn from
+        at as a UTC ```datetime```), for the app to keep and learn from
 
     """
 

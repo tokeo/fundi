@@ -63,7 +63,7 @@ guest.
 ### ```python_untrusted_exec```
 
 For code you must not trust (model-generated, foreign). It carries the marker
-```wasm_exec_pysnippet = True```, which tells the wasm sandbox to run the ```code```
+```is_wasm_snippet = True```, which tells the wasm sandbox to run the ```code```
 argument directly in the guest without rebuilding the tool there. The guest
 therefore rebuilds no tool from tokeo: no framework mount is needed and the
 untrusted snippet is walled off from the framework, your app, and the host. It
@@ -318,9 +318,9 @@ There is no stdin runner here. For each call the sandbox:
    is incomplete. No file means no value.
 6. The host builds the ```ToolResult```: the value from ```/io/value.json``` (read
    with ```json.loads``` up to ```max_output_mb```), the states from what it
-   observed itself. A clean exit leaves ```exception``` empty. A tool or snippet
+   observed itself. A clean exit leaves ```error``` empty. A tool or snippet
    that raises exits with code 1: the result has no value and the last stderr
-   line as ```exception``` (a tool error, A). A failure of the entry's own
+   line as ```error``` (a tool error, A). A failure of the entry's own
    machinery (the task, the guest modules, the tool import) exits with code 3
    and is raised as a ```TokeoAiError``` (a machinery error, B), as are a crash,
    a timeout, and a broken value.
@@ -329,8 +329,8 @@ Only JSON-able arguments and the value as data cross the bridge; the host
 rebuilds ```as_data``` from ```as_json```, so a value's structured form survives
 without the guest having to send a possibly non-JSON-able object. The host
 captures ```stdout``` and ```stderr``` and reads the exit code itself; on a failed
-exit the last stderr line becomes ```exception```. The guest still writes the
-text of those streams and reports ```incomplete```, so these states are a hint
+exit the last stderr line becomes ```error```. The guest still writes the
+text of those streams and reports ```is_incomplete```, so these states are a hint
 the host does not trust; it decides only on the exit code, a trap, the
 timeout and the limits it observed.
 
@@ -399,7 +399,7 @@ value, the host builds the ```ToolResult``` (or raises on a machinery error):
 ## The two trust models in depth
 
 The difference between the tools is not in the tool code; it is in which guest
-entry the sandbox chooses, based on the tool's ```wasm_exec_pysnippet``` marker.
+entry the sandbox chooses, based on the tool's ```is_wasm_snippet``` marker.
 
 Pysnippet path (untrusted). The guest runs the ```code``` argument as-is. It
 rebuilds no tool from tokeo, so the box needs no framework mount, no app, and no
@@ -444,7 +444,7 @@ before the snippet runs exits with code 3, a machinery error (B):
   <line x1="340" y1="232" x2="340" y2="250" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
   <rect x="240" y="252" width="200" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
   <text x="340" y="275" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C">None or encode value</text>
-  <text x="340" y="293" text-anchor="middle" font-size="12" fill="#3C3489">as_str, as_json, incomplete</text>
+  <text x="340" y="293" text-anchor="middle" font-size="12" fill="#3C3489">as_str, as_json, is_incomplete</text>
 
   <path d="M125 228 L125 280 L238 280" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ah2)"/>
 
@@ -475,7 +475,7 @@ is exactly why this path is for trusted input only.
 
 The exec-tool guest entry (```_GUEST_ENTRY_EXEC_TOOL```) in detail: it reads
 the task, rebuilds the tool with ```app=None``` and calls its ```exec```. A
-returned ```ToolResult``` hands over its value and ```incomplete```; its other
+returned ```ToolResult``` hands over its value and ```is_incomplete```; its other
 states are not taken, the host captures them. A tool that raises exits with code 1, a tool error (A); a
 failure before the call (the task, the import, the setup) exits with code 3, a
 machinery error (B):
@@ -563,9 +563,9 @@ runs. A missing source ends the run with an error. The rules:
   of the list; a test checks that by the syntax tree.
 - The guest writes only ```/io``` and ```/work```; everything else is read-only.
 - The guest hands back only data: the value in ```/io/value.json```, read with
-  ```json.loads``` up to ```max_output_mb```, with ```incomplete```. The
+  ```json.loads``` up to ```max_output_mb```, with ```is_incomplete```. The
   exit code, a trap and the timeout are observed by the host; the text of
-  stdout, stderr and the exception is the guest's and only a hint.
+  stdout, stderr and the error is the guest's and only a hint.
 - ```PYTHONDONTWRITEBYTECODE=1```: the guest writes no bytecode next to the
   copies.
 

@@ -311,7 +311,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             who=answer.who,
             retries=retries,
             is_recalled=is_recalled,
-            at=datetime.now(timezone.utc).isoformat(),
+            at=datetime.now(timezone.utc),
         )
         ctx.confirmations.append(confirmation)
         if answer.note:

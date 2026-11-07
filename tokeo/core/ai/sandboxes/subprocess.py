@@ -83,7 +83,7 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
 
         The full ```ToolResult``` is rebuilt from the runner's JSON, including a
         tool that raised; the child catches the tool's own throw and reports it
-        in ```state.exception```, so it returns as a result, not as a raise.
+        in ```state.error```, so it returns as a result, not as a raise.
         Only a sandbox-machinery failure (timeout, a runner crash, a non-JSON or
         ```error``` reply) is raised here for the loop to catch.
 

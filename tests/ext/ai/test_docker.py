@@ -168,11 +168,11 @@ def test_the_docker_sandbox_cuts_the_output_and_refuses_a_large_value(docker):
 
 
 def test_a_raising_tool_in_the_docker_sandbox_is_a_tool_error(docker):
-    """The runner catches the raise; the result carries state.exception."""
+    """The runner catches the raise; the result carries state.error."""
     with DockerTest(config_defaults=make_ai_config(docker)) as app:
         out = run_tool(app, 'boom', {})
     assert out.value is None
-    assert 'tool failed on purpose' in out.state.exception
+    assert 'tool failed on purpose' in out.state.error
 
 
 def test_a_timeout_in_the_docker_sandbox_raises_and_kills_the_container(docker):

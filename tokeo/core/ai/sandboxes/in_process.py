@@ -79,7 +79,7 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
             no value, so ```value``` stays ```None```; a tool that means the
             json null as its result returns ```create_tool_result(None)```
         - a raised exception is caught and recorded as ```type: message``` in
-            ```state.exception```, with no value
+            ```state.error```, with no value
 
         The tool's stdout and stderr are captured onto ```state.stdout``` and
         ```state.stderr``` (only where the tool did not set them itself), so the
@@ -120,7 +120,7 @@ class TokeoAiInProcessSandbox(TokeoAiSandbox):
         except Exception as err:
             # a throw from tool.exec is the tool's own, so it becomes a result
             # carrying the exception rather than propagating to the loop
-            output = ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
+            output = ToolResult(value=None, state=ToolStates(error=f'{type(err).__name__}: {err}'))
         finally:
             _call_buffers.reset(token)
         # a bare None carries no value; a finished ToolResult passes through; any

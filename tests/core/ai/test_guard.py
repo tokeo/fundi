@@ -179,16 +179,16 @@ def test_redact_masks_nested_arguments():
 
 
 def test_redact_masks_error_and_streams_of_a_failed_call():
-    """A secret in error, exception, stdout and stderr is masked without a value."""
+    """A secret in error, state.error, stdout and stderr is masked, no value."""
     with AiTest() as app:
         invocation = Invocation(id='t1', name='connect', arguments={})
         invocation.error = 'cannot connect: password=geheim'
         invocation.result = ToolResult(
             value=None,
-            state=ToolStates(stdout='password=a', stderr='password=b', exception='Error: password=c'),
+            state=ToolStates(stdout='password=a', stderr='password=b', error='Error: password=c'),
         )
         _make_redact_guard(app).on_return(ctx=None, invocation=invocation)
         assert invocation.error == 'cannot connect: [redacted]'
         state = invocation.result.state
-        assert (state.stdout, state.stderr, state.exception) == ('[redacted]', '[redacted]', 'Error: [redacted]')
+        assert (state.stdout, state.stderr, state.error) == ('[redacted]', '[redacted]', 'Error: [redacted]')
         assert invocation.result.value is None

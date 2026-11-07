@@ -6,7 +6,7 @@ at ```on_call``` the call arguments, nested ones too, and the call as the model
 sent it in the history and on the trace; at ```on_return``` the returned value
 (the model-facing ```as_str``` always, the structured ```as_data``` too unless
 ```sanitize_data``` is off), the run states ```stdout```, ```stderr``` and
-```exception``` and the error of the call. So a secret does not flow into a tool
+```error``` and the error of the call. So a secret does not flow into a tool
 or from a tool back to the model, the history, the trace or a log line. The
 user prompt (```on_prompt```) and the model answer (```on_answer```) are not
 masked by this guard.
@@ -107,7 +107,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         # _setup having run
         self._compiled_by_stage = {}
 
-    def _setup(self, app, config_name=None, config=None):
+    def _setup(self, app, config_name=None, item=None):
         """
         Reset the per-stage compiled-pattern cache.
 
@@ -119,11 +119,11 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
 
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the guard is configured under
-        - **config** (dict, optional): The raw item
+        - **item** (dict, optional): The raw item
 
         """
         # super first: builds the stage views the patterns read
-        super(TokeoAiRegexRedactGuard, self)._setup(app, config_name, config)
+        super(TokeoAiRegexRedactGuard, self)._setup(app, config_name, item)
         self._compiled_by_stage = {}
 
     def _compile_patterns(self, stage):
@@ -269,7 +269,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         Runs at the tool-return stage, after the tool ran. ```ctx``` is the
         running state (unused here). The model-facing ```value.as_str``` is
         always masked, as are the run states ```stdout```, ```stderr``` and
-        ```exception``` and the ```error``` of the invocation, which reach the
+        ```error``` and the ```error``` of the invocation, which reach the
         model and the trace as error text. When ```sanitize_data``` is on (the
         default), the structured ```value.as_data``` is masked too
         (recursively, the string values only), and the value is rebuilt so
@@ -293,13 +293,13 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
                 self._add_note(invocation, hits)
             return
         state = {}
-        for name in ('stdout', 'stderr', 'exception'):
+        for name in ('stdout', 'stderr', 'error'):
             text = getattr(result.state, name)
             if isinstance(text, str):
                 text, count = self._mask_text(text, stage)
                 hits += count
             state[name] = text
-        state['incomplete'] = result.state.incomplete
+        state['is_incomplete'] = result.state.is_incomplete
         value = result.value
         if value is None:
             if hits:
@@ -319,6 +319,6 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         # rebuild the value so all three views are coherent: as_data masked,
         # as_json re-encoded from it, as_str set explicitly to the masked text
         # (the explicit string wins, keeping a reshaped wording); the run state
-        # carries the masked streams and exception
+        # carries the masked streams and error
         invocation.result = create_tool_result(masked_data, as_str=masked_str, state=state)
         self._add_note(invocation, hits)

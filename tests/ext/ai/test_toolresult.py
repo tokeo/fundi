@@ -2,7 +2,7 @@
 Tests for what the ai extension makes of a tool result.
 
 Driven through ```app.ai._exec_in_sandbox```: a raising tool becoming
-```state.exception``` (tool error) while machinery failures surface separately,
+```state.error``` (tool error) while machinery failures surface separately,
 the captured stdout, and a structured result keeping its views across the wall.
 The ToolResult model itself is tested in ```tests/core/ai/test_toolresult.py```.
 """
@@ -63,41 +63,41 @@ def make_ai_config():
 
 
 def test_in_process_catches_a_raising_tool_into_state_exception():
-    """In process a raise lands in state.exception (tool error A), value None."""
+    """In process a raise lands in state.error (tool error A), value None."""
     with ToolResultTest(config_defaults=make_ai_config()) as app:
         agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
         assert isinstance(out, ToolResult)
         assert out.value is None
-        assert out.state.exception is not None
-        assert 'tool failed on purpose' in out.state.exception
+        assert out.state.error is not None
+        assert 'tool failed on purpose' in out.state.error
 
 
 def test_subprocess_catches_a_raising_tool_into_state_exception():
-    """The subprocess child catches the raise, the parent gets state.exception."""
+    """The subprocess child catches the raise, the parent gets state.error."""
     with ToolResultTest(config_defaults=make_ai_config()) as app:
         agent = app.ai._get_agent('jail')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
         assert out.value is None
-        assert out.state.exception is not None
-        assert 'tool failed on purpose' in out.state.exception
+        assert out.state.error is not None
+        assert 'tool failed on purpose' in out.state.error
 
 
 def test_tool_error_a_and_machinery_error_b_are_separate():
     """
-    A raising tool rides in state.exception (A), a machinery failure is raised (B).
+    A raising tool rides in state.error (A), a machinery failure is raised (B).
 
-    In process, boom returns a result with state.exception set. A subprocess
+    In process, boom returns a result with state.error set. A subprocess
     timeout (slow sleeping 3s against a 1s timeout) raises TokeoAiError
     'timed out' and propagates, so the loop, not the result, carries it. The
     loop's shaping of both into 'error: ...' content is in the Spiral tests.
     """
     cfg = make_ai_config()
     with ToolResultTest(config_defaults=cfg) as app:
-        # A: a raising tool returns a result with state.exception set
+        # A: a raising tool returns a result with state.error set
         agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
-        assert out.state.exception is not None
+        assert out.state.error is not None
     # B: a subprocess timeout is a machinery failure: raised, not in state
     cfg['ai']['sandboxes']['jailed']['options']['timeout'] = 1
     cfg['ai']['tools']['slow'] = dict(type='tests.ext.ai.lib.ai_tests_helper:SleepTool')
@@ -145,4 +145,4 @@ def test_a_tool_returning_nothing_yields_no_value():
         agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('void', {}, agent, None, None, None, None)
         assert out.value is None
-        assert out.state.exception is None
+        assert out.state.error is None

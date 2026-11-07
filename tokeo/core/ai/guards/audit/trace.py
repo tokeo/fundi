@@ -74,15 +74,15 @@ class TokeoAiTraceAuditGuard(TokeoAiAuditGuard):
             # a sandbox-machinery failure (timeout, transport); name WHERE it ran
             # when a sandbox was reached (a denied call never reaches one, so
             # sandbox stays None there)
-            sandbox_str = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
+            sandbox_str = f' in sandbox {invocation.sandbox_name!r}' if invocation.sandbox_name else ''
             self._write_line(f'return {invocation.name!r} errored{sandbox_str}: {invocation.error}')
-        elif invocation.result and invocation.result.state.exception is not None:
+        elif invocation.result and invocation.result.state.error is not None:
             # a tool that raised: caught by the sandbox, carried in its state,
             # distinct from the machinery error above, so the log tells them apart
-            where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
-            self._write_line(f'return {invocation.name!r} raised{where}: {invocation.result.state.exception}')
+            where = f' in sandbox {invocation.sandbox_name!r}' if invocation.sandbox_name else ''
+            self._write_line(f'return {invocation.name!r} raised{where}: {invocation.result.state.error}')
         else:
-            where = f' in sandbox {invocation.sandbox!r}' if invocation.sandbox else ''
+            where = f' in sandbox {invocation.sandbox_name!r}' if invocation.sandbox_name else ''
             text = invocation.result.value.as_str if invocation.result and invocation.result.value else ''
             self._write_line(f'return {invocation.name!r} ran{where}, returned: {text!r}')
 

@@ -131,13 +131,13 @@ def test_untrusted_exec_runs_in_process():
 
 def test_untrusted_exec_sets_the_pysnippet_flag():
     """
-    Only the untrusted exec tool sets wasm_exec_pysnippet.
+    Only the untrusted exec tool sets is_wasm_snippet.
 
     The flag tells the wasm sandbox to run the snippet via run_snippet in
     the guest instead of rebuilding the tool.
     """
-    assert TokeoAiPythonUntrustedExecTool(None).wasm_exec_pysnippet is True
-    assert getattr(TokeoAiPythonTrustedExecTool(None), 'wasm_exec_pysnippet', False) is False
+    assert TokeoAiPythonUntrustedExecTool(None).is_wasm_snippet is True
+    assert getattr(TokeoAiPythonTrustedExecTool(None), 'is_wasm_snippet', False) is False
 
 
 def test_trusted_exec_runs_in_process():

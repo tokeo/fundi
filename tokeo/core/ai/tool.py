@@ -101,7 +101,7 @@ class TokeoAiTool(MetaMixin):
             return self._config_name
         return f'{type(self).__module__}:{type(self).__name__}'
 
-    def _setup(self, app, config_name=None, config=None):
+    def _setup(self, app, config_name=None, item=None):
         """
         Set up the tool with its config.
 
@@ -114,7 +114,7 @@ class TokeoAiTool(MetaMixin):
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the tool is configured
             under (```calc```)
-        - **config** (dict, optional): The raw ```ai.tools``` item
+        - **item** (dict, optional): The raw ```ai.tools``` item
 
         """
         if config_name:
@@ -122,7 +122,7 @@ class TokeoAiTool(MetaMixin):
         # deepcopy keeps the class-level config_defaults untouched
         self._config_options = deep_merge(
             copy.deepcopy(self._meta.config_defaults or {}),
-            copy.deepcopy((config or {}).get('options') or {}),
+            copy.deepcopy((item or {}).get('options') or {}),
         )
 
     def _config(self, key, *, fallback=None):
@@ -235,7 +235,7 @@ class TokeoAiTool(MetaMixin):
         Close what ```prepare``` opened and record the outcome; being the only
         hook that always runs, it is the one place that sees every ending.
         ```result``` is always a ```ToolResult```; on a failed call it carries
-        the exception in ```result.state.exception```. Raising here is recorded
+        the exception in ```result.state.error```. Raising here is recorded
         without overturning the result the call already produced.
 
         ### Args
@@ -254,7 +254,7 @@ class TokeoJsonAiToolResultEncoder(TokeoJsonUnknownNoneEncoder):
     Encoder that names an unknown object and records that it did so.
 
     Used once by ```create_tool_result``` to build ```as_json``` and derive
-    ```incomplete``` in a single encode pass: json calls ```encode``` for every
+    ```is_incomplete``` in a single encode pass: json calls ```encode``` for every
     value it cannot serialize, so substituting there (the type name in place of
     the object) and flipping a flag tells whether the json form is faithful.
 
@@ -265,7 +265,7 @@ class TokeoJsonAiToolResultEncoder(TokeoJsonUnknownNoneEncoder):
         #: (bool) Flipped the moment the base returns None for an unknown
         #: object, so after one dump_json it tells whether anything was
         #: substituted
-        self.substituted = False
+        self.is_substituted = False
 
     def encode(self, obj):
         """
@@ -278,7 +278,7 @@ class TokeoJsonAiToolResultEncoder(TokeoJsonUnknownNoneEncoder):
         ### Returns
 
         - **str|dict**: As the base for a handled type; the object's type name
-            for any other object, with ```substituted``` set so the caller
+            for any other object, with ```is_substituted``` set so the caller
             learns the json form is not faithful
 
         """
@@ -286,7 +286,7 @@ class TokeoJsonAiToolResultEncoder(TokeoJsonUnknownNoneEncoder):
         if result is None:
             # the base handled no known type, so json would render null; name
             # the object instead and mark that the json form is not faithful
-            self.substituted = True
+            self.is_substituted = True
             return type(obj).__name__
         return result
 
@@ -307,9 +307,9 @@ def create_tool_result(value, as_str=None, state=None):
         ```str(value)```, or the empty string for a ```None``` value, when not
         given
     - **state** (dict|None): Run states to carry as a dict of field names
-        (```stdout```, ```stderr```, ```exception```, ```incomplete```); only the
+        (```stdout```, ```stderr```, ```error```, ```is_incomplete```); only the
         named fields are set onto the derived states, so a partial dict keeps the
-        derived ```incomplete```. With ```None``` the states are derived from the
+        derived ```is_incomplete```. With ```None``` the states are derived from the
         encoding alone
 
     ### Returns
@@ -318,14 +318,14 @@ def create_tool_result(value, as_str=None, state=None):
 
     """
     # one encode pass: the encoder names every object it has to substitute and
-    # flips its flag, so incomplete is observed in the same dump as as_json
+    # flips its flag, so is_incomplete is observed in the same dump as as_json
     encoder = TokeoJsonAiToolResultEncoder()
     as_json = dump_json(value, encoder=encoder)
     # always a fresh states owned by this result (so nothing the caller holds is
-    # aliased); incomplete starts from the encoder's finding, then a state dict
-    # sets only its named fields onto it; a partial dict keeps the derived
-    # incomplete. walking fields() covers a new ToolStates field untouched here
-    toolstate = ToolStates(incomplete=encoder.substituted)
+    # aliased); is_incomplete starts from the encoder's finding, then a state
+    # dict sets only its named fields onto it; a partial dict keeps the derived
+    # is_incomplete. walking fields() covers a new ToolStates field untouched here
+    toolstate = ToolStates(is_incomplete=encoder.is_substituted)
     if isinstance(state, dict):
         for f in fields(ToolStates):
             if f.name in state:

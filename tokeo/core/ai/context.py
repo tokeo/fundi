@@ -4,7 +4,7 @@ The run context: the manager of one agent-loop run's history.
 ```TokeoAiContext``` is the active manager that travels a run; it holds the one
 chronological trace of every object the run produces and keeps the typed views
 over it consistent. It lives apart from ```data.py``` (the passive value shapes)
-because it carries behaviour (```track```, ```tracked```, the typed-view
+because it carries behaviour (```track```, ```get_tracked```, the typed-view
 properties), not just fields.
 """
 
@@ -31,7 +31,7 @@ class TokeoAiContext:
     The caches are a different thing: ```messages```, ```invocations```,
     ```results``` are lists of the *bare objects* in their current state, grouped
     by kind, so a guard can iterate one kind without walking the trace. They hold
-    objects, not steps. ```tracked``` returns a cache by type;
+    objects, not steps. ```get_tracked``` returns a cache by type;
     ```current_invocation``` is the latest tool call. ```track``` appends the bare
     object to each cache it matches; ```supersede``` swaps the last cache entry
     of a kind when a guard hands back a fresh object (so a cache stays one entry
@@ -82,7 +82,7 @@ class TokeoAiContext:
     # an instance of (isinstance, so a subclass lands in its base's view too)
     _CACHE_KINDS = (ChatMessage, Invocation, ChatResult)
 
-    def __init__(self, messages=None, turndata=None, userdata=None, trace=True, notes=None):
+    def __init__(self, messages=None, turndata=None, userdata=None, notes=None, trace=True):
         # whether to record the step history; the caches always fill
         self._with_trace = trace
         # the one chronological stream of every tracked object
@@ -112,19 +112,19 @@ class TokeoAiContext:
         for message in messages or []:
             self.track(self, message if isinstance(message, ChatMessage) else ChatMessage(message))
 
-    def _append_step(self, origin, obj, changed, stage):
+    def _append_step(self, origin, obj, is_changed, stage):
         """
         Append one TraceStep, the shared trace-write of track/supersede/refine.
 
         The trace half that every recorder has in common: build the step (origin,
-        object, changed, stage) and append it. The cache half differs per
+        object, is_changed, stage) and append it. The cache half differs per
         recorder and stays in each.
 
         ### Args
 
         - **origin**: Who produced the step (the loop or a guard)
         - **obj**: The object as it stood after the step
-        - **changed** (bool): Whether a new object was introduced
+        - **is_changed** (bool): Whether a new object was introduced
         - **stage**: The guard stage, or None for a loop track
 
         """
@@ -132,7 +132,7 @@ class TokeoAiContext:
         # in track/supersede/refine_messages, so guards keep working
         if not self._with_trace:
             return
-        self._trace.append(TraceStep(origin=origin, object=obj, changed=changed, stage=stage))
+        self._trace.append(TraceStep(origin=origin, object=obj, is_changed=is_changed, stage=stage))
 
     def track(self, origin, obj, stage=None):
         """
@@ -192,11 +192,11 @@ class TokeoAiContext:
         - ```result``` is ```None``` or the *same* object as ```current```:
             the guard added no new object (it mutated in place, or did nothing).
             The cache is left alone; the step records ```current``` with
-            ```changed=False```. The current working reference is unchanged.
+            ```is_changed=False```. The current working reference is unchanged.
         - ```result``` is a *different* object: the guard handed back a fresh
             copy. It supersedes the last cache entry of its kind, and the step
-            records it with ```changed=True```. The returned object becomes the
-            new working reference.
+            records it with ```is_changed=True```. The returned object becomes
+            the new working reference.
 
         A guard whose return is neither ```None``` nor the same nor the same
         *kind* as ```current``` is a bug (an ```on_return``` guard must return an
@@ -236,7 +236,7 @@ class TokeoAiContext:
                 bucket[-1] = result
         return result
 
-    def refine_messages(self, origin, returned, stage=None):
+    def refine_messages(self, origin, result, stage=None):
         """
         Record a pre-model guard's step on the whole conversation.
 
@@ -245,16 +245,16 @@ class TokeoAiContext:
         object, so this is the messages counterpart of ```supersede```: the unit
         here is the whole ```messages``` list, not one cache entry.
 
-        - ```returned``` is ```None``` or *is* the live ```messages``` list: the
+        - ```result``` is ```None``` or *is* the live ```messages``` list: the
             guard refined in place (or did nothing). The cache is left alone; the
-            step records a snapshot of the list with ```changed=False```.
-        - ```returned``` is a *new* list: the guard built a fresh conversation
+            step records a snapshot of the list with ```is_changed=False```.
+        - ```result``` is a *new* list: the guard built a fresh conversation
             (a trimmed history, an injected system turn). Its items must all be
             mappings (a ```ChatMessage``` is a ```dict```), or it is a guard bug
             and this raises. The whole ```ChatMessage``` cache is replaced by the
             new turns (wrapped as ```ChatMessage```), in place so existing
             references to the live list stay valid; the step records a snapshot
-            with ```changed=True```.
+            with ```is_changed=True```.
 
         The step holds a shallow copy of the list, not the live cache, so it
         shows the conversation as it stood at this stage; the live list keeps
@@ -268,7 +268,7 @@ class TokeoAiContext:
         ### Args
 
         - **origin**: The guard that ran (recorded on the step)
-        - **returned**: What the guard returned (a new list, the same list, or
+        - **result**: What the guard returned (a new list, the same list, or
             ```None```)
         - **stage**: The guard stage that ran (recorded on the step)
 
@@ -278,7 +278,7 @@ class TokeoAiContext:
 
         """
         cache = self._caches[ChatMessage]
-        if returned is None or returned is cache:
+        if result is None or result is cache:
             # the guard refined in place (or did nothing): a step holding a
             # SNAPSHOT of the conversation at this stage, the cache untouched.
             # a shallow copy of the list, since the cache list keeps growing as
@@ -288,17 +288,17 @@ class TokeoAiContext:
         # a returned conversation must be a list of mappings (ChatMessage is a
         # dict); anything else is a guard bug; fail loud, do not corrupt the
         # cache
-        if not isinstance(returned, list) or not all(isinstance(m, dict) for m in returned):
+        if not isinstance(result, list) or not all(isinstance(m, dict) for m in result):
             raise TokeoAiError(f'guard {origin!r} returned an invalid messages list (expected a list of messages)')
         # replace the WHOLE conversation in place, so references to the live
         # list stay valid; wrap a plain dict as ChatMessage so the cache stays
         # typed (the same rule the constructor's seeding uses)
-        cache[:] = [m if isinstance(m, ChatMessage) else ChatMessage(m) for m in returned]
+        cache[:] = [m if isinstance(m, ChatMessage) else ChatMessage(m) for m in result]
         # a snapshot for the step, so it shows this stage's state, not the end
         self._append_step(origin, list(cache), True, stage)
         return cache
 
-    def tracked(self, kind):
+    def get_tracked(self, kind):
         """
         The typed view for a kind: the bare objects of that type, in order.
 

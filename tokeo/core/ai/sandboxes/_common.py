@@ -83,7 +83,7 @@ def result_from_reply(stdout, stderr, class_path, sandbox_type):
     ```None``` (the tool delivered nothing), otherwise the two string views
     cross and ```as_data``` is rebuilt from ```as_json```; the run states come
     as recorded. A tool that raised is a normal reply with
-    ```state.exception```.
+    ```state.error```.
 
     ### Args
 
@@ -116,10 +116,10 @@ def result_from_reply(stdout, stderr, class_path, sandbox_type):
         value = ToolValue(as_str=value_dict.get('as_str', ''), as_json=as_json, as_data=json.loads(as_json) if as_json else None)
     state_dict = reply.get('state') or {}
     state = ToolStates(
-        incomplete=state_dict.get('incomplete', False),
         stdout=state_dict.get('stdout'),
         stderr=state_dict.get('stderr'),
-        exception=state_dict.get('exception'),
+        error=state_dict.get('error'),
+        is_incomplete=state_dict.get('is_incomplete', False),
     )
     return ToolResult(value=value, state=state)
 

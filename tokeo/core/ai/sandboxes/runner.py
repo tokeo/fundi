@@ -22,8 +22,8 @@ The reply is the JSON-encoded ```ToolResult``` on success::
 
     {
       "value": { "as_str": "...", "as_json": "..." } | null,
-      "state": { "incomplete": bool, "stdout": ..., "stderr": ...,
-                 "exception": "type: message" | null }
+      "state": { "stdout": ..., "stderr": ...,
+                 "error": "type: message" | null, "is_incomplete": bool }
     }
 
 Only the two string views of a value cross; ```as_data``` is left out, since a
@@ -32,7 +32,7 @@ raw object (a datetime, a set) need not be JSON-able. The parent rebuilds
 boundary as its encoded JSON shape.
 
 A tool that raised is a normal reply too, carrying its message in
-```state.exception``` with a null ```value```; the tool throwing is the tool's
+```state.error``` with a null ```value```; the tool throwing is the tool's
 own outcome, not a sandbox failure. Only a failure of the sandbox machinery
 itself (a bad job, an unenforceable limit, an unimportable tool) becomes a
 ```{"error": "..."}``` reply with a non-zero exit, a short message and never a
@@ -120,10 +120,10 @@ def _encode_result(output):
         value_dict = dict(as_str=value.as_str, as_json=value.as_json)
     state = output.state
     state_dict = dict(
-        incomplete=state.incomplete,
         stdout=state.stdout,
         stderr=state.stderr,
-        exception=state.exception,
+        error=state.error,
+        is_incomplete=state.is_incomplete,
     )
     return dict(value=value_dict, state=state_dict)
 
@@ -136,7 +136,7 @@ def main():
     unimportable tool) becomes a clean ```{"error": ...}``` reply with a
     non-zero exit. A tool that itself raises is not a machinery failure: it is
     caught around its own call and returned as a normal ```ToolResult``` reply
-    carrying the message in ```state.exception```.
+    carrying the message in ```state.error```.
     """
     # imports from inside, so an import failure here is still a machinery error
     # and crosses as {"error": ...}, not as a tool result
@@ -165,8 +165,8 @@ def main():
             output = tool.exec(**(job.get('arguments') or {}))
     except Exception as err:
         # the tool itself raised: its own outcome, returned as a result with no
-        # value and the message in state.exception (the same split as in process)
-        output = ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
+        # value and the message in state.error (the same split as in process)
+        output = ToolResult(value=None, state=ToolStates(error=f'{type(err).__name__}: {err}'))
     # a finished ToolResult passes through; a bare None carries no value; any
     # other value is wrapped, so the reply is always a ToolResult
     if output is None:

@@ -114,7 +114,7 @@ class TokeoAiAgent(MetaMixin):
             return self._config_name
         return f'{type(self).__module__}:{type(self).__name__}'
 
-    def _setup(self, app, config_name=None, config=None):
+    def _setup(self, app, config_name=None, item=None):
         """
         Set up the agent with its config.
 
@@ -127,7 +127,7 @@ class TokeoAiAgent(MetaMixin):
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the agent is configured
             under (```assistant```)
-        - **config** (dict, optional): The raw ```ai.agents``` item
+        - **item** (dict, optional): The raw ```ai.agents``` item
 
         """
         if config_name:
@@ -135,7 +135,7 @@ class TokeoAiAgent(MetaMixin):
         # deepcopy keeps the class-level config_defaults untouched
         self._config_options = deep_merge(
             copy.deepcopy(self._meta.config_defaults or {}),
-            copy.deepcopy((config or {}).get('options') or {}),
+            copy.deepcopy((item or {}).get('options') or {}),
         )
 
     def _config(self, key, *, fallback=None):

@@ -19,7 +19,7 @@ class TokeoAiPythonExecTool(TokeoAiTool):
 
     Derive the snippet tools from it; ```after``` turns a run that printed
     output but delivered no value into a result that carries the hint as its
-    exception, the printed output stays in the state for the trace.
+    error, the printed output stays in the state for the trace.
     """
 
     #: The hint the model gets for a run that printed but delivered nothing.
@@ -39,10 +39,10 @@ class TokeoAiPythonExecTool(TokeoAiTool):
 
         ### Returns
 
-        - **ToolResult|None**: The result with the hint as exception, or
+        - **ToolResult|None**: The result with the hint as error, or
             ```None``` to keep the result as it is
 
         """
         if result.value is None and result.state.stdout:
-            return ToolResult(value=None, state=dataclasses.replace(result.state, exception=self.NO_RESULT_HINT))
+            return ToolResult(value=None, state=dataclasses.replace(result.state, error=self.NO_RESULT_HINT))
         return None

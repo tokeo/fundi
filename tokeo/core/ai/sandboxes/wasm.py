@@ -14,12 +14,12 @@ network must be granted it explicitly, or run in a different sandbox.
 ### Notes
 
 : The guest delivers its value as data in ```/io/value.json```, with the flag
-    ```incomplete```. The host observes the exit code, a trap, the timeout and
+    ```is_incomplete```. The host observes the exit code, a trap, the timeout and
     the limits itself, and captures stdout and stderr outside ```/io``` (they
     count for ```max_disk_mb```, and are cut at ```max_output_mb```); on a
-    failed exit the last stderr line becomes ```exception```. What the guest
-    writes (the value, ```incomplete```, the text of stdout, stderr and the
-    exception) is a hint the host does not trust; it decides only on what it
+    failed exit the last stderr line becomes ```error```. What the guest
+    writes (the value, ```is_incomplete```, the text of stdout, stderr and the
+    error) is a hint the host does not trust; it decides only on what it
     observed.
 
 : On the untrusted path the guest runs the snippet directly and sees nothing of
@@ -84,12 +84,12 @@ class Encoder(TokeoJsonUnknownNoneEncoder):
 
     def __init__(self):
         super().__init__()
-        self.substituted = False
+        self.is_substituted = False
 
     def encode(self, obj):
         result = super().encode(obj)
         if result is None:
-            self.substituted = True
+            self.is_substituted = True
             return type(obj).__name__
         return result
 
@@ -100,7 +100,7 @@ def deliver(value):
     encoder = Encoder()
     as_json = dump_json(value, encoder=encoder)
     with open('/io/value.json', 'w') as f:
-        json.dump(dict(as_str=str(value), as_json=as_json, incomplete=encoder.substituted), f)
+        json.dump(dict(as_str=str(value), as_json=as_json, is_incomplete=encoder.is_substituted), f)
 """
 
 # the untrusted entry: runs the code argument, rebuilds no tool from tokeo
@@ -127,7 +127,7 @@ result = tool.exec(**arguments)
 if isinstance(result, ToolResult):
     if result.value is not None:
         with open('/io/value.json', 'w') as f:
-            json.dump(dict(as_str=result.value.as_str, as_json=result.value.as_json, incomplete=result.state.incomplete), f)
+            json.dump(dict(as_str=result.value.as_str, as_json=result.value.as_json, is_incomplete=result.state.is_incomplete), f)
 else:
     deliver(result)
 """
@@ -194,7 +194,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         self._runtime = None
         self._stdlib = None
 
-    def _setup(self, app, config_name=None, config=None):
+    def _setup(self, app, config_name=None, item=None):
         """
         Set up the wasm sandbox after instantiation.
 
@@ -206,11 +206,11 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): The key the sandbox is configured under
-        - **config** (dict, optional): The raw item
+        - **item** (dict, optional): The raw item
 
         """
         # super first: builds the view the _config below reads
-        super(TokeoAiWasmSandbox, self)._setup(app, config_name, config)
+        super(TokeoAiWasmSandbox, self)._setup(app, config_name, item)
         # proxied: runtime and stdlib are each used at more than one place
         self._runtime = self._config('runtime')
         self._stdlib = self._config('stdlib')
@@ -238,10 +238,10 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         """
         Run the tool in a wasm guest and return its result.
 
-        The guest delivers its value and ```incomplete```; the host builds the
-        rest from what it observed: the exit code, the captured stdout and
+        The guest delivers its value and ```is_incomplete```; the host builds
+        the rest from what it observed: the exit code, the captured stdout and
         stderr, and on a failed exit the last line of stderr as
-        ```exception```. The guest's part is a hint, not a trusted fact.
+        ```error```. The guest's part is a hint, not a trusted fact.
 
         ### Args
 
@@ -271,7 +271,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         class_path = _get_importable_path(type(tool), 'tool')
         # an untrusted tool runs as a snippet; nothing of tokeo enters the guest
-        trusted = not getattr(tool, 'wasm_exec_pysnippet', False)
+        trusted = not getattr(tool, 'is_wasm_snippet', False)
         task = dict(arguments=arguments or {})
         if trusted:
             module, _, cls = class_path.rpartition('.')
@@ -329,18 +329,18 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         if len(data) > reply_bytes(max_bytes):
             raise TokeoAiError(f'tool {class_path!r} delivered more than {max_output_mb:g} MB in the wasm sandbox')
         reply = data.decode('utf-8', 'replace')
-        value, incomplete = None, False
+        value, is_incomplete = None, False
         if reply:
             try:
                 doc = json.loads(reply)
-                as_str, as_json, incomplete = doc['as_str'], doc['as_json'], bool(doc.get('incomplete'))
+                as_str, as_json, is_incomplete = doc['as_str'], doc['as_json'], bool(doc.get('is_incomplete'))
                 value = ToolValue(as_str=str(as_str), as_json=as_json, as_data=json.loads(as_json))
             except (ValueError, TypeError, KeyError) as err:
                 raise TokeoAiError(f'tool {class_path!r} delivered no valid value in the wasm sandbox: {err}')
         # a raising tool exits non-zero; its message is the last stderr line
         lines = [line for line in stderr.splitlines() if line.strip()]
-        exception = lines[-1].strip() if code != 0 and lines else None
-        state = ToolStates(incomplete=incomplete, stdout=stdout or None, stderr=stderr or None, exception=exception)
+        error = lines[-1].strip() if code != 0 and lines else None
+        state = ToolStates(stdout=stdout or None, stderr=stderr or None, error=error, is_incomplete=is_incomplete)
         return check_output(ToolResult(value=value, state=state), max_bytes, f'{max_output_mb:g} MB', class_path, 'wasm')
 
     def _run_guest(self, wasmtime, io_dir, capture_dir, class_path, shims):

@@ -748,11 +748,11 @@ def test_subprocess_keeps_a_user_pythonpath_in_the_lead():
 
 
 def test_setup_is_one_form_across_the_ai_classes():
-    """All ai classes set up via _setup(app, config_name, config), one form."""
+    """All ai classes set up via _setup(app, config_name, item), one form."""
     # the handler writes no attributes from outside
     for cls in (TokeoAiProvider, TokeoAiSandbox, TokeoAiAgent, TokeoAiTool, TokeoAiGovernor):
         params = list(inspect.signature(cls._setup).parameters)
-        assert params == ['self', 'app', 'config_name', 'config'], cls.__name__
+        assert params == ['self', 'app', 'config_name', 'item'], cls.__name__
 
 
 def test_a_tool_reads_its_configured_options_through_config():

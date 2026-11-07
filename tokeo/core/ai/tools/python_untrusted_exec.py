@@ -9,7 +9,7 @@ itself, never the framework, the app or its config.
 
 ### Notes
 
-: ```wasm_exec_pysnippet = True``` tells the wasm sandbox to run the ```code```
+: ```is_wasm_snippet = True``` tells the wasm sandbox to run the ```code```
     argument via run_snippet in the guest, without rebuilding this tool there,
     so nothing of tokeo is mounted and the untrusted code stays walled off from
     the framework. The snippet delivers its answer by ending on an expression
@@ -47,7 +47,7 @@ class TokeoAiPythonUntrustedExecTool(TokeoAiPythonExecTool):
 
     #: The wasm sandbox runs the code in the guest without rebuilding this
     #: tool
-    wasm_exec_pysnippet = True
+    is_wasm_snippet = True
 
     class Meta:
         """Python untrusted exec tool meta-data."""

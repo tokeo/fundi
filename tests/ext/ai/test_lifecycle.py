@@ -94,11 +94,11 @@ def test_prepare_and_teardown_write_turndata():
 def test_teardown_reads_exception_from_result():
     """On a failed call teardown gets 'ValueError: nope' in result.state."""
     tool = _BareTool.__new__(_BareTool)
-    failed = ToolResult(value=None, state=ToolStates(exception='ValueError: nope'))
+    failed = ToolResult(value=None, state=ToolStates(error='ValueError: nope'))
     # the default teardown is a no-op, but the contract is that result is always
-    # a ToolResult and the exception lives in result.state.exception
+    # a ToolResult and the exception lives in result.state.error
     assert tool.teardown({}, {}, failed, lambda message: None) is None
-    assert failed.state.exception == 'ValueError: nope'
+    assert failed.state.error == 'ValueError: nope'
 
 
 # ---- the lifecycle as the loop runs it --------------------------------------
@@ -111,7 +111,7 @@ class _Sandbox:
         try:
             return tool.exec(**arguments)
         except Exception as err:
-            return ToolResult(value=None, state=ToolStates(exception=f'{type(err).__name__}: {err}'))
+            return ToolResult(value=None, state=ToolStates(error=f'{type(err).__name__}: {err}'))
 
 
 class _LoggingTool(TokeoAiTool):
@@ -165,7 +165,7 @@ def test_prepare_raising_skips_everything_including_teardown():
     tool = _LoggingTool(fail='prepare')
     result = _run_tool(tool)
     assert tool.ran == ['prepare']
-    assert 'boom-prepare' in result.state.exception
+    assert 'boom-prepare' in result.state.error
 
 
 def test_before_raising_short_circuits_to_teardown():
@@ -173,7 +173,7 @@ def test_before_raising_short_circuits_to_teardown():
     tool = _LoggingTool(fail='before')
     result = _run_tool(tool)
     assert tool.ran == ['prepare', 'before', 'teardown']
-    assert 'boom-before' in result.state.exception
+    assert 'boom-before' in result.state.error
 
 
 def test_exec_raising_still_runs_teardown():
@@ -181,7 +181,7 @@ def test_exec_raising_still_runs_teardown():
     tool = _LoggingTool(fail='exec')
     result = _run_tool(tool)
     assert tool.ran == ['prepare', 'before', 'exec', 'teardown']
-    assert 'boom-exec' in result.state.exception
+    assert 'boom-exec' in result.state.error
 
 
 def test_after_raising_becomes_the_result():
@@ -189,7 +189,7 @@ def test_after_raising_becomes_the_result():
     tool = _LoggingTool(fail='after')
     result = _run_tool(tool)
     assert tool.ran == ['prepare', 'before', 'exec', 'after', 'teardown']
-    assert 'boom-after' in result.state.exception
+    assert 'boom-after' in result.state.error
 
 
 def test_teardown_raising_is_noted_and_keeps_the_result():
@@ -199,7 +199,7 @@ def test_teardown_raising_is_noted_and_keeps_the_result():
     result = _run_tool(tool, ctx)
     # the settled result survives a failing teardown
     assert result.value == 'ran safe/x'
-    assert result.state.exception is None
+    assert result.state.error is None
     notes = [step.object.content for step in ctx.trace if hasattr(step.object, 'content')]
     assert any('teardown failed' in note for note in notes)
 
@@ -241,4 +241,4 @@ def test_teardown_gets_a_tool_result_when_the_sandbox_fails():
         handler._exec_lifecycle(tool, _BrokenSandbox(), {'path': 'x'}, TokeoAiContext(messages=[]))
     assert isinstance(tool.seen, ToolResult)
     assert tool.seen.value is None
-    assert tool.seen.state.exception == 'TokeoAiError: timed out after 1s'
+    assert tool.seen.state.error == 'TokeoAiError: timed out after 1s'

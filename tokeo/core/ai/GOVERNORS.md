@@ -79,7 +79,7 @@ flowchart TD
     Result["result: ToolResult | None"] --> Value
     Result --> State
     Value["value: ToolValue | None<br/>(None = tool returned nothing)"] --> Views["as_str · as_json · as_data"]
-    State["state: ToolStates"] --> Fields["incomplete · stdout · stderr · exception"]
+    State["state: ToolStates"] --> Fields["stdout · stderr · error · is_incomplete"]
     Error["error: str | None<br/>(machinery failure: timeout, transport)"]
 ```
 
@@ -87,7 +87,7 @@ The split to keep in mind:
 
 - ```invocation.error``` is a machinery failure: a timeout, a transport break,
     an exhausted sandbox chain. The tool may never have run.
-- ```result.state.exception``` is a tool error: the tool's own raise, which the
+- ```result.state.error``` is a tool error: the tool's own raise, which the
     sandbox caught, or a raise of its ```prepare```/```before```/```after```
     hook, recorded as ```type: message``` with ```value``` left ```None```. A
     tool may also set it in ```after``` for a hint of its own.
@@ -112,7 +112,7 @@ contract is the same for all: reach the views through ```invocation.result.value
 after the ```None``` guard above.
 
 An audit guard only observes. It reads ```value.as_str``` (and may
-read ```invocation.error``` and ```result.state.exception``` to tell a machinery
+read ```invocation.error``` and ```result.state.error``` to tell a machinery
 failure from a tool that raised), logs, and returns ```None```; it changes
 nothing.
 
@@ -136,19 +136,19 @@ on the invocation identity, not on the result inside it.
 ```mermaid
 flowchart TD
     Gov["governor.on_return<br/>changes the result"] --> Choice{"what does it<br/>return?"}
-    Choice -->|"None / same invocation"| InPlace["changed = False<br/>cache untouched,<br/>chain sees the change"]
-    Choice -->|"a new Invocation"| New["changed = True<br/>cache swapped,<br/>trace marks a transition"]
+    Choice -->|"None / same invocation"| InPlace["is_changed = False<br/>cache untouched,<br/>chain sees the change"]
+    Choice -->|"a new Invocation"| New["is_changed = True<br/>cache swapped,<br/>trace marks a transition"]
 ```
 
 - In place: mutate ```invocation.result``` and return ```None```. The step is
-    recorded with ```changed=False``` (the invocation identity did not change), but
-    the invocation now carries the new result, so the next governor in the chain
-    and the loop both see it. This is the common case.
+    recorded with ```is_changed=False``` (the invocation identity did not
+    change), but the invocation now carries the new result, so the next
+    governor in the chain and the loop both see it. This is the common case.
 - A new invocation: build a fresh ```Invocation``` (e.g. with
     ```dataclasses.replace```) carrying the new result and return it. The step is
-    recorded with ```changed=True``` and the trace marks the transition with the
-    governor as its origin. Choose this when the trace should show the change as a
-    distinct step, not just carry the new value on an unchanged one.
+    recorded with ```is_changed=True``` and the trace marks the transition with
+    the governor as its origin. Choose this when the trace should show the change
+    as a distinct step, not just carry the new value on an unchanged one.
 
 Either way the chain carries the changed result on: a later governor reads the
 result the earlier one left.
@@ -171,10 +171,10 @@ Two ways to write the change:
     ```python
     masked = self._mask(invocation.result.value.as_str)
     invocation.result = create_tool_result(masked, state=dict(
-        incomplete=invocation.result.state.incomplete,
         stdout=invocation.result.state.stdout,
         stderr=invocation.result.state.stderr,
-        exception=invocation.result.state.exception,
+        error=invocation.result.state.error,
+        is_incomplete=invocation.result.state.is_incomplete,
     ))
     ```
 

@@ -54,7 +54,7 @@ class TokeoAiProvider:
             return self._config_name
         return f'{type(self).__module__}:{type(self).__name__}'
 
-    def _setup(self, app, config_name=None, config=None):
+    def _setup(self, app, config_name=None, item=None):
         """
         Set up the provider.
 
@@ -65,7 +65,7 @@ class TokeoAiProvider:
 
         - **app**: The Tokeo application instance
         - **config_name** (str, optional): Never handed in for a provider
-        - **config** (dict, optional): Never handed in for a provider
+        - **item** (dict, optional): Never handed in for a provider
 
         """
         if config_name:

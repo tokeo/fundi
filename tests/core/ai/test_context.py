@@ -53,7 +53,7 @@ def test_context_seeds_incoming_messages_as_chat_messages():
     assert isinstance(step, TraceStep)
     assert step.object is message
     assert step.origin is ctx
-    assert step.changed is True
+    assert step.is_changed is True
 
 
 def test_context_empty_when_unseeded():
@@ -131,19 +131,19 @@ def test_trace_keeps_chronological_order_across_kinds():
     assert ctx.messages == [ctx.trace[0].object, answer]
 
 
-def test_tracked_returns_the_bare_object_cache_by_type():
-    """tracked(ChatResult) is the same live list as ctx.results."""
+def test_get_tracked_returns_the_bare_object_cache_by_type():
+    """get_tracked(ChatResult) is the same live list as ctx.results."""
     ctx = TokeoAiContext()
     result = ctx.track(object(), ChatResult(text='hi', tool_calls=[]))
-    assert ctx.tracked(ChatResult) == [result]
-    assert ctx.tracked(ChatResult) is ctx.results
+    assert ctx.get_tracked(ChatResult) == [result]
+    assert ctx.get_tracked(ChatResult) is ctx.results
 
 
-def test_tracked_unknown_kind_is_empty_not_error():
-    """tracked(ToolResult), not a cached kind, returns [] instead of raising."""
+def test_get_tracked_unknown_kind_is_empty_not_error():
+    """get_tracked(ToolResult), not a cached kind, returns [] instead of raising."""
     # so a caller can iterate without guarding for absence
     ctx = TokeoAiContext()
-    assert ctx.tracked(ToolResult) == []
+    assert ctx.get_tracked(ToolResult) == []
 
 
 def test_supersede_with_none_records_an_unchanged_step_and_keeps_the_cache():
@@ -157,7 +157,7 @@ def test_supersede_with_none_records_an_unchanged_step_and_keeps_the_cache():
     # a step was appended, marked unchanged, originated by the guard
     assert len(ctx.trace) == 2
     assert ctx.trace[-1].origin is guard
-    assert ctx.trace[-1].changed is False
+    assert ctx.trace[-1].is_changed is False
     assert ctx.trace[-1].object is invocation
     # the cache still holds exactly the one invocation
     assert ctx.invocations == [invocation]
@@ -169,7 +169,7 @@ def test_supersede_with_same_object_is_also_unchanged():
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     returned = ctx.supersede(object(), invocation, invocation)
     assert returned is invocation
-    assert ctx.trace[-1].changed is False
+    assert ctx.trace[-1].is_changed is False
     assert ctx.invocations == [invocation]
 
 
@@ -188,7 +188,7 @@ def test_supersede_with_a_new_object_swaps_the_cache_and_records_a_changed_step(
     assert ctx.current_invocation is revised
     # the trace grew: the original track step plus the changed supersede step
     assert len(ctx.trace) == 2
-    assert ctx.trace[-1].changed is True
+    assert ctx.trace[-1].is_changed is True
     assert ctx.trace[-1].object is revised
     assert ctx.trace[-1].origin is guard
 
@@ -262,7 +262,7 @@ def test_refine_messages_in_place_records_an_unchanged_step():
     before = ctx.messages
     returned = ctx.refine_messages(object(), None, stage='on_begin')
     assert returned is before
-    assert ctx.trace[-1].changed is False
+    assert ctx.trace[-1].is_changed is False
     assert ctx.trace[-1].stage == 'on_begin'
 
 
@@ -271,7 +271,7 @@ def test_refine_messages_same_list_is_also_unchanged():
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     returned = ctx.refine_messages(object(), ctx.messages, stage='on_prompt')
     assert returned is ctx.messages
-    assert ctx.trace[-1].changed is False
+    assert ctx.trace[-1].is_changed is False
 
 
 def test_refine_messages_with_a_new_list_replaces_the_whole_conversation():
@@ -286,7 +286,7 @@ def test_refine_messages_with_a_new_list_replaces_the_whole_conversation():
     assert returned is live
     assert [m['role'] for m in ctx.messages] == ['system', 'user']
     assert all(isinstance(m, ChatMessage) for m in ctx.messages)
-    assert ctx.trace[-1].changed is True
+    assert ctx.trace[-1].is_changed is True
     assert ctx.trace[-1].stage == 'on_prompt'
 
 

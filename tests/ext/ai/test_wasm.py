@@ -221,7 +221,7 @@ def test_untrusted_guest_cannot_import_the_framework():
             None,
         )
         assert out.value is None
-        assert 'ModuleNotFoundError' in (out.state.exception or '')
+        assert 'ModuleNotFoundError' in (out.state.error or '')
 
 
 @pytest.mark.skipif(
@@ -248,7 +248,7 @@ def test_wasm_guest_has_no_network():
             None,
         )
         assert out.value is None
-        assert out.state.exception is not None
+        assert out.state.error is not None
 
 
 @pytest.mark.skipif(
@@ -276,7 +276,7 @@ def test_wasm_guest_cannot_write_a_read_only_mount():
             None,
         )
         assert out.value is None
-        assert 'PermissionError' in (out.state.exception or '')
+        assert 'PermissionError' in (out.state.error or '')
     assert not os.path.exists(probe)
 
 
@@ -300,15 +300,15 @@ def test_the_host_tells_stdout_and_stderr():
     """print out and err, then 7: the value 7, stdout and stderr as captured."""
     out = run_untrusted('import sys\nprint("out")\nprint("err", file=sys.stderr)\n7')
     assert out.value.as_str == '7'
-    assert (out.state.stdout, out.state.stderr, out.state.exception) == ('out\n', 'err\n', None)
+    assert (out.state.stdout, out.state.stderr, out.state.error) == ('out\n', 'err\n', None)
 
 
 @needs_build
 def test_the_host_tells_the_exception_of_a_raising_snippet():
-    """1/0 gives no value and the last stderr line as the exception."""
+    """1/0 gives no value and the last stderr line as the error."""
     out = run_untrusted('1/0')
     assert out.value is None
-    assert out.state.exception == 'ZeroDivisionError: division by zero'
+    assert out.state.error == 'ZeroDivisionError: division by zero'
     assert 'Traceback' in out.state.stderr
 
 
@@ -338,7 +338,7 @@ def test_the_untrusted_guest_cannot_leave_by_a_symlink():
     """A symlink in /io to ../../etc does not open a host file."""
     out = run_untrusted('import os\nos.symlink("../../../../../etc", "/io/up")\nopen("/io/up/hostname").read()')
     assert out.value is None
-    assert out.state.exception is not None
+    assert out.state.error is not None
 
 
 @needs_build
@@ -361,7 +361,7 @@ def test_guest_and_host_encode_a_value_alike(code):
     value = eval(code, dict(datetime=datetime, timezone=timezone))
     host = create_tool_result(value)
     out = run_untrusted(f'from datetime import datetime, timezone\n{code}')
-    assert (out.value.as_json, out.state.incomplete) == (host.value.as_json, host.state.incomplete)
+    assert (out.value.as_json, out.state.is_incomplete) == (host.value.as_json, host.state.is_incomplete)
     if code != 'object()':
         assert out.value.as_str == host.value.as_str
 

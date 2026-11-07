@@ -88,21 +88,22 @@ class TokeoJsonAiTraceEncoder(TokeoJsonUnknownNameEncoder):
 
     """
 
-    def __init__(self, compact=False):
+    def __init__(self, is_compact=False):
         super().__init__()
         #: (bool) Drop the ```object``` of an unchanged ```TraceStep```
-        self.compact = compact
+        self.is_compact = is_compact
 
     def encode(self, obj):
         """
         Encode a trace step, dropping its object on an unchanged compact step.
 
-        A ```TraceStep``` with ```changed=False``` left its object exactly as the
-        last changed step already showed it, so its object is pure repetition;
-        in compact mode this renders the step without the ```object``` field. A
-        changed step keeps its object. Everything else delegates to the base
-        name encoder, so a date, dataclass, or live origin renders the same as
-        in the full export (an unknown object as its type name).
+        A ```TraceStep``` with ```is_changed=False``` left its object exactly as
+        the last changed step already showed it, so its object is pure
+        repetition; in compact mode this renders the step without the
+        ```object``` field. A changed step keeps its object. Everything else
+        delegates to the base name encoder, so a date, dataclass, or live
+        origin renders the same as in the full export (an unknown object as
+        its type name).
 
         ### Args
 
@@ -117,11 +118,11 @@ class TokeoJsonAiTraceEncoder(TokeoJsonUnknownNameEncoder):
         # a trace step: render its fields, and drop the object when the step is
         # unchanged; an unchanged step repeats the object the last changed step
         # already showed, so it is pure repetition in the compact view. a changed
-        # step keeps its object (it shows what actually changed). the changed flag
-        # is read off the built dict, after the type is known
-        if self.compact and isinstance(obj, TraceStep):
+        # step keeps its object (it shows what actually changed). the is_changed
+        # flag is read off the built dict, after the type is known
+        if self.is_compact and isinstance(obj, TraceStep):
             step = dict(obj.__dict__)
-            if not step['changed']:
+            if not step['is_changed']:
                 del step['object']
             return step
         return super().encode(obj)
