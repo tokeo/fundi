@@ -5,7 +5,7 @@ A ready-to-use redact guard that masks secret-looking spans by regex.
 at ```on_call``` the call arguments, nested ones too, and the call as the model
 sent it in the history and on the trace; at ```on_return``` the returned value
 (the model-facing ```as_str``` always, the structured ```as_data``` too unless
-```sanitize_data``` is off), the run states ```stdout```, ```stderr``` and
+```redact_data``` is off), the run states ```stdout```, ```stderr``` and
 ```error``` and the error of the call. So a secret does not flow into a tool
 or from a tool back to the model, the history, the trace or a log line. The
 user prompt (```on_prompt```) and the model answer (```on_answer```) are not
@@ -37,7 +37,7 @@ ai:
         replacement: '[redacted]'
         # also mask the structured result view (value.as_data), recursively,
         # the string values only; true by default, set false to mask as_str only
-        sanitize_data: true
+        redact_data: true
 ```
 """
 
@@ -57,7 +57,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
     Applies each configured pattern to the text it handles and replaces every
     match with the ```replacement``` marker: at ```on_call``` to each string
     value in ```invocation.arguments```, at ```on_return``` to
-    ```invocation.result.value.as_str``` (and, when ```sanitize_data``` is on,
+    ```invocation.result.value.as_str``` (and, when ```redact_data``` is on,
     the string values in ```value.as_data``` too). It never changes the
     ```decision```, so it is
     safe on every agent; when it masks anything it notes the count on
@@ -97,7 +97,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
             # as_data/as_json and leak to the trace; set false to mask only the
             # model-facing as_str and leave the structure as the tool returned
             # it
-            sanitize_data=True,
+            redact_data=True,
         )
 
     def __init__(self, app, *args, **kw):
@@ -270,10 +270,10 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         running state (unused here). The model-facing ```value.as_str``` is
         always masked, as are the run states ```stdout```, ```stderr``` and
         ```error``` and the ```error``` of the invocation, which reach the
-        model and the trace as error text. When ```sanitize_data``` is on (the
+        model and the trace as error text. When ```redact_data``` is on (the
         default), the structured ```value.as_data``` is masked too
         (recursively, the string values only), and the value is rebuilt so
-        ```as_json``` carries no secret either. With ```sanitize_data``` off,
+        ```as_json``` carries no secret either. With ```redact_data``` off,
         the structure is left as the tool returned it.
 
         ### Args
@@ -311,7 +311,7 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         masked_str, count = self._mask_text(value.as_str or '', stage)
         hits += count
         masked_data = value.as_data
-        if self._config('sanitize_data', stage=stage) and value.as_data is not None:
+        if self._config('redact_data', stage=stage) and value.as_data is not None:
             masked_data, count = self._mask_data(value.as_data, stage)
             hits += count
         if not hits:

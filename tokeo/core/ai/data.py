@@ -415,7 +415,7 @@ class TokeoAiResult:
     - **loopdata** (TokeoAiLoopdata): The loop's live counters for the run
     - **trace** (list): The run's ```TraceStep``` history, in order
     - **confirmations** (list): Every confirm decision of the run in order,
-        each a dict (stage, guard, subject_dict, previous_decision,
+        each a dict (stage, guard_name, subject_dict, previous_decision,
         previous_reason, answer, decision, note, by, who, retries, is_recalled,
         at as a UTC ```datetime```), for the app to keep and learn from
 

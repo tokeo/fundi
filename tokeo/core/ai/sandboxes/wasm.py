@@ -215,7 +215,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         self._runtime = self._config('runtime')
         self._stdlib = self._config('stdlib')
 
-    def validate_options(self, options):
+    def lint_options(self, options):
         """
         Check the values the linter cannot know.
 
@@ -229,7 +229,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             max_output_mb not above 0
 
         """
-        errors = TokeoAiSandbox.validate_options(self, options)
+        errors = TokeoAiSandbox.lint_options(self, options)
         if not is_number_ge((options or {}).get('watch_interval', 1.0), 0.1):
             errors.append('watch_interval must be a number of seconds, at least 0.1')
         return errors

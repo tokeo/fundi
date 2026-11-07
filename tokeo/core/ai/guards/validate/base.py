@@ -9,7 +9,7 @@ say "this is a validate step" while your subclass decides what to check.
 
 Ready-to-use validate implementations live beside this module in the
 ```validate``` package (e.g. ```tool_schema.py``` with its
-```TokeoAiToolSchemaValidator```, which checks the arguments against the tool's
+```TokeoAiToolSchemaValidateGuard```, which checks the arguments against the tool's
 declared parameter schema).
 """
 

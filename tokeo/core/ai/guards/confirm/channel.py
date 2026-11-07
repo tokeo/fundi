@@ -48,7 +48,7 @@ ai:
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from tokeo.core.utils.validate import is_int_ge
@@ -79,36 +79,36 @@ class TokeoAiConfirmRequest:
 
     ### Args
 
-    - **stage** (str): The stage asking, e.g. ```on_call```
-    - **guard** (str): The config name of the confirm guard
     - **subject**: What is to be confirmed: the ```Invocation``` at the tool
         stages, the ```ChatResult``` at ```on_answer```/```on_close```, the
         messages at ```on_begin```/```on_prompt```
     - **decision** (str): The decision the guards reached, ```allow``` or
         ```deny```
     - **reason** (str|None): The reason of the decision
-    - **notes** (list): Every note so far, also from earlier runs
     - **answer_values** (tuple): The values an answer may have
+    - **stage** (str): The stage asking, e.g. ```on_call```
+    - **guard_name** (str): The config name of the confirm guard
     - **userdata**: The caller's ```userdata``` of the run, e.g. who is asked
+    - **notes** (list): Every note so far, also from earlier runs
 
     """
 
-    #: The stage that asks
-    stage: str
-    #: The config name of the asking guard
-    guard: str
     #: The work object of the stage
     subject: object
     #: The decision of the guards so far
     decision: str
     #: The reason of the decision
     reason: str | None
-    #: Every note so far, also from earlier runs
-    notes: list
     #: The values an answer may have
     answer_values: tuple
+    #: The stage that asks
+    stage: str
+    #: The config name of the asking guard
+    guard_name: str
     #: The caller's ```userdata``` of the run
     userdata: object = None
+    #: Every note so far, also from earlier runs
+    notes: list = field(default_factory=list)
 
 
 @dataclass
@@ -179,7 +179,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         # the options that hold tool and group names, checked by the linter
         tool_name_options = ('tools',)
 
-    def validate_options(self, options):
+    def lint_options(self, options):
         """
         Check the values the linter cannot know.
 
@@ -262,7 +262,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         if answer is None:
             request = TokeoAiConfirmRequest(
                 stage=stage,
-                guard=self.config_name,
+                guard_name=self.config_name,
                 subject=subject,
                 decision=decision,
                 reason=reason,
@@ -300,7 +300,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             confirm_cache['run'][cache_key] = answer
         confirmation = dict(
             stage=stage,
-            guard=self.config_name,
+            guard_name=self.config_name,
             subject_dict=subject_dict,
             previous_decision=decision,
             previous_reason=reason,

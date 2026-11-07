@@ -15,9 +15,10 @@ registers it the same way for a command of its own:
 
 ```python
 from tokeo.core.ai.guards.confirm import GOVERNOR_CONFIRM_CHANNEL_HOOK
-from tokeo.core.ai.guards.confirm.terminal import terminal_channel
+from tokeo.core.ai.guards.confirm.terminal import create_terminal_channel
 
-app.hook.register(GOVERNOR_CONFIRM_CHANNEL_HOOK, terminal_channel(input, print))
+channel = create_terminal_channel(input, print)
+app.hook.register(GOVERNOR_CONFIRM_CHANNEL_HOOK, channel)
 ```
 """
 
@@ -28,7 +29,7 @@ from tokeo.core.ai import Invocation
 from tokeo.core.ai.guards.confirm.channel import TokeoAiConfirmAnswer
 
 
-def terminal_channel(read, write):
+def create_terminal_channel(read, write):
     """
     Build a confirm channel that asks a person in the terminal.
 
@@ -62,7 +63,7 @@ def terminal_channel(read, write):
             shown = (subject[-1] if subject else {}).get('content')
         else:
             shown = getattr(subject, 'text', subject)
-        write(f'confirm {request.stage} ({request.guard}): {shown}')
+        write(f'confirm {request.stage} ({request.guard_name}): {shown}')
         write(f'  decision: {request.decision}' + (f' ({request.reason})' if request.reason else ''))
         for note in request.notes:
             write(f'  note: {note.get("note")}')

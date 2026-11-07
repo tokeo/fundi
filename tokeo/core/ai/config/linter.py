@@ -461,7 +461,7 @@ class TokeoAiLinter:
                 self._add_issue(path, _format_unknown('governor', entry, known))
 
     def _validate_sandbox(self, section, name, item):
-        # option values are checked by the class in validate_options
+        # option values are checked by the class in lint_options
         path = f'ai.{section}.{name}'
         if not self._lint_long_form(path, item, 'sandbox'):
             return
@@ -486,7 +486,7 @@ class TokeoAiLinter:
 
     def _validate_options_via_class(self, kind, path, item):
         # the class knows its allowed option keys; resolve it and call its
-        # ```validate_options``` hook. a resolution failure is already reported
+        # ```lint_options``` hook. a resolution failure is already reported
         # by ```_lint_type```; a hook that returns messages becomes lint errors
         options = item.get('options')
         if not isinstance(options, dict):
@@ -495,7 +495,7 @@ class TokeoAiLinter:
             cls = self.app.ai.resolve(kind, item.get('type'))
         except Exception:
             return
-        hook = getattr(cls, 'validate_options', None)
+        hook = getattr(cls, 'lint_options', None)
         if hook is None:
             return
         try:

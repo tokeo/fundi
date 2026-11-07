@@ -162,7 +162,7 @@ guards:
   tool_schema_validate:           # item with options
     type: tool_schema_validate
     options:
-      strict: true                # deny a malformed call (default: only flag it)
+      schema_enforce: true        # deny a malformed call (default: only flag it)
   regex_redact:                   # item with options
     type: regex_redact
     options:
@@ -271,11 +271,12 @@ channel to confirm the decision the guards before it reached (```allow``` or
 a terminal channel when they run in a terminal; an app registers its own (a web
 page, a chat, a classifier, a model).
 
-The ```TokeoAiConfirmRequest``` holds ```stage```, ```guard``` (the config name),
-```subject``` (the ```Invocation``` at the tool stages, the ```ChatResult``` at
-```on_answer```/```on_close```, the messages at ```on_begin```/```on_prompt```),
-```decision``` and ```reason``` of the guards, ```notes```, ```answer_values```
-(the values an answer may have) and the ```userdata``` of the run. The
+The ```TokeoAiConfirmRequest``` holds ```subject``` (the ```Invocation``` at the
+tool stages, the ```ChatResult``` at ```on_answer```/```on_close```, the messages
+at ```on_begin```/```on_prompt```), ```decision``` and ```reason``` of the guards,
+```answer_values``` (the values an answer may have), ```stage```,
+```guard_name``` (the config name), the ```userdata``` of the run and
+```notes```. The
 ```TokeoAiConfirmAnswer``` holds ```value``` (```yes```, ```yes_run```, ```no```
 or ```no_retry```), ```by```, ```who``` and ```note```:
 
@@ -332,7 +333,7 @@ decision into deny, ```yes``` confirms the decision of the guards.
 Every answer says who decided, ```by``` is required: ```human``` for a person,
 ```auto``` for a function of the app; without an answer it is ```default```.
 Every answer lands in ```result.confirmations``` and on the trace, a note also
-in ```ctx.notes```. Each entry is a dict with ```stage```, ```guard```,
+in ```ctx.notes```. Each entry is a dict with ```stage```, ```guard_name```,
 ```subject_dict``` (a short form of the subject), ```previous_decision``` and
 ```previous_reason``` (what the guards reached), ```answer```, ```decision```
 (after the confirm), ```note```, ```by```, ```who```, ```retries``` (of the stage

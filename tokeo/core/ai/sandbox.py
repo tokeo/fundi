@@ -65,7 +65,7 @@ class TokeoAiSandbox(MetaMixin):
         # options. which options exist (a timeout, a memory limit, a container
         # name, a scratch mount ...) is the concrete mechanism's business, set
         # in its own config_defaults; the linter reports any other key as an
-        # error, values are checked by validate_options. every built-in sandbox
+        # error, values are checked by lint_options. every built-in sandbox
         # has max_output_mb
         config_defaults = {}
 
@@ -166,7 +166,7 @@ class TokeoAiSandbox(MetaMixin):
         """
         raise NotImplementedError
 
-    def validate_options(self, options):
+    def lint_options(self, options):
         """
         Validate the item's ```options``` for the linter.
 

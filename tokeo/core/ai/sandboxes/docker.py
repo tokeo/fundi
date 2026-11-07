@@ -129,7 +129,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         self._container = None
         self._lock = threading.Lock()
 
-    def validate_options(self, options):
+    def lint_options(self, options):
         """
         Check the values the linter cannot know.
 
@@ -143,7 +143,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             that is no whole number from 1, or a max_output_mb not above 0
 
         """
-        errors = TokeoAiSandbox.validate_options(self, options)
+        errors = TokeoAiSandbox.lint_options(self, options)
         if 'max_disk_mb' in (options or {}) and not is_int_ge(options['max_disk_mb'], 1):
             errors.append('max_disk_mb must be a whole number of MB, at least 1')
         if not (options or {}).get('image'):

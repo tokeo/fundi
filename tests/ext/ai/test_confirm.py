@@ -274,16 +274,16 @@ def test_the_linter_takes_the_confirm_options_and_flags_a_typo():
 
 def make_terminal_channel(*lines):
     """A terminal channel that reads the lines in order, and what it wrote."""
-    from tokeo.core.ai.guards.confirm.terminal import terminal_channel
+    from tokeo.core.ai.guards.confirm.terminal import create_terminal_channel
 
     lines, written = list(lines), []
-    return terminal_channel(lambda prompt: lines.pop(0), written.append), written
+    return create_terminal_channel(lambda prompt: lines.pop(0), written.append), written
 
 
 def make_request(decision, reason, notes=()):
     """A confirm request at on_call for echo('moin') with the given decision."""
     invocation = Invocation(id='c1', name='echo', arguments=dict(text='moin'))
-    return TokeoAiConfirmRequest('on_call', 'ask', invocation, decision, reason, list(notes), ('yes', 'yes_run', 'no', 'no_retry'))
+    return TokeoAiConfirmRequest(invocation, decision, reason, ('yes', 'yes_run', 'no', 'no_retry'), 'on_call', 'ask', notes=list(notes))
 
 
 def test_the_terminal_shows_the_decision_and_asks_until_an_answer():
