@@ -77,14 +77,14 @@ def _set_limits(limits):
             _, hard = resource.getrlimit(res)
         except (ValueError, OSError):
             continue
-        pinned = memory_bytes if hard == resource.RLIM_INFINITY else min(memory_bytes, hard)
+        max_memory_bytes = memory_bytes if hard == resource.RLIM_INFINITY else min(memory_bytes, hard)
         # WHY two attempts: enforcement happens at the SOFT limit (the kernel
         # fails allocations there); the hard limit is only the ceiling a
         # process may raise its own soft limit back to. pinning both hardens
         # against self-raising, but macos often refuses any change to the
         # hard limit (EINVAL), so fall back to soft-only, which is still
         # full enforcement, just not hardened (and we promise no jail)
-        for soft_hard in ((pinned, pinned), (pinned, hard)):
+        for soft_hard in ((max_memory_bytes, max_memory_bytes), (max_memory_bytes, hard)):
             try:
                 resource.setrlimit(res, soft_hard)
                 return

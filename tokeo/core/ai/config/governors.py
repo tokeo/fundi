@@ -120,13 +120,13 @@ def _resolve_stages(config_name, stages, get_class_stages):
     class_stages = frozenset(get_class_stages(config_name))
     if stages is None or list(stages) == [GOVERNOR_STAGE_ANY]:
         return class_stages
-    named = set()
+    named_stages = set()
     for stage in stages:
         if stage == GOVERNOR_STAGE_ANY:
-            named |= class_stages
+            named_stages |= class_stages
         else:
-            named.add(stage)
-    return frozenset(named) & class_stages
+            named_stages.add(stage)
+    return frozenset(named_stages) & class_stages
 
 
 def resolve_governors(governors_section, agent_governors, agent_omit, get_class_stages, logger=None):
@@ -179,13 +179,13 @@ def resolve_governors(governors_section, agent_governors, agent_omit, get_class_
     appearances = {}
 
     def add_appearance(config_name, stages, source):
-        resolved = _resolve_stages(config_name, stages, get_class_stages)
+        resolved_stages = _resolve_stages(config_name, stages, get_class_stages)
         if config_name not in appearances:
             appearances[config_name] = []
             order.append(config_name)
         # keep whether the entry was bare (stages is None -> all class stages),
         # so a note can say "bare entry (all stages)" vs an explicit list
-        appearances[config_name].append((source, resolved, stages is None))
+        appearances[config_name].append((source, resolved_stages, stages is None))
 
     def walk_entries(entries, source, chain_path):
         for entry in entries or []:
@@ -205,12 +205,12 @@ def resolve_governors(governors_section, agent_governors, agent_omit, get_class_
     walk_entries(agent_governors, 'agent', [])
 
     omit = set(agent_omit or [])
-    resolved = []
+    resolved_entries = []
     for config_name in order:
         if config_name in omit:
             continue
-        resolved.append(_decide_stages(config_name, appearances[config_name], logger))
-    return resolved
+        resolved_entries.append(_decide_stages(config_name, appearances[config_name], logger))
+    return resolved_entries
 
 
 def _decide_stages(config_name, appears, logger):

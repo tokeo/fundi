@@ -35,8 +35,8 @@ def resolve_tools(names, groups):
     - **list**: The flat item names, in first-appearance order, deduplicated
 
     """
-    resolved = []
-    seen = set()
+    resolved_names = []
+    seen_names = set()
 
     def add_name(name, path):
         if name in groups:
@@ -44,13 +44,13 @@ def resolve_tools(names, groups):
                 return
             for member in groups[name]:
                 add_name(member, path | {name})
-        elif name not in seen:
-            seen.add(name)
-            resolved.append(name)
+        elif name not in seen_names:
+            seen_names.add(name)
+            resolved_names.append(name)
 
     for name in names or []:
         add_name(name, set())
-    return resolved
+    return resolved_names
 
 
 def find_cycles(groups):

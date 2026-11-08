@@ -245,20 +245,20 @@ class TokeoAiLinter:
         # the one governor registry the handler builds at load: the three
         # sections merged by name. a name duplicated across sections is reported
         # by _lint_governor_uniqueness; here a plain merge resolves references
-        merged = {}
+        merged_governors = {}
         for section in _GOVERNOR_SECTIONS:
-            merged.update(self._get_value(section) or {})
-        return merged
+            merged_governors.update(self._get_value(section) or {})
+        return merged_governors
 
     def _lint_governor_uniqueness(self):
         # a governor name must be unique across guards/transformers/conductors
         # (they merge into one registry). report a name that appears in more
         # than one section, so the collision is caught before the merge
-        seen = {}
+        seen_sections = {}
         for section in _GOVERNOR_SECTIONS:
             for name in self._get_value(section) or {}:
-                seen.setdefault(name, []).append(section)
-        for name, sections in seen.items():
+                seen_sections.setdefault(name, []).append(section)
+        for name, sections in seen_sections.items():
             if len(sections) > 1:
                 where = ', '.join(sections)
                 self._add_issue(
@@ -417,7 +417,7 @@ class TokeoAiLinter:
         # governor section) is walked too. a named stage must be one the
         # governor's class can do; an unknown alias (not a class path, not
         # configured) is an error; an empty/null/[] stage list is an error
-        known = set(self._merge_governors())
+        known_names = set(self._merge_governors())
         chain_path = chain_path or []
         for entry in as_list(governors):
             try:
@@ -438,8 +438,8 @@ class TokeoAiLinter:
                 self._lint_governor_composition(path, value, chain_path + [config_name])
                 continue
             # a config name must be a configured name or a class path
-            if '.' not in config_name and config_name not in known:
-                self._add_issue(path, _format_unknown('governor', config_name, known))
+            if '.' not in config_name and config_name not in known_names:
+                self._add_issue(path, _format_unknown('governor', config_name, known_names))
                 continue
             # a named stage must be one the class can do
             if stages is not None:
@@ -453,12 +453,12 @@ class TokeoAiLinter:
         # omit is a list of governor config names to drop from the composition;
         # it is a sibling field, not a list entry, so it never collides with a
         # guard or chain name. each name should be a known guard or chain
-        known = set(self._merge_governors())
+        known_names = set(self._merge_governors())
         for entry in as_list(omit):
             if not isinstance(entry, str):
                 self._add_issue(path, f'omit entry must be a guard name, got {entry!r}')
-            elif '.' not in entry and entry not in known:
-                self._add_issue(path, _format_unknown('governor', entry, known))
+            elif '.' not in entry and entry not in known_names:
+                self._add_issue(path, _format_unknown('governor', entry, known_names))
 
     def _validate_sandbox(self, section, name, item):
         # option values are checked by the class in lint_options
@@ -472,13 +472,13 @@ class TokeoAiLinter:
         tool_names = set(self._get_value('tools') or {})
         # tools is required: the tool/group names from ai.tools; there is no
         # catch-all, a new tool runs nowhere until a sandbox names it
-        listed = item.get('tools')
-        if listed is None:
+        listed_tools = item.get('tools')
+        if listed_tools is None:
             self._add_issue(f'{path}.tools', 'is required (a list of tool/group names)')
-        elif '_all' in as_list(listed):
+        elif '_all' in as_list(listed_tools):
             self._add_issue(f'{path}.tools', "has no catch-all '_all', name the tools and groups it runs")
         else:
-            self._lint_names(f'{path}.tools', listed, tool_names, 'tool or group')
+            self._lint_names(f'{path}.tools', listed_tools, tool_names, 'tool or group')
         # except excludes members from THIS sandbox only (single or list)
         self._lint_names(f'{path}.except', item.get('except'), tool_names, 'tool or group')
         # ask the resolved class to validate its own option keys
@@ -507,13 +507,13 @@ class TokeoAiLinter:
         for message in errors or []:
             self._add_issue(f'{path}.options', message)
 
-    def _lint_names(self, path, selection, known, what):
-        # a single name or a list of names from ```known```; None is allowed
+    def _lint_names(self, path, selection, known_names, what):
+        # a single name or a list of names from ```known_names```; None is allowed
         # (the field is absent). used for the agent ```deny``` and a sandbox
         # ```except```/```tools```, which all accept one entry or many
         for entry in as_list(selection):
-            if entry not in known:
-                self._add_issue(path, _format_unknown(what, entry, known))
+            if entry not in known_names:
+                self._add_issue(path, _format_unknown(what, entry, known_names))
 
     def _add_issue(self, path, message, level='error'):
         self.issues.append(TokeoAiLintIssue(path, message, level))
@@ -533,11 +533,11 @@ class TokeoAiLinter:
         except Exception:
             return []
 
-    def _lint_keys(self, path, keys, allowed, what='key'):
+    def _lint_keys(self, path, keys, allowed_keys, what='key'):
         # a key nobody reads is a typo, never silently ignored
         for key in keys:
-            if key not in allowed:
-                self._add_issue(f'{path}.{key}', _format_unknown(what, key, allowed))
+            if key not in allowed_keys:
+                self._add_issue(f'{path}.{key}', _format_unknown(what, key, allowed_keys))
 
     def _lint_option_keys(self, kind, path, type_value, options):
         # the allowed options are the config_defaults of the nearest Meta in
@@ -606,15 +606,15 @@ class TokeoAiLinter:
             self._lint_options(path, item)
             self._lint_type('tool', path, item)
             self._lint_option_keys('tool', f'{path}.options', item.get('type'), item.get('options'))
-        known = set(items) | set(groups)
+        known_names = set(items) | set(groups)
         for name, entries in groups.items():
             path = f'ai.tools.{name}'
             if not all(isinstance(entry, str) for entry in entries):
                 self._add_issue(path, 'a group must be a list of tool or group names')
                 continue
             for entry in entries:
-                if entry not in known:
-                    self._add_issue(path, _format_unknown('tool or group', entry, known))
+                if entry not in known_names:
+                    self._add_issue(path, _format_unknown('tool or group', entry, known_names))
         self._lint_cycles(groups)
 
     def _lint_cycles(self, groups):
@@ -666,18 +666,18 @@ class TokeoAiLinter:
         self._lint_keys('ai.defaults', defaults, _DEFAULTS_KEYS)
         profile = defaults.get('profile')
         if profile:
-            known = set(profiles) if isinstance(profiles, dict) else set()
-            if profile not in known:
-                self._add_issue('ai.defaults.profile', _format_unknown('profile', profile, known))
+            known_names = set(profiles) if isinstance(profiles, dict) else set()
+            if profile not in known_names:
+                self._add_issue('ai.defaults.profile', _format_unknown('profile', profile, known_names))
         agent = defaults.get('agent')
         if agent:
-            known = set(agents) if isinstance(agents, dict) else set()
-            if agent not in known:
-                self._add_issue('ai.defaults.agent', _format_unknown('agent', agent, known))
+            known_names = set(agents) if isinstance(agents, dict) else set()
+            if agent not in known_names:
+                self._add_issue('ai.defaults.agent', _format_unknown('agent', agent, known_names))
 
 
-def _format_unknown(what, name, known):
+def _format_unknown(what, name, known_names):
     # build an "unknown X 'name'; did you mean 'closest'?" message
-    match = difflib.get_close_matches(str(name), [str(k) for k in known], n=1)
+    match = difflib.get_close_matches(str(name), [str(k) for k in known_names], n=1)
     suggestion = f'; did you mean {match[0]!r}?' if match else ''
     return f'unknown {what} {name!r}{suggestion}'

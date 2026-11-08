@@ -370,8 +370,8 @@ class TokeoAi(MetaMixin):
         try:
             return self._registry[kind][type_value]
         except KeyError:
-            known = ', '.join(sorted(self._registry.get(kind, {}))) or '(none)'
-            raise TokeoAiError(f'unknown ai {kind} type {type_value!r}; known: {known}')
+            known_types = ', '.join(sorted(self._registry.get(kind, {}))) or '(none)'
+            raise TokeoAiError(f'unknown ai {kind} type {type_value!r}; known: {known_types}')
 
     def registry(self, kind=None):
         """
@@ -903,7 +903,7 @@ class TokeoAi(MetaMixin):
         # (and calls) share one agent and each carve out a subset. the agent is
         # resolved call > profile.agent > defaults.agent
         agent_obj = self._resolve_agent(agent, profile)
-        requested = self._get_active_tools(agent_obj, profile, deny)
+        requested_tools = self._get_active_tools(agent_obj, profile, deny)
         if max_steps is None:
             # the agent's own limits win; without one (None) the handler's
             # base defaults (config_defaults max_steps / max_loops) apply
@@ -912,7 +912,7 @@ class TokeoAi(MetaMixin):
         if max_loops is None:
             agent_max_loops = agent_obj._config('max_loops')
             max_loops = agent_max_loops if agent_max_loops is not None else self._config('max_loops', fallback=3)
-        specs = self._build_tool_specs(requested)
+        specs = self._build_tool_specs(requested_tools)
         # guards (selected on the agent) are positioned steps in the loop; each
         # participates at the stages whose method it overrides. partition once
         # the per-stage running order: each stage's ordered governor list. the loop
@@ -1341,14 +1341,14 @@ class TokeoAiController(Controller):
                         # a pure switch line: confirm the new selection and
                         # wait for the next prompt, no model call
                         params = session['model_params']
-                        shown = ' '.join(f'{k}={v}' for k, v in params.items()) if params else '-'
+                        shown_params = ' '.join(f'{k}={v}' for k, v in params.items()) if params else '-'
                         self.app.print(
                             'ai chat - '
                             f"profile={session['profile'] or '-'} "
                             f"agent={session['agent'] or '-'} "
                             f"model={session['model'] or '-'} "
                             f"purpose={session['purpose'] or '-'} "
-                            f'model_params={shown}'
+                            f'model_params={shown_params}'
                         )
                         continue
                     if not text:
@@ -1445,7 +1445,7 @@ class TokeoAiController(Controller):
             # a naive split, used only to spot the switch tokens
             tokens = line.split()
         names = self.app.ai.get_selectable_names()
-        pending = []
+        pending_switches = []
         param_pairs = []
         rest = []
         index = 0
@@ -1462,12 +1462,12 @@ class TokeoAiController(Controller):
                     # reject unknown values with the configured options
                     options = ', '.join(names[key]) or '(none configured)'
                     return line, False, f'unknown {key} {value!r}; available: {options}'
-                pending.append((key, value))
+                pending_switches.append((key, value))
                 index += 2
                 continue
             rest.append(token)
             index += 1
-        if not pending and not param_pairs:
+        if not pending_switches and not param_pairs:
             # nothing changed: return the original line so a normal prompt's
             # punctuation and spacing survive exactly
             return line, False, None
@@ -1475,7 +1475,7 @@ class TokeoAiController(Controller):
         # so a key set earlier survives and a null/empty value drops just that
         # key. a malformed pair (no "=") reports an error and changes nothing
         if param_pairs:
-            merged = dict(session.get('model_params') or {})
+            merged_params = dict(session.get('model_params') or {})
             try:
                 update = parse_model_params(param_pairs)
             except TokeoAiError as err:
@@ -1483,13 +1483,13 @@ class TokeoAiController(Controller):
             for pair in param_pairs:
                 key = pair.partition('=')[0].strip()
                 if key in update:
-                    merged[key] = update[key]
+                    merged_params[key] = update[key]
                 else:
                     # null/empty: parse_model_params dropped it, so remove it
                     # from the running session params too
-                    merged.pop(key, None)
-            session['model_params'] = merged
-        for key, value in pending:
+                    merged_params.pop(key, None)
+            session['model_params'] = merged_params
+        for key, value in pending_switches:
             if key in self._CHAT_EXCLUSIVE:
                 # keep the three profile selectors mutually exclusive
                 for other in self._CHAT_EXCLUSIVE:

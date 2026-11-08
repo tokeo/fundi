@@ -44,8 +44,8 @@ def has_sandbox_tool(item, tool_name, resolve):
     # as_list so a single name (a scalar) is one name, not iterated chars
     if tool_name not in resolve(as_list(item.get('tools'))):
         return False
-    excepted = resolve(as_list(item.get('except')))
-    return tool_name not in excepted
+    excepted_names = resolve(as_list(item.get('except')))
+    return tool_name not in excepted_names
 
 
 def find_sandbox(tool_name, chain, find_sandbox_item, resolve):

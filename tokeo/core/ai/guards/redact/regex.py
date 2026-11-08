@@ -152,13 +152,13 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
             # the run aborts loudly instead of passing secrets through unmasked
             if not patterns:
                 raise TokeoAiRedactGuardError(f'missing or invalid pattern at {stage!r}: no patterns configured')
-            compiled = []
+            compiled_re_patterns = []
             for pattern in patterns:
                 try:
-                    compiled.append(re.compile(pattern))
+                    compiled_re_patterns.append(re.compile(pattern))
                 except re.error as err:
                     raise TokeoAiRedactGuardError(f'missing or invalid pattern at {stage!r}: {pattern!r} ({err})')
-            self._compiled_by_stage[stage] = compiled
+            self._compiled_by_stage[stage] = compiled_re_patterns
         return self._compiled_by_stage[stage]
 
     def _mask_text(self, text, stage):
@@ -195,15 +195,15 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         if isinstance(obj, dict):
             out, hits = {}, 0
             for key, value in obj.items():
-                masked, count = self._mask_data(value, stage)
-                out[key] = masked
+                masked_data, count = self._mask_data(value, stage)
+                out[key] = masked_data
                 hits += count
             return out, hits
         if isinstance(obj, (list, tuple)):
             out, hits = [], 0
             for item in obj:
-                masked, count = self._mask_data(item, stage)
-                out.append(masked)
+                masked_data, count = self._mask_data(item, stage)
+                out.append(masked_data)
                 hits += count
             return out, hits
         return obj, 0
@@ -233,9 +233,9 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         """
         hits = 0
         if invocation.arguments:
-            masked, hits = self._mask_data(invocation.arguments, GOVERNOR_STAGE_ON_CALL)
+            masked_data, hits = self._mask_data(invocation.arguments, GOVERNOR_STAGE_ON_CALL)
             if hits:
-                invocation.arguments = masked
+                invocation.arguments = masked_data
         if ctx is not None:
             self._mask_request(ctx, invocation.id)
         if hits:
@@ -249,16 +249,16 @@ class TokeoAiRegexRedactGuard(TokeoAiRedactGuard):
         for message in ctx.messages:
             for call in message.get('tool_calls') or []:
                 if call.get('id') == call_id:
-                    masked, count = self._mask_data(call, GOVERNOR_STAGE_ON_CALL)
+                    masked_data, count = self._mask_data(call, GOVERNOR_STAGE_ON_CALL)
                     if count:
                         call.clear()
-                        call.update(masked)
+                        call.update(masked_data)
         for result in ctx.results:
             for call in result.tool_calls:
                 if call.id == call_id:
-                    masked, count = self._mask_data(call.arguments, GOVERNOR_STAGE_ON_CALL)
+                    masked_data, count = self._mask_data(call.arguments, GOVERNOR_STAGE_ON_CALL)
                     if count:
-                        call.arguments = masked
+                        call.arguments = masked_data
                     if result.raw is not None:
                         result.raw, _ = self._mask_data(result.raw, GOVERNOR_STAGE_ON_CALL)
 

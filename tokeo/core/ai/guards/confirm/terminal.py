@@ -58,12 +58,12 @@ def create_terminal_channel(read, write):
     def ask_on_terminal(app, request):
         subject = request.subject
         if isinstance(subject, Invocation):
-            shown = f'{subject.name} {json.dumps(subject.arguments, default=str)}'
+            shown_text = f'{subject.name} {json.dumps(subject.arguments, default=str)}'
         elif isinstance(subject, list):
-            shown = (subject[-1] if subject else {}).get('content')
+            shown_text = (subject[-1] if subject else {}).get('content')
         else:
-            shown = getattr(subject, 'text', subject)
-        write(f'confirm {request.stage} ({request.guard_name}): {shown}')
+            shown_text = getattr(subject, 'text', subject)
+        write(f'confirm {request.stage} ({request.guard_name}): {shown_text}')
         write(f'  decision: {request.decision}' + (f' ({request.reason})' if request.reason else ''))
         for note in request.notes:
             write(f'  note: {note.get("note")}')
