@@ -338,7 +338,7 @@ in ```ctx.notes```. Each entry is a dict with ```stage```, ```guard_name```,
 ```previous_reason``` (what the guards reached), ```answer```, ```decision```
 (after the confirm), ```note```, ```by```, ```who```, ```retries``` (of the stage
 before this answer), ```is_recalled``` (a ```yes_run``` answered it) and ```at```
-(a UTC ```datetime```, ISO-8601 in the trace export). The guards read
+(a UTC ```datetime```, RFC 3339 in the trace export). The guards read
 ```ctx.notes```; a later run gets the notes by
 ```chat(..., notes=result.confirmations)```. Whether the model sees a note is a
 guard's decision, confirm never hands it on by itself.
