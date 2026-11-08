@@ -258,7 +258,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
         cache_key = json.dumps([stage, subject_dict, decision, reason], sort_keys=True, default=str)
         answer_values = (TokeoAiConfirmAnswer.YES, TokeoAiConfirmAnswer.YES_RUN, TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.NO_RETRY)
         answer = confirm_cache['run'].get(cache_key)
-        is_recalled = answer is not None
+        recalled = answer is not None
         if answer is None:
             request = TokeoAiConfirmRequest(
                 stage=stage,
@@ -279,7 +279,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             if default not in (TokeoAiConfirmAnswer.NO, TokeoAiConfirmAnswer.YES):
                 raise TokeoAiConfirmGuardError(f'confirm guard {self.config_name!r}: default must be no or yes, got {default!r}')
             answer = TokeoAiConfirmAnswer(default, by=TokeoAiConfirmAnswer.BY_DEFAULT)
-        elif not is_recalled:
+        elif not recalled:
             if answer.value not in answer_values:
                 raise TokeoAiConfirmGuardError(
                     f'confirm guard {self.config_name!r}: answer {answer.value!r} is not one of {answer_values}'
@@ -310,7 +310,7 @@ class TokeoAiChannelConfirmGuard(TokeoAiConfirmGuard):
             by=answer.by,
             who=answer.who,
             retries=retries,
-            is_recalled=is_recalled,
+            recalled=recalled,
             at=datetime.now(timezone.utc),
         )
         ctx.confirmations.append(confirmation)

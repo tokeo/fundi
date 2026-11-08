@@ -14,7 +14,7 @@ linter draw from the same source for "which profile" and "which agent".
 from tokeo.core.ai.exc import TokeoAiError
 
 
-def _is_enabled(profile):
+def _enabled(profile):
     # a profile counts only when it is a mapping and not disabled; a disabled
     # profile is skipped everywhere, so it is also not found by its name
     return isinstance(profile, dict) and bool(profile.get('enabled', True))
@@ -44,11 +44,11 @@ def get_profile(profiles, key, value):
     """
     if key in ('profile', 'name'):
         profile = profiles.get(value)
-        if _is_enabled(profile):
+        if _enabled(profile):
             return value, profile
         raise TokeoAiError(f'no enabled ai profile named {value!r}')
     for name, profile in profiles.items():
-        if not _is_enabled(profile):
+        if not _enabled(profile):
             continue
         if profile.get(key) == value:
             return name, profile
@@ -141,10 +141,10 @@ def get_selectable_names(profiles, agent_names):
         'purpose': [...]}```, only enabled profiles contributing
 
     """
-    enabled = [(name, profile) for name, profile in profiles.items() if _is_enabled(profile)]
+    enabled_profiles = [(name, profile) for name, profile in profiles.items() if _enabled(profile)]
     return {
-        'profile': [name for name, _ in enabled],
+        'profile': [name for name, _ in enabled_profiles],
         'agent': list(agent_names),
-        'model': sorted({p.get('model') for _, p in enabled} - {None}),
-        'purpose': sorted({p.get('purpose') for _, p in enabled} - {None}),
+        'model': sorted({p.get('model') for _, p in enabled_profiles} - {None}),
+        'purpose': sorted({p.get('purpose') for _, p in enabled_profiles} - {None}),
     }

@@ -163,7 +163,7 @@ def test_chat_successful_call_resets_the_failed_loops():
         result = app.ai.chat([dict(role='user', content='hi')], agent='plain', max_loops=3)
         assert result.answer.text == 'done'
         assert result.loopdata.steps == 5
-        assert result.loopdata.failed_loops == 2
+        assert result.loopdata.failed_loop_cnt == 2
 
 
 def test_chat_agent_limit_applies_without_a_call_argument():
@@ -210,7 +210,7 @@ def test_chat_refuses_arguments_that_are_no_json_object(agent):
         # every step of the answer that asked for the call keeps what it sent
         calls = [c for s in result.trace if getattr(s.object, 'tool_calls', None) for c in s.object.tool_calls]
         assert calls and all(c.arguments == 'hello' for c in calls)
-        assert result.loopdata.failed_loops == 1
+        assert result.loopdata.failed_loop_cnt == 1
 
 
 def make_code_call(source):
@@ -223,7 +223,7 @@ def test_chat_code_that_only_prints_gets_the_hint():
     with LoopTest(config_defaults=make_loop_config([make_code_call('print(9)'), dict(text='done')])) as app:
         result = app.ai.chat([dict(role='user', content='hi')], agent='plain')
         assert get_tool_contents(result) == [HINT]
-        assert result.loopdata.failed_loops == 1
+        assert result.loopdata.failed_loop_cnt == 1
 
 
 def test_chat_code_that_delivers_a_value_gets_it():
@@ -231,7 +231,7 @@ def test_chat_code_that_delivers_a_value_gets_it():
     with LoopTest(config_defaults=make_loop_config([make_code_call('x = 9'), dict(text='done')])) as app:
         result = app.ai.chat([dict(role='user', content='hi')], agent='plain')
         assert get_tool_contents(result) == ['9']
-        assert result.loopdata.failed_loops == 0
+        assert result.loopdata.failed_loop_cnt == 0
 
 
 def test_chat_code_that_keeps_printing_ends_at_max_loops():

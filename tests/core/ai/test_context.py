@@ -66,7 +66,7 @@ def test_context_empty_when_unseeded():
     assert ctx.current_invocation is None
     assert isinstance(ctx.loopdata, TokeoAiLoopdata)
     assert ctx.loopdata.steps == 0
-    assert ctx.loopdata.failed_loops == 0
+    assert ctx.loopdata.failed_loop_cnt == 0
     assert isinstance(ctx.turndata, TokeoAiTurndata)
     assert ctx.turndata == {}
 
@@ -220,9 +220,9 @@ def test_status_counters_are_mutable_in_place():
     """The loop counters live on ctx.loopdata and are advanced there in place."""
     ctx = TokeoAiContext()
     ctx.loopdata.steps += 1
-    ctx.loopdata.failed_loops += 2
+    ctx.loopdata.failed_loop_cnt += 2
     assert ctx.loopdata.steps == 1
-    assert ctx.loopdata.failed_loops == 2
+    assert ctx.loopdata.failed_loop_cnt == 2
 
 
 def test_userdata_defaults_to_none():

@@ -336,7 +336,7 @@ class TokeoAiLoopdata:
 
     - **steps** (int): The number of tool rounds run so far, against
         ```max_steps```
-    - **failed_loops** (int): Consecutive rounds with no successful tool call,
+    - **failed_loop_cnt** (int): Consecutive rounds with no successful tool call,
         against ```max_loops```; reset by any successful call
 
     """
@@ -344,7 +344,7 @@ class TokeoAiLoopdata:
     #: The number of tool rounds run so far, against ```max_steps```
     steps: int = 0
     #: Consecutive rounds with no successful tool call, against ```max_loops```
-    failed_loops: int = 0
+    failed_loop_cnt: int = 0
 
 
 class TokeoAiTurndata(dict):
@@ -397,7 +397,7 @@ class TokeoAiRunResult:
         reasoning, tool_calls, usage, raw). The answer is not always plain text
         (a refusal is distinct from empty text), so the full ```TokeoAiChatResult```
         is kept, not a flattened string.
-    - the loopdata: the loop's counters (```steps```, ```failed_loops```).
+    - the loopdata: the loop's counters (```steps```, ```failed_loop_cnt```).
     - the trace: the ordered ```TraceStep``` history of the run (every
         model round, tool call, and guard that ran).
     - the confirmations: every confirm decision of the run, in order.
@@ -416,7 +416,7 @@ class TokeoAiRunResult:
     - **trace** (list): The run's ```TraceStep``` history, in order
     - **confirmations** (list): Every confirm decision of the run in order,
         each a dict (stage, guard_name, subject_dict, previous_decision,
-        previous_reason, answer, decision, note, by, who, retries, is_recalled,
+        previous_reason, answer, decision, note, by, who, retries, recalled,
         at as a UTC ```datetime```), for the app to keep and learn from
 
     """

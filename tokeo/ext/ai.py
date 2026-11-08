@@ -538,10 +538,10 @@ class TokeoAi(MetaMixin):
         # the resolved set of denied tools, shared by the spec-trimming and the
         # exec-time defence line so both always agree: the agent's deny, the
         # profile's deny, and the call's deny, each a single name or a group
-        denied = set(self._resolve_tools(as_list(agent_obj._config('deny'))))
-        denied |= set(self._resolve_tools(as_list((profile or {}).get('deny'))))
-        denied |= set(self._resolve_tools(as_list(call_deny)))
-        return denied
+        denied_tools = set(self._resolve_tools(as_list(agent_obj._config('deny'))))
+        denied_tools |= set(self._resolve_tools(as_list((profile or {}).get('deny'))))
+        denied_tools |= set(self._resolve_tools(as_list(call_deny)))
+        return denied_tools
 
     def _get_active_tools(self, agent_obj, profile, call_deny=None):
         # the active tool set: the agent's tools minus the shared deny set. a
@@ -549,8 +549,8 @@ class TokeoAi(MetaMixin):
         # add a tool the agent does not carry. tools resolve to concrete names
         # first (so a denied group removes all its members), order is kept
         active = self._resolve_tools(as_list(agent_obj._config('tools')))
-        denied = self._get_deny_set(agent_obj, profile, call_deny)
-        return [name for name in active if name not in denied]
+        denied_tools = self._get_deny_set(agent_obj, profile, call_deny)
+        return [name for name in active if name not in denied_tools]
 
     def _get_governor(self, config_name):
         # build the governor for a config name (the name as written) once and
@@ -635,13 +635,13 @@ class TokeoAi(MetaMixin):
         name = find_sandbox(tool_name, as_list(agent_obj._config('sandboxes')), self._sandboxes.get, self._resolve_tools)
         return self._get_sandbox(name) if name is not None else None
 
-    def _is_denied(self, tool_name, agent_obj, profile, call_deny=None):
+    def _denied(self, tool_name, agent_obj, profile, call_deny=None):
         # the exec-time defence line: refuse a tool that is in the shared deny
         # set before any sandbox lookup, the same set used to trim the specs,
         # so a model calling a carved-out tool is refused here too
         return tool_name in self._get_deny_set(agent_obj, profile, call_deny)
 
-    def _is_offered(self, tool_name, agent_obj, profile, call_deny=None):
+    def _offered(self, tool_name, agent_obj, profile, call_deny=None):
         # a tool runs only when the agent offers it: its tools minus every deny,
         # the same set the model was shown
         return tool_name in self._get_active_tools(agent_obj, profile, call_deny)
@@ -704,9 +704,9 @@ class TokeoAi(MetaMixin):
         # chosen sandbox contains the ```tool.exec```. when an invocation is
         # passed, record WHERE it ran (the configured sandbox name) so the
         # trace and audit can show it
-        if self._is_denied(tool_name, agent_obj, profile, call_deny):
+        if self._denied(tool_name, agent_obj, profile, call_deny):
             raise TokeoAiError(f'tool {tool_name!r} is denied')
-        if not self._is_offered(tool_name, agent_obj, profile, call_deny):
+        if not self._offered(tool_name, agent_obj, profile, call_deny):
             raise TokeoAiError(f'tool {tool_name!r} is not offered by the agent')
         tool = self._get_tool(tool_name)
         sandbox = self._find_sandbox(tool_name, agent_obj)
@@ -1021,8 +1021,8 @@ class TokeoAi(MetaMixin):
                 # call (every call denied or failing); 0 is unlimited. this stops
                 # a model stuck repeating broken calls, while any successful call
                 # resets the counter and lets honest work continue
-                ctx.loopdata.failed_loops = 0 if succeeded else ctx.loopdata.failed_loops + 1
-                if max_loops and ctx.loopdata.failed_loops >= max_loops:
+                ctx.loopdata.failed_loop_cnt = 0 if succeeded else ctx.loopdata.failed_loop_cnt + 1
+                if max_loops and ctx.loopdata.failed_loop_cnt >= max_loops:
                     raise TokeoAiError(f'ai max_loops ({max_loops}) reached, execution aborted')
                 # on_prompt again before the follow-up model call
                 self._govern(at_prompt, create_messages_step(GOVERNOR_STAGE_ON_PROMPT), None)

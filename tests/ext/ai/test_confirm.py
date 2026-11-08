@@ -91,7 +91,7 @@ def test_a_yes_confirms_the_decision_and_is_recorded():
     confirmation = result.confirmations[0]
     assert (confirmation['answer'], confirmation['by'], confirmation['who'], confirmation['decision']) == ('yes', 'human', 'tom', 'allow')
     assert confirmation['subject_dict'] == dict(tool='echo', arguments=dict(text='moin'))
-    assert (confirmation['previous_reason'], confirmation['retries'], confirmation['is_recalled']) == (None, 0, False)
+    assert (confirmation['previous_reason'], confirmation['retries'], confirmation['recalled']) == (None, 0, False)
 
 
 def test_a_yes_never_turns_the_no_of_a_guard_into_a_yes():
@@ -112,7 +112,7 @@ def test_yes_run_is_recalled_only_for_the_same_question():
     result, asked = run_chat(make_confirm_config([make_call('a'), make_call('a'), make_call('b'), dict(text='done')]), YES_RUN)
     assert get_tool_contents(result) == ['a', 'a', 'b']
     assert [request.subject.arguments for request in asked] == [dict(text='a'), dict(text='b')]
-    assert [(c['is_recalled'], c['by']) for c in result.confirmations] == [(False, 'human'), (True, 'human'), (False, 'human')]
+    assert [(c['recalled'], c['by']) for c in result.confirmations] == [(False, 'human'), (True, 'human'), (False, 'human')]
 
 
 def test_no_retry_lets_the_guards_judge_anew_with_the_note():
