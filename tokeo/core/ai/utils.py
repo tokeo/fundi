@@ -97,7 +97,7 @@ class TokeoAiTraceJsonEncoder(TokeoJsonUnknownNameEncoder):
         """
         Encode a trace step, dropping its object on an unchanged compact step.
 
-        A ```TraceStep``` with ```is_changed=False``` left its object exactly as
+        A ```TraceStep``` with ```changed=False``` left its object exactly as
         the last changed step already showed it, so its object is pure
         repetition; in compact mode this renders the step without the
         ```object``` field. A changed step keeps its object. Everything else
@@ -118,11 +118,11 @@ class TokeoAiTraceJsonEncoder(TokeoJsonUnknownNameEncoder):
         # a trace step: render its fields, and drop the object when the step is
         # unchanged; an unchanged step repeats the object the last changed step
         # already showed, so it is pure repetition in the compact view. a changed
-        # step keeps its object (it shows what actually changed). the is_changed
+        # step keeps its object (it shows what actually changed). the changed
         # flag is read off the built dict, after the type is known
         if self.is_compact and isinstance(obj, TraceStep):
             step = dict(obj.__dict__)
-            if not step['is_changed']:
+            if not step['changed']:
                 del step['object']
             return step
         return super().encode(obj)

@@ -120,19 +120,19 @@ class TokeoAiContext:
         for message in messages or []:
             self.track(self, message if isinstance(message, TokeoAiChatMessage) else TokeoAiChatMessage(message))
 
-    def _append_step(self, origin, obj, is_changed, stage):
+    def _append_step(self, origin, obj, changed, stage):
         """
         Append one TraceStep, the shared trace-write of track/supersede/refine.
 
         The trace half that every recorder has in common: build the step (origin,
-        object, is_changed, stage) and append it. The cache half differs per
+        object, changed, stage) and append it. The cache half differs per
         recorder and stays in each.
 
         ### Args
 
         - **origin**: Who produced the step (the loop or a guard)
         - **obj**: The object as it stood after the step
-        - **is_changed** (bool): Whether a new object was introduced
+        - **changed** (bool): Whether a new object was introduced
         - **stage**: The guard stage, or None for a loop track
 
         """
@@ -140,7 +140,7 @@ class TokeoAiContext:
         # in track/supersede/refine_messages, so guards keep working
         if not self._with_trace:
             return
-        self._trace.append(TraceStep(origin=origin, object=obj, is_changed=is_changed, stage=stage))
+        self._trace.append(TraceStep(origin=origin, object=obj, changed=changed, stage=stage))
 
     def track(self, origin, obj, stage=None):
         """
@@ -200,10 +200,10 @@ class TokeoAiContext:
         - ```result``` is ```None``` or the *same* object as ```current```:
             the guard added no new object (it mutated in place, or did nothing).
             The cache is left alone; the step records ```current``` with
-            ```is_changed=False```. The current working reference is unchanged.
+            ```changed=False```. The current working reference is unchanged.
         - ```result``` is a *different* object: the guard handed back a fresh
             copy. It supersedes the last cache entry of its kind, and the step
-            records it with ```is_changed=True```. The returned object becomes
+            records it with ```changed=True```. The returned object becomes
             the new working reference.
 
         A guard whose return is neither ```None``` nor the same nor the same
@@ -255,14 +255,14 @@ class TokeoAiContext:
 
         - ```result``` is ```None``` or *is* the live ```messages``` list: the
             guard refined in place (or did nothing). The cache is left alone; the
-            step records a snapshot of the list with ```is_changed=False```.
+            step records a snapshot of the list with ```changed=False```.
         - ```result``` is a *new* list: the guard built a fresh conversation
             (a trimmed history, an injected system turn). Its items must all be
             mappings (a ```TokeoAiChatMessage``` is a ```dict```), or it is a guard
             bug and this raises. The whole ```TokeoAiChatMessage``` cache is
             replaced by the new turns (wrapped as ```TokeoAiChatMessage```), in
             place so existing references to the live list stay valid; the step
-            records a snapshot with ```is_changed=True```.
+            records a snapshot with ```changed=True```.
 
         The step holds a shallow copy of the list, not the live cache, so it
         shows the conversation as it stood at this stage; the live list keeps

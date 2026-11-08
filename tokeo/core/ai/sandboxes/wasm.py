@@ -84,12 +84,12 @@ class Encoder(TokeoJsonUnknownNoneEncoder):
 
     def __init__(self):
         super().__init__()
-        self.is_substituted = False
+        self.substituted = False
 
     def encode(self, obj):
         result = super().encode(obj)
         if result is None:
-            self.is_substituted = True
+            self.substituted = True
             return type(obj).__name__
         return result
 
@@ -100,7 +100,7 @@ def deliver(value):
     encoder = Encoder()
     as_json = dump_json(value, encoder=encoder)
     with open('/io/value.json', 'w') as f:
-        json.dump(dict(as_str=str(value), as_json=as_json, is_incomplete=encoder.is_substituted), f)
+        json.dump(dict(as_str=str(value), as_json=as_json, is_incomplete=encoder.substituted), f)
 """
 
 # the untrusted entry: runs the code argument, rebuilds no tool from tokeo

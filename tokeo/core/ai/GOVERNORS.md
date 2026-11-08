@@ -136,17 +136,17 @@ on the invocation identity, not on the result inside it.
 ```mermaid
 flowchart TD
     Gov["governor.on_return<br/>changes the result"] --> Choice{"what does it<br/>return?"}
-    Choice -->|"None / same invocation"| InPlace["is_changed = False<br/>cache untouched,<br/>chain sees the change"]
-    Choice -->|"a new Invocation"| New["is_changed = True<br/>cache swapped,<br/>trace marks a transition"]
+    Choice -->|"None / same invocation"| InPlace["changed = False<br/>cache untouched,<br/>chain sees the change"]
+    Choice -->|"a new Invocation"| New["changed = True<br/>cache swapped,<br/>trace marks a transition"]
 ```
 
 - In place: mutate ```invocation.result``` and return ```None```. The step is
-    recorded with ```is_changed=False``` (the invocation identity did not
+    recorded with ```changed=False``` (the invocation identity did not
     change), but the invocation now carries the new result, so the next
     governor in the chain and the loop both see it. This is the common case.
 - A new invocation: build a fresh ```Invocation``` (e.g. with
     ```dataclasses.replace```) carrying the new result and return it. The step is
-    recorded with ```is_changed=True``` and the trace marks the transition with
+    recorded with ```changed=True``` and the trace marks the transition with
     the governor as its origin. Choose this when the trace should show the change
     as a distinct step, not just carry the new value on an unchanged one.
 

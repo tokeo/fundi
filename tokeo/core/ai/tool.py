@@ -265,7 +265,7 @@ class TokeoAiToolResultJsonEncoder(TokeoJsonUnknownNoneEncoder):
         #: (bool) Flipped the moment the base returns None for an unknown
         #: object, so after one dump_json it tells whether anything was
         #: substituted
-        self.is_substituted = False
+        self.substituted = False
 
     def encode(self, obj):
         """
@@ -278,7 +278,7 @@ class TokeoAiToolResultJsonEncoder(TokeoJsonUnknownNoneEncoder):
         ### Returns
 
         - **str|dict**: As the base for a handled type; the object's type name
-            for any other object, with ```is_substituted``` set so the caller
+            for any other object, with ```substituted``` set so the caller
             learns the json form is not faithful
 
         """
@@ -286,7 +286,7 @@ class TokeoAiToolResultJsonEncoder(TokeoJsonUnknownNoneEncoder):
         if result is None:
             # the base handled no known type, so json would render null; name
             # the object instead and mark that the json form is not faithful
-            self.is_substituted = True
+            self.substituted = True
             return type(obj).__name__
         return result
 
@@ -325,7 +325,7 @@ def create_tool_result(value, as_str=None, state=None):
     # aliased); is_incomplete starts from the encoder's finding, then a state
     # dict sets only its named fields onto it; a partial dict keeps the derived
     # is_incomplete. walking fields() covers a new ToolStates field untouched here
-    toolstate = ToolStates(is_incomplete=encoder.is_substituted)
+    toolstate = ToolStates(is_incomplete=encoder.substituted)
     if isinstance(state, dict):
         for f in fields(ToolStates):
             if f.name in state:

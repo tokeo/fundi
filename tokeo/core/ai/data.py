@@ -294,7 +294,7 @@ class TraceStep:
         attributable
     - **object**: The run object as it stood after this step (a
         ```TokeoAiChatMessage```, ```Invocation```, ```TokeoAiChatResult```, ...)
-    - **is_changed** (bool): Whether this step introduced a *new* object (a
+    - **changed** (bool): Whether this step introduced a *new* object (a
         guard returned a fresh copy) rather than leaving the existing one in
         place. A ```track``` is always a new object; a ```supersede``` is
         ```True``` only when the guard handed back a different object
@@ -311,7 +311,7 @@ class TraceStep:
     #: The run object as it stood after this step
     object: object
     #: Whether this step introduced a new object
-    is_changed: bool = True
+    changed: bool = True
     #: (str|None) The stage that recorded this step; ```None``` for a loop
     #: track (a fresh object the loop added outside any stage)
     stage: object = None
