@@ -6,9 +6,9 @@ configuration build-up and validation); this re-exports it so the short path
 ```from tokeo.core.ai.linter import TokeoAiLinter``` keeps working.
 """
 
-from tokeo.core.ai.config.linter import TokeoAiLinter, AiLintIssue
+from tokeo.core.ai.config.linter import TokeoAiLinter, TokeoAiLintIssue
 
 __all__ = [
     'TokeoAiLinter',
-    'AiLintIssue',
+    'TokeoAiLintIssue',
 ]

@@ -86,7 +86,7 @@ from tokeo.ext.argparse import Controller
 from tokeo.core.utils.validate import as_list
 from tokeo.core.utils.modules import resolve_object, TokeoModulesLoadError
 from tokeo.core.utils.json import dump_json, TokeoJsonUnknownNameEncoder
-from tokeo.core.ai.utils import parse_model_params, TokeoJsonAiTraceEncoder
+from tokeo.core.ai.utils import parse_model_params, TokeoAiTraceJsonEncoder
 from tokeo.core.ai import (
     TokeoAiError,
     Invocation,
@@ -1176,7 +1176,7 @@ class _ChatCompleter(Completer):
                     yield Completion(switch, start_position=-len(current_word))
 
 
-class AiController(Controller):
+class TokeoAiController(Controller):
     """
     Ai command group for the agentic and ai-facing commands.
 
@@ -1261,7 +1261,7 @@ class AiController(Controller):
 
     def _print_trace(self, result):
         # the whole result with the full or the compact trace
-        self.app.print(dump_json(result, encoder=TokeoJsonAiTraceEncoder(is_compact=self.app.pargs.trace_compact), indent=2))
+        self.app.print(dump_json(result, encoder=TokeoAiTraceJsonEncoder(is_compact=self.app.pargs.trace_compact), indent=2))
 
     def _format_decline(self, err):
         # the line for a run a governor declined
@@ -1635,4 +1635,4 @@ def load(app):
     app.hook.register('post_setup', ai_extend_app)
     # after the post_setup hooks of the project, which may register aliases
     app.hook.register('post_setup', ai_lint_on_setup, weight=100)
-    app.handler.register(AiController)
+    app.handler.register(TokeoAiController)

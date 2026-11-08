@@ -78,7 +78,7 @@ def parse_model_params(pairs):
     return params
 
 
-class TokeoJsonAiTraceEncoder(TokeoJsonUnknownNameEncoder):
+class TokeoAiTraceJsonEncoder(TokeoJsonUnknownNameEncoder):
     """
     JSON encoder for the ```ai ask --trace``` export.
 

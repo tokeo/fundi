@@ -72,7 +72,7 @@ _SANDBOX_KEYS = {'type', 'tools', 'except', 'options'}
 
 
 @dataclass
-class AiLintIssue:
+class TokeoAiLintIssue:
     """
     A single ai configuration problem found by the linter.
 
@@ -115,7 +115,7 @@ class TokeoAiLinter:
     def __init__(self, app):
         #: The Tokeo application instance
         self.app = app
-        #: (list) The ```AiLintIssue``` entries of the last ```lint```
+        #: (list) The ```TokeoAiLintIssue``` entries of the last ```lint```
         self.issues = []
         self._validators = {}
         # built-in element validations; a project or a later derivation adds
@@ -141,7 +141,7 @@ class TokeoAiLinter:
         - **section** (str): The ```ai``` section to validate (for example
             ```agents``` or ```guards```)
         - **validator** (callable): Called as ```validator(section, name,
-            value)``` per element; it returns an iterable of ```AiLintIssue```
+            value)``` per element; it returns an iterable of ```TokeoAiLintIssue```
             entries (or ```None``` when it reports through the linter itself).
             It may also raise: a ```TokeoAiError``` becomes an error issue with
             its message at the element, any other exception is reported as a
@@ -156,7 +156,7 @@ class TokeoAiLinter:
 
         ### Returns
 
-        - **list**: ```AiLintIssue``` entries; an empty list means the
+        - **list**: ```TokeoAiLintIssue``` entries; an empty list means the
             configuration is sound
 
         """
@@ -516,7 +516,7 @@ class TokeoAiLinter:
                 self._add_issue(path, _format_unknown(what, entry, known))
 
     def _add_issue(self, path, message, level='error'):
-        self.issues.append(AiLintIssue(path, message, level))
+        self.issues.append(TokeoAiLintIssue(path, message, level))
 
     def _get_value(self, key):
         # read one ```ai``` config value; a missing key raises in cement, so

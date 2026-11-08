@@ -249,7 +249,7 @@ class TokeoAiTool(MetaMixin):
         """
 
 
-class TokeoJsonAiToolResultEncoder(TokeoJsonUnknownNoneEncoder):
+class TokeoAiToolResultJsonEncoder(TokeoJsonUnknownNoneEncoder):
     """
     Encoder that names an unknown object and records that it did so.
 
@@ -319,7 +319,7 @@ def create_tool_result(value, as_str=None, state=None):
     """
     # one encode pass: the encoder names every object it has to substitute and
     # flips its flag, so is_incomplete is observed in the same dump as as_json
-    encoder = TokeoJsonAiToolResultEncoder()
+    encoder = TokeoAiToolResultJsonEncoder()
     as_json = dump_json(value, encoder=encoder)
     # always a fresh states owned by this result (so nothing the caller holds is
     # aliased); is_incomplete starts from the encoder's finding, then a state
