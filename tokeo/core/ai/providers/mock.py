@@ -14,7 +14,7 @@ the same result, and the ```[mock]``` marker keeps it obvious that no real model
 was involved.
 """
 
-from tokeo.core.ai import TokeoAiProvider, ChatResult, ToolCall, Usage
+from tokeo.core.ai import TokeoAiProvider, TokeoAiChatResult, TokeoAiToolCall, TokeoAiUsage
 
 
 class TokeoAiMockProvider(TokeoAiProvider):
@@ -50,7 +50,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
 
         ### Returns
 
-        - **ChatResult**: The faked, deterministic response
+        - **TokeoAiChatResult**: The faked, deterministic response
 
         """
         messages = messages or []
@@ -75,7 +75,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         match = self._match_tool(prompt, tools)
         if match is not None:
             spec, argument = match
-            call = ToolCall(
+            call = TokeoAiToolCall(
                 id='call_1',
                 name=self._get_tool_name(spec),
                 arguments=self._build_tool_arguments(spec, argument),
@@ -105,8 +105,8 @@ class TokeoAiMockProvider(TokeoAiProvider):
     def _create_codeact_call(self, prompt, tools):
         # recognise ```text <op> <sentence>``` and, when a code-running tool is
         # on offer, build a tool call whose code computes the value. returns a
-        # ToolCall or None (so the normal tool/echo paths still apply). the tool
-        # is matched by SHAPE (it takes a single ```code``` parameter), not by
+        # TokeoAiToolCall or None (so the normal tool/echo paths still apply). the
+        # tool is matched by SHAPE (it takes a single ```code``` parameter), not by
         # a fixed name, since the config name is the project's to choose
         if not prompt or not tools:
             return None
@@ -123,7 +123,7 @@ class TokeoAiMockProvider(TokeoAiProvider):
         # the synthesized snippet: assign the computed value to ```result```,
         # which the exec tool returns. the sentence is embedded as a literal
         code = f'result = {template.format(s=sentence.strip())}'
-        return ToolCall(id='call_1', name=self._get_tool_name(coder), arguments={'code': code})
+        return TokeoAiToolCall(id='call_1', name=self._get_tool_name(coder), arguments={'code': code})
 
     def _find_code_tool(self, tools):
         # the code-running tool is the one whose only/first parameter is
@@ -179,11 +179,11 @@ class TokeoAiMockProvider(TokeoAiProvider):
         return {key: value} if key else {}
 
     def _create_result(self, text, tool_calls=None, finish_reason='stop'):
-        # build a ChatResult with deterministic, faked token usage
-        return ChatResult(
+        # build a TokeoAiChatResult with deterministic, faked token usage
+        return TokeoAiChatResult(
             text=text,
             tool_calls=tool_calls or [],
-            usage=Usage(completion_tokens=len(text.split()), total_tokens=len(text.split())),
+            usage=TokeoAiUsage(completion_tokens=len(text.split()), total_tokens=len(text.split())),
             finish_reason=finish_reason,
             raw={'provider': 'mock', 'text': text},
         )

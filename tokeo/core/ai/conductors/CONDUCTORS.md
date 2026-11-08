@@ -78,8 +78,8 @@ from tokeo.core.utils.uid import get_token_hex
 - ```drop_tool_calls(result, name=None)```: remove one kind by name, or all
   with ```None```.
 
-Both return a new ```ChatResult```; hand it back and ```supersede``` takes it.
-From the two you get every strategy: append only (```add_tool_call```), full
+Both return a new ```TokeoAiChatResult```; hand it back and ```supersede``` takes
+it. From the two you get every strategy: append only (```add_tool_call```), full
 replace (```drop_tool_calls(result)``` then ```add_tool_call```), targeted swap
 (```drop_tool_calls(result, 'x')``` then ```add_tool_call(..., 'y')```), or
 defensive append (```if not result.tool_calls: add_tool_call(...)```).

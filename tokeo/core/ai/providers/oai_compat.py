@@ -5,8 +5,8 @@ A thin synchronous client over the OpenAI-compatible chat-completions transport,
 the protocol that Ollama, llama.cpp, vLLM, MLX and the commercial APIs all
 speak, so one provider serves them all. It is a dumb transport: it posts the
 messages (and any tool specs) to ```{base_url}/chat/completions``` and maps the
-reply into a ```ChatResult```, turning the native ```tool_calls``` into
-```ToolCall``` objects; the governors only ever see that one form.
+reply into a ```TokeoAiChatResult```, turning the native ```tool_calls``` into
+```TokeoAiToolCall``` objects; the governors only ever see that one form.
 
 It is sync on purpose: the agent loop is synchronous and
 needs the whole result before it can run the next tool round. Streaming, if it
@@ -22,7 +22,7 @@ import json
 import httpx
 
 from tokeo.core.utils.validate import is_filled_str
-from tokeo.core.ai import TokeoAiError, TokeoAiProvider, ChatResult, ToolCall, Usage
+from tokeo.core.ai import TokeoAiError, TokeoAiProvider, TokeoAiChatResult, TokeoAiToolCall, TokeoAiUsage
 
 
 class TokeoAiOaiCompatProvider(TokeoAiProvider):
@@ -40,8 +40,8 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         ```http://localhost:11434/v1```), ```key``` (optional bearer token; omit
         for an open local endpoint), ```timeout``` (seconds, default 120;
         inference is slow, so the default is generous)
-    - The unmodified server reply is kept on ```ChatResult.raw```, so a caller
-        can always inspect exactly what came back
+    - The unmodified server reply is kept on ```TokeoAiChatResult.raw```, so a
+        caller can always inspect exactly what came back
     - Errors become a clear ```TokeoAiError```: an unreachable endpoint, a
         timeout, or a non-2xx status (with a short body excerpt), never a
         raw transport traceback across the boundary
@@ -79,7 +79,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
 
         ### Returns
 
-        - **ChatResult**: Text, reasoning, refusal, tool_calls, usage,
+        - **TokeoAiChatResult**: Text, reasoning, refusal, tool_calls, usage,
             finish_reason, system_fingerprint, and the raw reply
 
         ### Raises
@@ -143,9 +143,9 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         return self._create_result(data)
 
     def _create_result(self, data):
-        # map a chat-completions reply into a ChatResult; missing fields degrade
-        # to sensible empties rather than raising, so an odd-but-valid reply is
-        # still usable and fully visible on ```raw```
+        # map a chat-completions reply into a TokeoAiChatResult; missing fields
+        # degrade to sensible empties rather than raising, so an odd-but-valid reply
+        # is still usable and fully visible on ```raw```
         choices = data.get('choices') or [{}]
         first = choices[0] if choices else {}
         message = first.get('message') or {}
@@ -160,7 +160,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         tool_calls = self._parse_tool_calls(message.get('tool_calls') or [])
         usage = self._parse_usage(data.get('usage'))
         finish_reason = first.get('finish_reason')
-        return ChatResult(
+        return TokeoAiChatResult(
             text=text,
             reasoning=reasoning,
             refusal=refusal,
@@ -172,9 +172,9 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         )
 
     def _parse_tool_calls(self, raw_calls):
-        # turn native function tool_calls into our ToolCall objects. arguments
-        # arrive as a JSON STRING in the openai shape, so parse it; empty means
-        # no arguments. anything else, malformed json or json that is no
+        # turn native function tool_calls into our TokeoAiToolCall objects.
+        # arguments arrive as a JSON STRING in the openai shape, so parse it; empty
+        # means no arguments. anything else, malformed json or json that is no
         # object, is kept as it came: the loop refuses that call and the trace
         # shows what the model really sent
         calls = []
@@ -195,7 +195,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
                 arguments = {}
             else:
                 arguments = raw_args
-            calls.append(ToolCall(id=call.get('id') or f'call_{index + 1}', name=name, arguments=arguments))
+            calls.append(TokeoAiToolCall(id=call.get('id') or f'call_{index + 1}', name=name, arguments=arguments))
         return calls
 
     def _parse_usage(self, raw_usage):
@@ -203,7 +203,7 @@ class TokeoAiOaiCompatProvider(TokeoAiProvider):
         # local servers, so None is a normal outcome
         if not isinstance(raw_usage, dict):
             return None
-        return Usage(
+        return TokeoAiUsage(
             prompt_tokens=raw_usage.get('prompt_tokens') or 0,
             completion_tokens=raw_usage.get('completion_tokens') or 0,
             total_tokens=raw_usage.get('total_tokens') or 0,

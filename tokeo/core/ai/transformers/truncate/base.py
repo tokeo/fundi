@@ -36,11 +36,10 @@ class TokeoAiTruncateTransformer(TokeoAiTransformer):
     ```TokeoAiTransformer```: it states the transformer's role (shortening) on
     the agent and the trace. For *what object each stage hands you and which text
     to shorten* (```on_return``` the ```invocation.result.value.as_str``` of a
-    completed tool call; ```on_close``` the final ```ChatResult.text``` of the
-    whole run; ```on_answer``` a per-round ```ChatResult.text```), see the stage
-    guide in the ```tokeo.core.ai.governor.TokeoAiGovernor``` class
-    documentation, the single reference for building a governor across its
-    stages.
+    completed tool call; ```on_close``` the final ```TokeoAiChatResult.text``` of
+    the whole run; ```on_answer``` a per-round ```TokeoAiChatResult.text```), see
+    the stage guide in the ```tokeo.core.ai.governor.TokeoAiGovernor``` class
+    documentation, the single reference for building a governor across its stages.
 
     A truncate transformer only shortens and does not stop the run. If shortening
     is *required* and cannot be applied (the run must not carry an oversized

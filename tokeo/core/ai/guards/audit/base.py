@@ -33,7 +33,7 @@ class TokeoAiAuditGuard(TokeoAiGuard):
     ```TokeoAiGuard```: it states the guard's role (observation) on the agent
     and the trace. For *what object each stage hands you and how to read it*
     (```on_begin```/```on_prompt``` see ```ctx.messages```, ```on_answer```/
-    ```on_close``` a ```ChatResult```, ```on_call```/```on_return``` an
+    ```on_close``` a ```TokeoAiChatResult```, ```on_call```/```on_return``` an
     ```Invocation```), see the stage guide in the ```TokeoAiGovernor``` class
     documentation, the single reference for building a guard across its
     stages. An audit guard uses those objects read-only.

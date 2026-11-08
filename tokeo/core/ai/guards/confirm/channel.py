@@ -80,7 +80,7 @@ class TokeoAiConfirmRequest:
     ### Args
 
     - **subject**: What is to be confirmed: the ```Invocation``` at the tool
-        stages, the ```ChatResult``` at ```on_answer```/```on_close```, the
+        stages, the ```TokeoAiChatResult``` at ```on_answer```/```on_close```, the
         messages at ```on_begin```/```on_prompt```
     - **decision** (str): The decision the guards reached, ```allow``` or
         ```deny```

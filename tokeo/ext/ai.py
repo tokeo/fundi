@@ -90,13 +90,13 @@ from tokeo.core.ai.utils import parse_model_params, TokeoJsonAiTraceEncoder
 from tokeo.core.ai import (
     TokeoAiError,
     Invocation,
-    ChatMessage,
+    TokeoAiChatMessage,
     ToolResult,
     ToolStates,
     TokeoAiTurndata,
     TokeoAiContext,
     TokeoAiFundiAgent,
-    TokeoAiResult,
+    TokeoAiRunResult,
     TokeoAiRunDeclinedError,
     TokeoAiTraceNote,
 )
@@ -486,9 +486,10 @@ class TokeoAi(MetaMixin):
         return self._resolve_tools(as_list(names))
 
     def _build_tool_specs(self, config_names):
-        # build openai-style function specs from the tools' Meta; the model-
-        # facing function name IS the config name (that is what comes back as
-        # ToolCall.name); unknown names are skipped, an empty list yields none
+        # build openai-style function specs from the tools' Meta; the
+        # model-facing function name IS the config name (that is what comes back
+        # as TokeoAiToolCall.name); unknown names are skipped, an empty list
+        # yields none
         specs = []
         for config_name in config_names or []:
             try:
@@ -831,7 +832,7 @@ class TokeoAi(MetaMixin):
         notes=None,
     ):
         """
-        Run the agent loop and return the run's ```TokeoAiResult```.
+        Run the agent loop and return the run's ```TokeoAiRunResult```.
 
         Resolves a profile (the model), then calls the provider. The active
         tools come from the agent (the composition root, which also sets the
@@ -877,8 +878,8 @@ class TokeoAi(MetaMixin):
 
         ### Returns
 
-        - **TokeoAiResult**: The run result: the final answer (a
-            ```ChatResult```, no pending tool calls), the trace, the counters
+        - **TokeoAiRunResult**: The run result: the final answer (a
+            ```TokeoAiChatResult```, no pending tool calls), the trace, the counters
             and the confirmations
 
         ### Raises
@@ -968,7 +969,7 @@ class TokeoAi(MetaMixin):
                 # reaching it aborts loudly: a silent empty answer hides the cause
                 if max_steps and ctx.loopdata.steps >= max_steps:
                     raise TokeoAiError(f'ai max_steps ({max_steps}) reached, execution aborted')
-                ctx.track(self, ChatMessage(self._build_assistant_turn(result)))
+                ctx.track(self, TokeoAiChatMessage(self._build_assistant_turn(result)))
                 succeeded = False
                 for call in result.tool_calls:
                     if call.arguments is not None and not isinstance(call.arguments, dict):
@@ -976,7 +977,7 @@ class TokeoAi(MetaMixin):
                         # guard: no guessing, the model gets the reason and the
                         # trace keeps the raw value on the answer it came with
                         content = f'error: arguments must be a JSON object, got {type(call.arguments).__name__}'
-                        ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
+                        ctx.track(self, TokeoAiChatMessage(role='tool', tool_call_id=call.id, content=content))
                         continue
                     if tool_governed:
                         # the invocation is tracked inside _exec_governed at
@@ -1014,7 +1015,7 @@ class TokeoAi(MetaMixin):
                             content = f'error: {type(err).__name__}: {err}'
                             is_successful = False
                     succeeded = succeeded or is_successful
-                    ctx.track(self, ChatMessage(role='tool', tool_call_id=call.id, content=content))
+                    ctx.track(self, TokeoAiChatMessage(role='tool', tool_call_id=call.id, content=content))
                 ctx.loopdata.steps += 1
                 # max_loops limits the consecutive rounds without one successful
                 # call (every call denied or failing); 0 is unlimited. this stops
@@ -1030,15 +1031,15 @@ class TokeoAi(MetaMixin):
                 result = self._govern(at_answer, create_result_step(GOVERNOR_STAGE_ON_ANSWER), result)
             # on_close: once, on the final result, after the loop
             result = self._govern(at_close, create_result_step(GOVERNOR_STAGE_ON_CLOSE), result)
-            # the run result: the final answer (a ChatResult), plus the run's
+            # the run result: the final answer (a TokeoAiChatResult), plus the run's
             # history, counters and confirmations lifted off the context (which
             # ends here). the answer is just the model answer
-            return TokeoAiResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace, confirmations=ctx.confirmations)
+            return TokeoAiRunResult(answer=result, loopdata=ctx.loopdata, trace=ctx.trace, confirmations=ctx.confirmations)
         except TokeoAiRunDeclinedError as err:
             # the declined answer stays on the trace only, so no caller uses it
             # by mistake
             ctx.track(self, TokeoAiTraceNote(dict(decline=dict(stage=err.stage, reason=err.reason, by=err.by))))
-            err.result = TokeoAiResult(loopdata=ctx.loopdata, trace=ctx.trace, confirmations=ctx.confirmations)
+            err.result = TokeoAiRunResult(loopdata=ctx.loopdata, trace=ctx.trace, confirmations=ctx.confirmations)
             raise
 
     def _build_assistant_turn(self, result):

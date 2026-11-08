@@ -49,7 +49,7 @@ flowchart TD
     Guards["governors<br/>(allow / deny / mask / limit / check)"] -->|allowed| Sandbox
     Sandbox["sandbox<br/>(the wall the tool runs behind)"] --> Result
     Guards -->|denied| Result
-    Result["TokeoAiResult"]
+    Result["TokeoAiRunResult"]
 ```
 
 .. important::
@@ -147,10 +147,10 @@ A guard acts at one or more stages of a tool call. The six stages, in order:
 |-------|------|--------------------|
 | ```on_begin``` | run start | the accumulated ```messages``` |
 | ```on_prompt``` | before the model is asked | the ```messages``` about to be sent |
-| ```on_answer``` | after each model answer | the round's ```ChatResult``` |
+| ```on_answer``` | after each model answer | the round's ```TokeoAiChatResult``` |
 | ```on_call``` | before a tool runs | the ```Invocation``` (may deny or reshape) |
 | ```on_return``` | after a tool ran | the completed ```Invocation``` (result/error) |
-| ```on_close``` | run end | the final ```ChatResult``` |
+| ```on_close``` | run end | the final ```TokeoAiChatResult``` |
 
 ### 4.1 Configuring a guard
 
@@ -272,9 +272,9 @@ a terminal channel when they run in a terminal; an app registers its own (a web
 page, a chat, a classifier, a model).
 
 The ```TokeoAiConfirmRequest``` holds ```subject``` (the ```Invocation``` at the
-tool stages, the ```ChatResult``` at ```on_answer```/```on_close```, the messages
-at ```on_begin```/```on_prompt```), ```decision``` and ```reason``` of the guards,
-```answer_values``` (the values an answer may have), ```stage```,
+tool stages, the ```TokeoAiChatResult``` at ```on_answer```/```on_close```, the
+messages at ```on_begin```/```on_prompt```), ```decision``` and ```reason``` of the
+guards, ```answer_values``` (the values an answer may have), ```stage```,
 ```guard_name``` (the config name), the ```userdata``` of the run and
 ```notes```. The
 ```TokeoAiConfirmAnswer``` holds ```value``` (```yes```, ```yes_run```, ```no```
@@ -783,7 +783,8 @@ by, and the run so far in ```result```), from ```ask``` as from ```chat```.
 
 ### 9.2 Full control and the full result with ```chat```
 
-```chat()``` takes a ```messages``` list and returns the whole ```TokeoAiResult```:
+```chat()``` takes a ```messages``` list and returns the whole
+```TokeoAiRunResult```:
 
 ```python
 result = app.ai.chat(
@@ -797,7 +798,7 @@ result = app.ai.chat(
     userdata={'tenant': 'acme'},
 )
 
-result.answer      # the model's ChatResult (result.answer.text is the text)
+result.answer      # the model's TokeoAiChatResult (result.answer.text is the text)
 result.trace       # the ordered step history (empty if ai.trace is false)
 result.loopdata    # the run's loop counters
 result.confirmations  # every confirm decision of the run, in order

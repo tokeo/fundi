@@ -31,7 +31,7 @@ class TokeoAiRunDeclinedError(TokeoAiError):
     - **stage** (str): The stage the run was declined at
     - **reason** (str): Why it was declined
     - **by** (str|None): Who decided (```human```, ```auto```, ```default```)
-    - **result** (TokeoAiResult|None): The run so far, set by ```chat```
+    - **result** (TokeoAiRunResult|None): The run so far, set by ```chat```
 
     """
 
@@ -43,5 +43,5 @@ class TokeoAiRunDeclinedError(TokeoAiError):
         self.reason = reason
         #: (str|None) Who decided: human, auto or default
         self.by = by
-        #: (TokeoAiResult|None) The run so far: trace, loopdata, confirmations
+        #: (TokeoAiRunResult|None) The run so far: trace, loopdata, confirmations
         self.result = result

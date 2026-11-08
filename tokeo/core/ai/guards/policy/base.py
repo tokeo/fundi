@@ -36,8 +36,8 @@ class TokeoAiPolicyGuard(TokeoAiGuard):
     and the trace. For *what object each stage hands you and how to act on it*
     (```on_call``` is where a pending ```Invocation``` is denied via its
     ```decision```/```reason```; ```on_begin```/```on_prompt``` see
-    ```ctx.messages```; ```on_answer```/```on_close``` a ```ChatResult```), see
-    the stage guide in the ```TokeoAiGovernor``` class documentation, the single
+    ```ctx.messages```; ```on_answer```/```on_close``` a ```TokeoAiChatResult```),
+    see the stage guide in the ```TokeoAiGovernor``` class documentation, the single
     reference for building a guard across its stages.
 
     The two levels of refusal matter most for a policy guard:

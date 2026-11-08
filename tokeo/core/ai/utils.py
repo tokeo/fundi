@@ -10,7 +10,7 @@ import yaml
 from dataclasses import replace
 
 from tokeo.core.ai import TokeoAiError
-from tokeo.core.ai.data import TraceStep, ToolCall
+from tokeo.core.ai.data import TraceStep, TokeoAiToolCall
 from tokeo.core.utils.json import TokeoJsonUnknownNameEncoder
 
 
@@ -132,9 +132,9 @@ def add_tool_call(result, name, call_id, /, **arguments):
     """
     Originate a tool call from the code side (the conductor pattern).
 
-    Appends a fresh ```ToolCall``` to ```result.tool_calls``` and returns a new
-    ```ChatResult``` (via ```replace```), because a governor's ```on_answer```
-    only counts as a change when it hands back a different object.
+    Appends a fresh ```TokeoAiToolCall``` to ```result.tool_calls``` and returns a
+    new ```TokeoAiChatResult``` (via ```replace```), because a governor's
+    ```on_answer``` only counts as a change when it hands back a different object.
 
     The id is passed in, not built here; the caller owns it (typically
     ```get_token_hex(4, 'inj_')``` from ```tokeo.core.utils.uid```, so it is
@@ -143,7 +143,7 @@ def add_tool_call(result, name, call_id, /, **arguments):
 
     ### Args
 
-    - **result** (ChatResult): The answer to add the call to
+    - **result** (TokeoAiChatResult): The answer to add the call to
     - **name** (str): The tool to call
     - **call_id** (str): The id for the new call, unique within the turn
     - **arguments**: The call's arguments as keywords
@@ -153,7 +153,7 @@ def add_tool_call(result, name, call_id, /, **arguments):
     : See the conductor docs for the append-vs-replace strategies (append only,
         full replace via ```drop_tool_calls``` first, or a targeted swap).
     """
-    call = ToolCall(id=call_id, name=name, arguments=arguments)
+    call = TokeoAiToolCall(id=call_id, name=name, arguments=arguments)
     return replace(result, tool_calls=[*result.tool_calls, call])
 
 
@@ -162,14 +162,14 @@ def drop_tool_calls(result, name=None):
     Drop tool calls from an answer before they run (the conductor pattern).
 
     With a ```name``` it removes every call of that name; with ```None``` it
-    removes all calls. Returns a new ```ChatResult``` (via ```replace```) for the
-    same reason as ```add_tool_call```. Together the two cover append-only,
+    removes all calls. Returns a new ```TokeoAiChatResult``` (via ```replace```) for
+    the same reason as ```add_tool_call```. Together the two cover append-only,
     full-replace (```drop_tool_calls``` then ```add_tool_call```), and targeted
     swap.
 
     ### Args
 
-    - **result** (ChatResult): The answer to trim
+    - **result** (TokeoAiChatResult): The answer to trim
     - **name** (str, optional): The call name to drop; ```None``` drops all
     """
     tool_calls = [] if name is None else [c for c in result.tool_calls if c.name != name]

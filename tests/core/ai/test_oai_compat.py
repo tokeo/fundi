@@ -2,12 +2,12 @@
 Tests for the OpenAI-compatible provider.
 
 The provider is a thin transport, so the tests pin down the two things that can
-break: the mapping from a chat-completions reply into a ```ChatResult``` (text,
-tool calls with JSON-string arguments, usage, finish reason, reasoning), and the
-error behaviour (unreachable endpoint and non-2xx status become a clear
+break: the mapping from a chat-completions reply into a ```TokeoAiChatResult```
+(text, tool calls with JSON-string arguments, usage, finish reason, reasoning), and
+the error behaviour (unreachable endpoint and non-2xx status become a clear
 ```TokeoAiError```, not a transport traceback). No network and no server: an
-```httpx.MockTransport``` answers every request, injected by patching the
-client the provider builds per call.
+```httpx.MockTransport``` answers every request, injected by patching the client the
+provider builds per call.
 """
 
 import json
@@ -37,7 +37,7 @@ def _make_provider(handler, monkeypatch):
 
 
 def test_oai_compat_maps_text_and_usage(monkeypatch):
-    """Text 'hello there', finish 'stop' and 7 total tokens map into ChatResult."""
+    """Text 'hello there', finish 'stop', 7 total tokens fill TokeoAiChatResult."""
 
     def handler(request):
         return httpx.Response(
@@ -246,7 +246,7 @@ def test_oai_compat_maps_refusal(monkeypatch):
 
 
 def test_oai_compat_maps_system_fingerprint(monkeypatch):
-    """system_fingerprint 'fp_abc123' is mapped onto the ChatResult."""
+    """system_fingerprint 'fp_abc123' is mapped onto the TokeoAiChatResult."""
 
     def handler(request):
         return httpx.Response(200, json={'system_fingerprint': 'fp_abc123', 'choices': [{'message': {'content': 'ok'}}]})

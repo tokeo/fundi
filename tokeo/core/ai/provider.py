@@ -1,6 +1,6 @@
 """
 The provider base class: a dumb transport that turns an already
-resolved profile and a list of messages into a normalized ChatResult.
+resolved profile and a list of messages into a normalized TokeoAiChatResult.
 """
 
 
@@ -9,10 +9,10 @@ class TokeoAiProvider:
     Base class for ai providers.
 
     A provider receives an already-resolved profile and returns a
-    ```ChatResult```. Its class is resolved from the profile ```type``` (a built-in
-    alias or a class path) and instantiated with the application by the
-    ```app.ai``` handler. It must not keep mutable per-call state, so that it can
-    be called concurrently without locking.
+    ```TokeoAiChatResult```. Its class is resolved from the profile ```type``` (a
+    built-in alias or a class path) and instantiated with the application by the
+    ```app.ai``` handler. It must not keep mutable per-call state, so that it can be
+    called concurrently without locking.
 
     ### Args
 
@@ -89,7 +89,7 @@ class TokeoAiProvider:
 
         ### Returns
 
-        - **ChatResult**: The normalized response
+        - **TokeoAiChatResult**: The normalized response
 
         """
         raise NotImplementedError

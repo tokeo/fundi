@@ -61,10 +61,10 @@ flowchart TD
 
 The pre-model stages (```on_begin```, ```on_prompt```) work on the whole
 conversation (```ctx.messages```). The answer and close stages
-(```on_answer```, ```on_close```) work on a ```ChatResult```, the model's answer.
-The tool stages (```on_call```, ```on_return```) work on an ```Invocation```, the
-one tool call in hand. This document focuses on ```on_return```, where a governor
-sees the finished tool result and may reshape it.
+(```on_answer```, ```on_close```) work on a ```TokeoAiChatResult```, the model's
+answer. The tool stages (```on_call```, ```on_return```) work on an
+```Invocation```, the one tool call in hand. This document focuses on
+```on_return```, where a governor sees the finished tool result and may reshape it.
 
 ## What ```on_return``` hands you
 

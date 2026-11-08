@@ -20,8 +20,8 @@ section and reached through one handler, ```app.ai```.
 The building blocks, each a class you configure or derive from:
 
 - a provider (```TokeoAiProvider```) is the transport to a model: given a
-    resolved profile it turns messages into a normalized ```ChatResult```. It is
-    a dumb, stateless transport, so it is safe to use from several threads at
+    resolved profile it turns messages into a normalized ```TokeoAiChatResult```. It
+    is a dumb, stateless transport, so it is safe to use from several threads at
     once (dramatiq workers, scheduler jobs).
 - a tool (```TokeoAiTool```) is a function the model may call, with a typed
     schema.
@@ -34,7 +34,7 @@ The building blocks, each a class you configure or derive from:
 - a sandbox (```TokeoAiSandbox```) is the wall a tool runs behind; an agent
     lists a chain and a tool runs in the first sandbox that claims it.
 
-A run returns a ```TokeoAiResult``` (the answer, the trace, and the status).
+A run returns a ```TokeoAiRunResult``` (the answer, the trace, and the status).
 Providers, tools, agents, guards and sandboxes are registered as classes; the
 handler instantiates them with the application. A ```type``` in the config is
 either an alias from tokeo's registry or a class path ```module:Class```
@@ -74,19 +74,19 @@ from tokeo.core.ai.exc import TokeoAiError, TokeoAiRunDeclinedError
 # the package facade: the public names live in focused modules (data shapes,
 # one base class per concern); import them from here as before
 from tokeo.core.ai.data import (
-    Usage,
-    ToolCall,
+    TokeoAiUsage,
+    TokeoAiToolCall,
     ToolResult,
     ToolValue,
     ToolStates,
-    ChatResult,
+    TokeoAiChatResult,
     Invocation,
-    ChatMessage,
+    TokeoAiChatMessage,
     TraceStep,
     TokeoAiLoopdata,
     TokeoAiTurndata,
     TokeoAiTraceNote,
-    TokeoAiResult,
+    TokeoAiRunResult,
 )
 from tokeo.core.ai.context import TokeoAiContext
 from tokeo.core.ai.provider import TokeoAiProvider
@@ -102,20 +102,20 @@ from tokeo.core.ai.sandbox import TokeoAiSandbox
 __all__ = [
     'TokeoAiError',
     'TokeoAiRunDeclinedError',
-    'Usage',
-    'ToolCall',
+    'TokeoAiUsage',
+    'TokeoAiToolCall',
     'ToolResult',
     'ToolValue',
     'ToolStates',
-    'ChatResult',
+    'TokeoAiChatResult',
     'Invocation',
-    'ChatMessage',
+    'TokeoAiChatMessage',
     'TraceStep',
     'TokeoAiContext',
     'TokeoAiLoopdata',
     'TokeoAiTurndata',
     'TokeoAiTraceNote',
-    'TokeoAiResult',
+    'TokeoAiRunResult',
     'TokeoAiProvider',
     'TokeoAiTool',
     'TokeoAiAgent',

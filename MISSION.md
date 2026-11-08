@@ -30,8 +30,8 @@ into the system. Three gaps follow, which fundi treats as a task of the
 architecture and not as a detail of configuration:
 
 **Governance depends on the provider.** Fundi turns every tool call into one
-typed form (```ToolCall```, then ```Invocation```) **before** the governor chain
-runs. A rule therefore applies the same way to every provider and every model.
+typed form (```TokeoAiToolCall```, then ```Invocation```) **before** the governor
+chain runs. A rule therefore applies the same way to every provider and every model.
 
 **Permitting and containing get mixed up.** A policy decision ("this tool may
 run") and an isolation boundary ("it runs behind this wall") are different
@@ -97,7 +97,7 @@ flowchart TD
     Caller["Caller<br/>task · scheduler · gRPC · CLI"] --> Facade
 
     Facade["app.ai: facade and loop<br/>ask() · chat()"] --> Norm
-    Norm["one typed form per tool call<br/>ToolCall → Invocation"] --> Chain
+    Norm["one typed form per tool call<br/>TokeoAiToolCall → Invocation"] --> Chain
 
     subgraph Chain["governor chain: six stages"]
         direction LR
@@ -127,9 +127,9 @@ flowchart TD
 ### 4.1 Contracts as the product
 
 Messages go in as ordinary OpenAI-shaped dicts; typed values come out:
-```ToolCall```, ```ToolResult```, ```ChatResult```, ```Invocation```,
+```TokeoAiToolCall```, ```ToolResult```, ```TokeoAiChatResult```, ```Invocation```,
 ```TraceStep```. The contracts do not depend on any provider SDK; the providers
-plug into the contracts, not the other way round. ```ChatResult``` also keeps
+plug into the contracts, not the other way round. ```TokeoAiChatResult``` also keeps
 the provider's ```raw``` reply: *inspect, don't trust*.
 
 ### 4.2 Agents are configuration

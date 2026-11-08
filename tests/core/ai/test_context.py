@@ -5,9 +5,9 @@ Covers ```TokeoAiContext``` as the run's manager: the trace as a list of
 ```TraceStep``` (origin + object), the bare-object caches
 (```messages```/```invocations```/```results```), ```track``` (a fresh object)
 and ```supersede``` (a guard's step, with the identity rule and the cache swap),
-```current_invocation```, ```status```, ```userdata```, and the ```ChatMessage```
-dict subclass. These are the mechanics in isolation; the full LLM loop that drives
-them is exercised by the Spiral tests.
+```current_invocation```, ```status```, ```userdata```, and the
+```TokeoAiChatMessage``` dict subclass. These are the mechanics in isolation; the
+full LLM loop that drives them is exercised by the Spiral tests.
 """
 
 import copy
@@ -17,9 +17,9 @@ from tokeo.core.ai import (
     TokeoAiTurndata,
     TokeoAiTraceNote,
     TraceStep,
-    ChatMessage,
+    TokeoAiChatMessage,
     Invocation,
-    ChatResult,
+    TokeoAiChatResult,
     ToolResult,
     TokeoAiError,
 )
@@ -38,12 +38,12 @@ def test_invocation_decision_constants_carry_the_expected_values():
 
 
 def test_context_seeds_incoming_messages_as_chat_messages():
-    """An incoming dict is cached as ChatMessage and traced with ctx as origin."""
+    """An incoming dict is cached as TokeoAiChatMessage, traced with origin ctx."""
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     assert len(ctx.messages) == 1
     assert len(ctx.trace) == 1
     message = ctx.messages[0]
-    assert isinstance(message, ChatMessage)
+    assert isinstance(message, TokeoAiChatMessage)
     assert isinstance(message, dict)
     # it is still the plain OpenAI-style dict the provider expects
     assert message['role'] == 'user'
@@ -120,9 +120,9 @@ def test_trace_keeps_chronological_order_across_kinds():
     """The trace keeps the tracked order across kinds, each cache only its kind."""
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'go'}])
     origin = object()
-    result = ctx.track(origin, ChatResult(text='', tool_calls=[]))
+    result = ctx.track(origin, TokeoAiChatResult(text='', tool_calls=[]))
     invocation = ctx.track(origin, Invocation(id='t1', name='calc'))
-    answer = ctx.track(origin, ChatMessage(role='assistant', content='done'))
+    answer = ctx.track(origin, TokeoAiChatMessage(role='assistant', content='done'))
     # trace order is exactly the order things were tracked (as steps)
     assert [step.object for step in ctx.trace] == [ctx.messages[0], result, invocation, answer]
     # and the caches partition by type, holding bare objects
@@ -132,11 +132,11 @@ def test_trace_keeps_chronological_order_across_kinds():
 
 
 def test_get_tracked_returns_the_bare_object_cache_by_type():
-    """get_tracked(ChatResult) is the same live list as ctx.results."""
+    """get_tracked(TokeoAiChatResult) is the same live list as ctx.results."""
     ctx = TokeoAiContext()
-    result = ctx.track(object(), ChatResult(text='hi', tool_calls=[]))
-    assert ctx.get_tracked(ChatResult) == [result]
-    assert ctx.get_tracked(ChatResult) is ctx.results
+    result = ctx.track(object(), TokeoAiChatResult(text='hi', tool_calls=[]))
+    assert ctx.get_tracked(TokeoAiChatResult) == [result]
+    assert ctx.get_tracked(TokeoAiChatResult) is ctx.results
 
 
 def test_get_tracked_unknown_kind_is_empty_not_error():
@@ -276,16 +276,16 @@ def test_refine_messages_same_list_is_also_unchanged():
 
 def test_refine_messages_with_a_new_list_replaces_the_whole_conversation():
     """A new list with a system turn replaces the whole live conversation."""
-    # the step is marked changed; plain dicts are wrapped as ChatMessage so the
-    # cache stays typed
+    # the step is marked changed; plain dicts are wrapped as TokeoAiChatMessage so
+    # the cache stays typed
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     live = ctx.messages
     new_convo = [{'role': 'system', 'content': 'be brief'}, {'role': 'user', 'content': 'hi'}]
     returned = ctx.refine_messages(object(), new_convo, stage='on_prompt')
-    # same live list object, new content, every entry a ChatMessage
+    # same live list object, new content, every entry a TokeoAiChatMessage
     assert returned is live
     assert [m['role'] for m in ctx.messages] == ['system', 'user']
-    assert all(isinstance(m, ChatMessage) for m in ctx.messages)
+    assert all(isinstance(m, TokeoAiChatMessage) for m in ctx.messages)
     assert ctx.trace[-1].is_changed is True
     assert ctx.trace[-1].stage == 'on_prompt'
 
@@ -310,7 +310,7 @@ def test_refine_messages_step_is_a_snapshot_not_the_live_list():
     ctx.refine_messages(object(), None, stage='on_begin')
     begin_step = ctx.trace[-1]
     # the conversation grows after the begin step
-    ctx.track(object(), ChatMessage(role='assistant', content='later'))
+    ctx.track(object(), TokeoAiChatMessage(role='assistant', content='later'))
     # the begin step still shows only the one message it saw, not the new one
     assert len(begin_step.object) == 1
     assert begin_step.object is not ctx.messages

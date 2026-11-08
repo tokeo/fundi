@@ -5,7 +5,7 @@ A governor is the regulator layer over the tools and sandboxes: a step at one or
 more stages of the run, from the raw request to the final result, that keeps the
 run ordered and safe. At its stage it receives the running ```TokeoAiContext```
 (the whole state: the trace and its typed views) and, where the stage works on
-one, a reference to that object (the ```ChatResult``` of a model answer, the
+one, a reference to that object (the ```TokeoAiChatResult``` of a model answer, the
 ```Invocation``` of a tool call). It may inspect and refine what it sees.
 
 The three roles built on it share this whole mechanic and differ in their
@@ -43,13 +43,13 @@ from tokeo.core.ai.exc import TokeoAiError
 GOVERNOR_STAGE_ON_BEGIN = 'on_begin'
 #: The stage before the model is asked, on the messages about to be sent
 GOVERNOR_STAGE_ON_PROMPT = 'on_prompt'
-#: The stage after each model answer, on the round's ChatResult
+#: The stage after each model answer, on the round's TokeoAiChatResult
 GOVERNOR_STAGE_ON_ANSWER = 'on_answer'
 #: The stage before a tool runs, on the Invocation
 GOVERNOR_STAGE_ON_CALL = 'on_call'
 #: The stage after a tool ran, on the completed Invocation
 GOVERNOR_STAGE_ON_RETURN = 'on_return'
-#: The stage at the end of the run, on the final ChatResult
+#: The stage at the end of the run, on the final TokeoAiChatResult
 GOVERNOR_STAGE_ON_CLOSE = 'on_close'
 
 #: The value standing for "all the class's stages": the base view key in
@@ -123,12 +123,12 @@ class TokeoAiGovernor(MetaMixin):
         conversation grow.
 
     - ```on_answer(ctx, result)```: after each model call, on that call's
-        answer. ```result``` is a ```ChatResult``` (```result.text```,
+        answer. ```result``` is a ```TokeoAiChatResult``` (```result.text```,
         ```result.reasoning```, ```result.refusal```, ```result.tool_calls```,
         ```result.usage```, ```result.raw```). Read or reshape its fields in
-        place and return ```None```, or return a new ```ChatResult``` to replace
-        it. This is where a role may, for example, strip or rewrite a pending
-        ```tool_calls``` entry before it is executed.
+        place and return ```None```, or return a new ```TokeoAiChatResult``` to
+        replace it. This is where a role may, for example, strip or rewrite a
+        pending ```tool_calls``` entry before it is executed.
 
     - ```on_call(ctx, invocation)```: before a tool runs, on the pending
         call. ```invocation``` is an ```Invocation```: ```invocation.name```,
@@ -154,7 +154,7 @@ class TokeoAiGovernor(MetaMixin):
         coherent. Return ```None``` or a new ```Invocation```.
 
     - ```on_close(ctx, result)```: once, on the final answer of the whole
-        run, after the loop. ```result``` is the final ```ChatResult```. Same
+        run, after the loop. ```result``` is the final ```TokeoAiChatResult```. Same
         shape and rules as ```on_answer```; this is the last chance to reshape
         what the caller receives.
 
@@ -359,8 +359,8 @@ class TokeoAiGovernor(MetaMixin):
         ### Args
 
         - **ctx** (TokeoAiContext): The running state
-        - **result** (ChatResult): The model's latest answer (text and/or tool
-            calls), already tracked, a reference to the object on the trace
+        - **result** (TokeoAiChatResult): The model's latest answer (text and/or
+            tool calls), already tracked, a reference to the object on the trace
 
         """
         pass
@@ -399,7 +399,7 @@ class TokeoAiGovernor(MetaMixin):
         ### Args
 
         - **ctx** (TokeoAiContext): The running state
-        - **result** (ChatResult): The final answer about to be returned
+        - **result** (TokeoAiChatResult): The final answer about to be returned
 
         """
         pass

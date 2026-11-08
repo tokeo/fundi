@@ -13,7 +13,7 @@ import pytest
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.utils import parse_model_params, coerce_model_param_value
 from tokeo.core.ai.utils import add_tool_call, drop_tool_calls
-from tokeo.core.ai.data import ChatResult
+from tokeo.core.ai.data import TokeoAiChatResult
 
 
 def test_coerce_types_like_a_yaml_scalar():
@@ -77,7 +77,7 @@ def test_parse_none_input_is_empty():
 
 
 def _make_blank_result():
-    return ChatResult(text='', reasoning='', refusal='', tool_calls=[], usage=None, finish_reason=None)
+    return TokeoAiChatResult(text='', reasoning='', refusal='', tool_calls=[], usage=None, finish_reason=None)
 
 
 def test_add_tool_call_appends_with_a_counted_id():

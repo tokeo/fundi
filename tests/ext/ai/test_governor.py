@@ -20,7 +20,7 @@ from tokeo.core.ai.context import TokeoAiContext
 from tokeo.core.ai.guards.policy import TokeoAiPolicyGuard
 from tokeo.core.ai.transformer import TokeoAiTransformer
 from tokeo.core.ai.conductor import TokeoAiConductor
-from tokeo.core.ai.data import Invocation, ToolCall
+from tokeo.core.ai.data import Invocation, TokeoAiToolCall
 
 
 class AiTest(TokeoTest):
@@ -191,7 +191,7 @@ def test_call_deny_without_reason_is_stamped_with_the_actor():
         governor = GuardDenyingSilently(app)
         governor._setup(app, 'shredder')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
-        call = ToolCall(id='t1', name='calc', arguments={'expr': '1+1'})
+        call = TokeoAiToolCall(id='t1', name='calc', arguments={'expr': '1+1'})
         invocation, content = app.ai._exec_governed(call, [governor], [], ctx, None, None)
         assert invocation.decision == Invocation.DENY
         assert invocation.reason == "guard 'shredder' gave no reason"
@@ -205,7 +205,7 @@ def test_return_deny_keeps_a_named_reason_untouched():
         governor = GuardDenyingOnReturn(app)
         governor._setup(app, 'rejector')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
-        call = ToolCall(id='t2', name='missing_tool', arguments={})
+        call = TokeoAiToolCall(id='t2', name='missing_tool', arguments={})
         invocation, content = app.ai._exec_governed(call, [], [governor], ctx, None, None)
         assert invocation.decision == Invocation.DENY
         assert invocation.reason == 'result rejected'
@@ -257,7 +257,7 @@ def test_a_no_at_on_return_stays_when_a_later_guard_allows():
         rejector._setup(app, 'rejector')
         lifter._setup(app, 'lifter')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
-        call = ToolCall(id='t3', name='missing_tool', arguments={})
+        call = TokeoAiToolCall(id='t3', name='missing_tool', arguments={})
         invocation, content = app.ai._exec_governed(call, [], [rejector, lifter], ctx, None, None)
         assert lifter.ran
         assert (invocation.decision, invocation.reason) == (Invocation.DENY, 'result rejected')
@@ -271,7 +271,7 @@ def test_a_no_at_on_call_stays_when_a_guard_at_on_return_allows():
         shredder._setup(app, 'shredder')
         lifter._setup(app, 'lifter')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
-        call = ToolCall(id='t4', name='calc', arguments={'expr': '1+1'})
+        call = TokeoAiToolCall(id='t4', name='calc', arguments={'expr': '1+1'})
         invocation, content = app.ai._exec_governed(call, [shredder], [lifter], ctx, None, None)
         assert lifter.ran
         assert invocation.decision == Invocation.DENY
@@ -284,7 +284,7 @@ def test_a_transformer_that_changes_the_decision_ends_the_run():
         governor = DenyingSilently(app)
         governor._setup(app, 'shredder')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
-        call = ToolCall(id='t5', name='calc', arguments={'expr': '1+1'})
+        call = TokeoAiToolCall(id='t5', name='calc', arguments={'expr': '1+1'})
         with pytest.raises(TokeoAiError, match="transformer 'shredder' changed the decision at on_call, only a guard decides"):
             app.ai._exec_governed(call, [governor], [], ctx, None, None)
 
@@ -295,6 +295,6 @@ def test_a_conductor_that_changes_the_decision_ends_the_run():
         governor = DenyingOnReturn(app)
         governor._setup(app, 'rejector')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
-        call = ToolCall(id='t6', name='missing_tool', arguments={})
+        call = TokeoAiToolCall(id='t6', name='missing_tool', arguments={})
         with pytest.raises(TokeoAiError, match="conductor 'rejector' changed the decision at on_return"):
             app.ai._exec_governed(call, [], [governor], ctx, None, None)

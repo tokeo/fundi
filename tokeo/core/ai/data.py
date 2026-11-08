@@ -2,36 +2,36 @@
 Data shapes of the ai subsystem: the typed objects that travel the run.
 
 Every object a run produces is a typed value recorded onto one trace: the chat
-messages (```ChatMessage```), the tool invocations (```Invocation```), the model
-results (```ChatResult```). ```ChatMessage``` is a ```dict``` subclass, so it is
-still the OpenAI-style message the provider receives, while carrying a type the
-trace and the context's typed views group it by.
+messages (```TokeoAiChatMessage```), the tool invocations (```Invocation```), the
+model results (```TokeoAiChatResult```). ```TokeoAiChatMessage``` is a ```dict```
+subclass, so it is still the OpenAI-style message the provider receives, while
+carrying a type the trace and the context's typed views group it by.
 """
 
 from datetime import datetime as datetime_type, timezone
 from dataclasses import dataclass, field
 
 
-class ChatMessage(dict):
+class TokeoAiChatMessage(dict):
     """
     One entry of the chat conversation, a ```dict``` that carries a type.
 
     Messages are OpenAI-style dicts (```role``` plus ```content``` and, for an
     assistant tool-call turn, ```tool_calls```; for a tool turn,
-    ```tool_call_id```). ```ChatMessage``` *is* such a dict, so the provider
+    ```tool_call_id```). ```TokeoAiChatMessage``` *is* such a dict, so the provider
     receives exactly what it always did, but as a typed object it can sit on the
     run's trace and be grouped into the context's ```messages``` view. It covers
     every role (```user```, ```assistant```, ```tool```), so the name stays
     neutral rather than naming one direction.
 
-    Construct it like a dict: ```ChatMessage(role='user', content='hi')``` or
-    ```ChatMessage({'role': 'user', 'content': 'hi'})```.
+    Construct it like a dict: ```TokeoAiChatMessage(role='user', content='hi')``` or
+    ```TokeoAiChatMessage({'role': 'user', 'content': 'hi'})```.
 
     """
 
 
 @dataclass
-class Usage:
+class TokeoAiUsage:
     """
     Token usage reported for a single chat call.
 
@@ -52,7 +52,7 @@ class Usage:
 
 
 @dataclass
-class ToolCall:
+class TokeoAiToolCall:
     """
     A single tool call requested by the model.
 
@@ -163,7 +163,7 @@ class ToolResult:
 
 
 @dataclass
-class ChatResult:
+class TokeoAiChatResult:
     """
     Normalized result of a chat call, uniform across providers.
 
@@ -180,8 +180,8 @@ class ChatResult:
         rather than answers (structured-outputs ```refusal``` field); empty
         otherwise. Distinct from an empty ```text```, so a caller can tell
         "declined" from "no content"
-    - **tool_calls** (list): The ```ToolCall``` entries the model requested
-    - **usage** (Usage|None): Token usage, when the provider reports it
+    - **tool_calls** (list): The ```TokeoAiToolCall``` entries the model requested
+    - **usage** (TokeoAiUsage|None): Token usage, when the provider reports it
     - **finish_reason** (str|None): Why the model stopped, when reported
     - **system_fingerprint** (str|None): The backend configuration fingerprint
         the endpoint reports, when present; with a fixed seed it identifies the
@@ -197,10 +197,10 @@ class ChatResult:
     reasoning: str = ''
     #: The model's explicit refusal message, when it declines
     refusal: str = ''
-    #: The ```ToolCall``` entries the model requested
+    #: The ```TokeoAiToolCall``` entries the model requested
     tool_calls: list = field(default_factory=list)
     #: Token usage, when the provider reports it
-    usage: Usage | None = None
+    usage: TokeoAiUsage | None = None
     #: Why the model stopped, when reported
     finish_reason: str | None = None
     #: The backend configuration fingerprint, when reported
@@ -292,8 +292,8 @@ class TraceStep:
     - **origin**: Who produced this step: the guard at a ```supersede```, the
         loop (its handler) at a ```track```. Never ```None```, so every step is
         attributable
-    - **object**: The run object as it stood after this step (a ```ChatMessage```,
-        ```Invocation```, ```ChatResult```, ...)
+    - **object**: The run object as it stood after this step (a
+        ```TokeoAiChatMessage```, ```Invocation```, ```TokeoAiChatResult```, ...)
     - **is_changed** (bool): Whether this step introduced a *new* object (a
         guard returned a fresh copy) rather than leaving the existing one in
         place. A ```track``` is always a new object; a ```supersede``` is
@@ -386,16 +386,16 @@ class TokeoAiTraceNote:
 
 
 @dataclass
-class TokeoAiResult:
+class TokeoAiRunResult:
     """
     The result of a whole ```chat``` run: answer, history, and bookkeeping.
 
     What ```chat``` returns. It separates the three views of one run that used
-    to be crammed onto a single ```ChatResult```:
+    to be crammed onto a single ```TokeoAiChatResult```:
 
-    - the answer: the final model reply, a ```ChatResult``` (text, refusal,
+    - the answer: the final model reply, a ```TokeoAiChatResult``` (text, refusal,
         reasoning, tool_calls, usage, raw). The answer is not always plain text
-        (a refusal is distinct from empty text), so the full ```ChatResult```
+        (a refusal is distinct from empty text), so the full ```TokeoAiChatResult```
         is kept, not a flattened string.
     - the loopdata: the loop's counters (```steps```, ```failed_loops```).
     - the trace: the ordered ```TraceStep``` history of the run (every
@@ -411,7 +411,7 @@ class TokeoAiResult:
 
     ### Args
 
-    - **answer** (ChatResult): The final model reply in full
+    - **answer** (TokeoAiChatResult): The final model reply in full
     - **loopdata** (TokeoAiLoopdata): The loop's live counters for the run
     - **trace** (list): The run's ```TraceStep``` history, in order
     - **confirmations** (list): Every confirm decision of the run in order,
@@ -422,7 +422,7 @@ class TokeoAiResult:
     """
 
     #: The final model reply in full
-    answer: ChatResult = field(default_factory=ChatResult)
+    answer: TokeoAiChatResult = field(default_factory=TokeoAiChatResult)
     #: The loop's live counters for the run
     loopdata: TokeoAiLoopdata = field(default_factory=TokeoAiLoopdata)
     #: The run's ```TraceStep``` history, in order

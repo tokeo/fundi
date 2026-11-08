@@ -8,7 +8,15 @@ because it carries behaviour (```track```, ```get_tracked```, the typed-view
 properties), not just fields.
 """
 
-from tokeo.core.ai.data import ChatMessage, Invocation, ChatResult, TraceStep, TokeoAiLoopdata, TokeoAiTurndata, TokeoAiTraceNote
+from tokeo.core.ai.data import (
+    TokeoAiChatMessage,
+    Invocation,
+    TokeoAiChatResult,
+    TraceStep,
+    TokeoAiLoopdata,
+    TokeoAiTurndata,
+    TokeoAiTraceNote,
+)
 from tokeo.core.ai.exc import TokeoAiError
 
 
@@ -49,8 +57,8 @@ class TokeoAiContext:
     dict that lives one run for in-process participants to keep working state
     under their own key.
 
-    The cached kinds are fixed at construction (```ChatMessage```,
-    ```Invocation```, ```ChatResult```), so a cache exists for each from the
+    The cached kinds are fixed at construction (```TokeoAiChatMessage```,
+    ```Invocation```, ```TokeoAiChatResult```), so a cache exists for each from the
     start; adding a kind is naming one more class.
 
     ### Args
@@ -80,7 +88,7 @@ class TokeoAiContext:
 
     # the kinds that get a typed view; track files an object into each one it is
     # an instance of (isinstance, so a subclass lands in its base's view too)
-    _CACHE_KINDS = (ChatMessage, Invocation, ChatResult)
+    _CACHE_KINDS = (TokeoAiChatMessage, Invocation, TokeoAiChatResult)
 
     def __init__(self, messages=None, turndata=None, userdata=None, notes=None, trace=True):
         # whether to record the step history; the caches always fill
@@ -105,12 +113,12 @@ class TokeoAiContext:
         #: (list) Every confirm decision of this run in order; chat hands it
         #: out as the result's confirmations
         self.confirmations = []
-        # seed the incoming conversation, as ChatMessage so it is typed in the
-        # cache; a plain dict is wrapped, an existing ChatMessage kept as is. the
-        # context itself is the origin of these seed steps (the incoming request,
-        # before any loop turn or guard)
+        # seed the incoming conversation, as TokeoAiChatMessage so it is typed in
+        # the cache; a plain dict is wrapped, an existing TokeoAiChatMessage kept as
+        # is. the context itself is the origin of these seed steps (the incoming
+        # request, before any loop turn or guard)
         for message in messages or []:
-            self.track(self, message if isinstance(message, ChatMessage) else ChatMessage(message))
+            self.track(self, message if isinstance(message, TokeoAiChatMessage) else TokeoAiChatMessage(message))
 
     def _append_step(self, origin, obj, is_changed, stage):
         """
@@ -150,8 +158,8 @@ class TokeoAiContext:
         - **origin**: Who creates this object: the loop (its handler) for a
             fresh message/result/invocation. Recorded on the step so the history
             is attributable
-        - **obj**: The run object to record (a ```ChatMessage```,
-            ```Invocation```, ```ChatResult```, or any future cached kind). A
+        - **obj**: The run object to record (a ```TokeoAiChatMessage```,
+            ```Invocation```, ```TokeoAiChatResult```, or any future cached kind). A
             plain value (anything from ```builtins``` or ```datetime```, so a
             str, dict, number or date) is wrapped in a ```TokeoAiTraceNote```
             first, because it would otherwise land on the trace nameless.
@@ -250,11 +258,11 @@ class TokeoAiContext:
             step records a snapshot of the list with ```is_changed=False```.
         - ```result``` is a *new* list: the guard built a fresh conversation
             (a trimmed history, an injected system turn). Its items must all be
-            mappings (a ```ChatMessage``` is a ```dict```), or it is a guard bug
-            and this raises. The whole ```ChatMessage``` cache is replaced by the
-            new turns (wrapped as ```ChatMessage```), in place so existing
-            references to the live list stay valid; the step records a snapshot
-            with ```is_changed=True```.
+            mappings (a ```TokeoAiChatMessage``` is a ```dict```), or it is a guard
+            bug and this raises. The whole ```TokeoAiChatMessage``` cache is
+            replaced by the new turns (wrapped as ```TokeoAiChatMessage```), in
+            place so existing references to the live list stay valid; the step
+            records a snapshot with ```is_changed=True```.
 
         The step holds a shallow copy of the list, not the live cache, so it
         shows the conversation as it stood at this stage; the live list keeps
@@ -277,7 +285,7 @@ class TokeoAiContext:
         - The live ```messages``` list to carry on with
 
         """
-        cache = self._caches[ChatMessage]
+        cache = self._caches[TokeoAiChatMessage]
         if result is None or result is cache:
             # the guard refined in place (or did nothing): a step holding a
             # SNAPSHOT of the conversation at this stage, the cache untouched.
@@ -285,15 +293,14 @@ class TokeoAiContext:
             # the run goes on; the live list would later show the end state
             self._append_step(origin, list(cache), False, stage)
             return cache
-        # a returned conversation must be a list of mappings (ChatMessage is a
-        # dict); anything else is a guard bug; fail loud, do not corrupt the
-        # cache
+        # a returned conversation must be a list of mappings (TokeoAiChatMessage is
+        # a dict); anything else is a guard bug; fail loud, do not corrupt the cache
         if not isinstance(result, list) or not all(isinstance(m, dict) for m in result):
             raise TokeoAiError(f'guard {origin!r} returned an invalid messages list (expected a list of messages)')
         # replace the WHOLE conversation in place, so references to the live
-        # list stay valid; wrap a plain dict as ChatMessage so the cache stays
-        # typed (the same rule the constructor's seeding uses)
-        cache[:] = [m if isinstance(m, ChatMessage) else ChatMessage(m) for m in result]
+        # list stay valid; wrap a plain dict as TokeoAiChatMessage so the cache
+        # stays typed (the same rule the constructor's seeding uses)
+        cache[:] = [m if isinstance(m, TokeoAiChatMessage) else TokeoAiChatMessage(m) for m in result]
         # a snapshot for the step, so it shows this stage's state, not the end
         self._append_step(origin, list(cache), True, stage)
         return cache
@@ -325,8 +332,8 @@ class TokeoAiContext:
 
     @property
     def messages(self):
-        """The ```ChatMessage``` turns, in order: the conversation history."""
-        return self._caches[ChatMessage]
+        """The conversation history: the ```TokeoAiChatMessage``` turns in order."""
+        return self._caches[TokeoAiChatMessage]
 
     @property
     def invocations(self):
@@ -335,8 +342,8 @@ class TokeoAiContext:
 
     @property
     def results(self):
-        """The ```ChatResult``` model answers, in order."""
-        return self._caches[ChatResult]
+        """The ```TokeoAiChatResult``` model answers, in order."""
+        return self._caches[TokeoAiChatResult]
 
     @property
     def current_invocation(self):

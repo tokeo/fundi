@@ -10,7 +10,7 @@ governors at the tool stages. The tools run in process.
 import pytest
 from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
-from tokeo.core.ai import TokeoAiError, TokeoAiProvider, TokeoAiGuard, TokeoAiRunDeclinedError, ChatResult, ToolCall
+from tokeo.core.ai import TokeoAiError, TokeoAiProvider, TokeoAiGuard, TokeoAiRunDeclinedError, TokeoAiChatResult, TokeoAiToolCall
 from tokeo.core.ai.data import Invocation
 
 SCRIPT = 'tests.ext.ai.test_loop:ScriptProvider'
@@ -57,8 +57,11 @@ class ScriptProvider(TokeoAiProvider):
         script = profile['options']['script']
         index = min(sum(1 for m in messages if m.get('role') == 'assistant'), len(script) - 1)
         turn = script[index]
-        calls = [ToolCall(id=f'c{index}_{n}', name=name, arguments=arguments) for n, (name, arguments) in enumerate(turn.get('calls', []))]
-        return ChatResult(text=turn.get('text', ''), tool_calls=calls)
+        calls = [
+            TokeoAiToolCall(id=f'c{index}_{n}', name=name, arguments=arguments)
+            for n, (name, arguments) in enumerate(turn.get('calls', []))
+        ]
+        return TokeoAiChatResult(text=turn.get('text', ''), tool_calls=calls)
 
 
 class DecliningGuard(TokeoAiGuard):
