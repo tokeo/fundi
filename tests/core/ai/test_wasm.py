@@ -100,12 +100,12 @@ def test_wasm_exit_status_nonzero_is_a_failure():
 
 
 def test_wasm_needs_a_runtime():
-    """Without runtime and stdlib exec raises TokeoAiError naming the runtime."""
+    """Without runtime_path and stdlib_dir exec raises naming both options."""
     pytest.importorskip('wasmtime')
     sandbox = TokeoAiWasmSandbox(None)
     sandbox._setup(None)
     tool = TokeoAiPythonUntrustedExecTool(None)
-    with pytest.raises(TokeoAiError, match='runtime'):
+    with pytest.raises(TokeoAiError, match='needs runtime_path .* and stdlib_dir'):
         sandbox.exec(tool, dict(code='1'))
 
 
@@ -115,6 +115,16 @@ def test_wasm_without_wasmtime_names_the_extra(monkeypatch):
     sandbox = TokeoAiWasmSandbox(None)
     sandbox._setup(None)
     with pytest.raises(TokeoAiError, match=r"pip install 'tokeo-fundi\[wasm\]'"):
+        sandbox.exec(TokeoAiPythonUntrustedExecTool(None), dict(code='1'))
+
+
+def test_wasm_names_a_missing_runtime(tmp):
+    """A runtime_path without a file raises naming the path."""
+    pytest.importorskip('wasmtime')
+    sandbox = TokeoAiWasmSandbox(None)
+    runtime_path = os.path.join(tmp.dir, 'python.wasm')
+    sandbox._setup(None, 'wasm', dict(options=dict(runtime_path=runtime_path, stdlib_dir=tmp.dir)))
+    with pytest.raises(TokeoAiError, match='runtime path does not exist or is not a file'):
         sandbox.exec(TokeoAiPythonUntrustedExecTool(None), dict(code='1'))
 
 

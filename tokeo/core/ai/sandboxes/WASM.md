@@ -631,7 +631,7 @@ proportionate tool.
 
 ## Troubleshooting
 
-"the wasm sandbox needs a runtime ... and a stdlib path": the
+"the wasm sandbox needs runtime_path ... and stdlib_dir": the
 ```runtime_path``` or ```stdlib_dir``` option is unset. Point them at your
 ```./wasm/python.wasm``` and ```./wasm/lib/python3.x```.
 
@@ -639,6 +639,10 @@ proportionate tool.
 at a missing host path. The message names which path and role failed. Check the
 build was unpacked where the options expect, and that the trusted mounts
 (tokeo / app / deps) resolve on this machine.
+
+"the wasm runtime path does not exist or is not a file": ```runtime_path```
+points at a missing ```python.wasm```. The stdlib was found, the runtime was
+not built or not copied.
 
 A crash mentioning Py_ExitStatusException with no clearer detail: usually
 the interpreter could not find its standard library at boot. Confirm the

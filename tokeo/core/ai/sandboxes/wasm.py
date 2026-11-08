@@ -192,8 +192,8 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
     def __init__(self, app, *args, **kw):
         super(TokeoAiWasmSandbox, self).__init__(app, *args, **kw)
         # proxied config, filled in _setup (each is used at more than one place)
-        self._runtime = None
-        self._stdlib = None
+        self._runtime_path = None
+        self._stdlib_dir = None
 
     def _setup(self, app, config_name=None, item=None):
         """
@@ -213,8 +213,8 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # super first: builds the view the _config below reads
         super(TokeoAiWasmSandbox, self)._setup(app, config_name, item)
         # proxied: runtime and stdlib are each used at more than one place
-        self._runtime = self._config('runtime_path')
-        self._stdlib = self._config('stdlib_dir')
+        self._runtime_path = self._config('runtime_path')
+        self._stdlib_dir = self._config('stdlib_dir')
 
     def lint_options(self, options):
         """
@@ -267,8 +267,8 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
             import wasmtime
         except ImportError:
             raise TokeoAiError("the wasm sandbox needs the wasmtime package: pip install 'tokeo-fundi[wasm]'")
-        if not self._runtime or not self._stdlib:
-            raise TokeoAiError('the wasm sandbox needs a runtime (python.wasm) and a stdlib path; see the docs')
+        if not self._runtime_path or not self._stdlib_dir:
+            raise TokeoAiError('the wasm sandbox needs runtime_path (python.wasm) and stdlib_dir; see WASM.md')
 
         class_path = _get_importable_path(type(tool), 'tool')
         # an untrusted tool runs as a snippet; nothing of tokeo enters the guest
@@ -369,7 +369,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
                 raise TokeoAiError(f'the wasm {what} path does not exist or is not a directory: {host_path!r}')
             wasi.preopen_dir(host_path, guest_path, fs_mutable=writable)
 
-        mount_dir(self._stdlib, '/lib', False, 'stdlib')
+        mount_dir(self._stdlib_dir, '/lib', False, 'stdlib')
         mount_dir(io_dir, '/io', True, 'io scratch')
         stderr_path = os.path.join(capture_dir, 'stderr')
         wasi.stdout_file = os.path.join(capture_dir, 'stdout')
@@ -483,7 +483,9 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         # the compiled runtime: from the cache dir when set and fitting, else
         # compiled now (and stored there). a file in the cache is native code
         # the host runs, so the dir must be writable only by the operator
-        with open(self._runtime, 'rb') as f:
+        if not os.path.isfile(self._runtime_path):
+            raise TokeoAiError(f'the wasm runtime path does not exist or is not a file: {self._runtime_path!r}')
+        with open(self._runtime_path, 'rb') as f:
             wasm = f.read()
         cache_dir = self._config('cache_dir')
         if not cache_dir:
