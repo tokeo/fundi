@@ -224,7 +224,7 @@ class TokeoAiLinter:
             self._lint_options(path, value)
             self._lint_type('governor', path, value)
             self._lint_option_keys('governor', f'{path}.options', value.get('type'), value.get('options'))
-            self._validate_options_via_class('governor', path, value)
+            self._lint_class_options('governor', path, value)
             # an on_<stage> block holds only its own options for that stage
             for stage in GOVERNOR_STAGES:
                 block = value.get(stage)
@@ -233,7 +233,7 @@ class TokeoAiLinter:
                     self._lint_options(f'{path}.{stage}', block)
                     self._lint_option_keys('governor', f'{path}.{stage}.options', value.get('type'), block.get('options'))
                     stage_entry = dict(type=value.get('type'), options=block.get('options'))
-                    self._validate_options_via_class('governor', f'{path}.{stage}', stage_entry)
+                    self._lint_class_options('governor', f'{path}.{stage}', stage_entry)
                 elif block is not None:
                     self._add_issue(f'{path}.{stage}', 'must be a mapping with "options"')
             self._lint_governor_purity(section, path, value.get('type'))
@@ -482,9 +482,9 @@ class TokeoAiLinter:
         # except excludes members from THIS sandbox only (single or list)
         self._lint_names(f'{path}.except', item.get('except'), tool_names, 'tool or group')
         # ask the resolved class to validate its own option keys
-        self._validate_options_via_class('sandbox', path, item)
+        self._lint_class_options('sandbox', path, item)
 
-    def _validate_options_via_class(self, kind, path, item):
+    def _lint_class_options(self, kind, path, item):
         # the class knows its allowed option keys; resolve it and call its
         # ```lint_options``` hook. a resolution failure is already reported
         # by ```_lint_type```; a hook that returns messages becomes lint errors

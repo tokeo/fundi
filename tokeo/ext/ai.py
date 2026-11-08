@@ -115,7 +115,7 @@ from tokeo.core.ai.transformer import TokeoAiTransformer
 from tokeo.core.ai.conductor import TokeoAiConductor
 from tokeo.core.ai.config.governors import resolve_governors
 from tokeo.core.ai.config.tools import resolve_tools
-from tokeo.core.ai.config.sandboxes import has_sandbox_tool, find_sandbox
+from tokeo.core.ai.config.sandboxes import find_sandbox
 from tokeo.core.ai.config.profiles import resolve_profile, resolve_agent_name, get_selectable_names
 from tokeo.core.ai.config.providers import get_provider_type
 from tokeo.core.ai.guards.audit import TokeoAiTraceAuditGuard
@@ -624,12 +624,6 @@ class TokeoAi(MetaMixin):
             obj._setup(self.app, config_name, item)
             self._sandbox_objs[config_name] = obj
         return obj
-
-    def _has_sandbox_tool(self, name, tool_name):
-        # do the tools of sandbox ```name``` contain ```tool_name```? delegates
-        # to the shared resolver (config.sandboxes), which knows ```except```;
-        # tool/group names are expanded through _resolve_tools
-        return has_sandbox_tool(self._sandboxes.get(name), tool_name, self._resolve_tools)
 
     def _find_sandbox(self, tool_name, agent_obj):
         # choose the sandbox a tool runs in: walk the agent's ordered chain via
