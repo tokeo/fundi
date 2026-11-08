@@ -500,15 +500,15 @@ def test_setup_aborts_on_a_lint_error():
 
 def test_setup_logs_a_lint_warning():
     """defaults null is only a warning: the setup logs it and goes on."""
-    logged = []
+    logged_lines = []
 
     def record(app):
-        app.log.warning = logged.append
+        app.log.warning = logged_lines.append
 
     cfg = make_ai_config()
     cfg['ai']['defaults'] = None
     with FundiTest(config_defaults=cfg, hooks=[('post_setup', record, 50)]):
-        assert any('ai.defaults' in message for message in logged)
+        assert any('ai.defaults' in message for message in logged_lines)
 
 
 @pytest.mark.parametrize('cfg', [dict(ai=dict(defaults=dict(profile='mock'))), {}], ids=['missing', 'no_ai_config'])
@@ -521,35 +521,35 @@ def test_setup_aborts_without_license_acknowledged(cfg):
 
 def make_notice_test(**kw):
     """A FundiTest that records its info log, and the list it records into."""
-    logged = []
+    logged_lines = []
 
     def record(app):
-        app.log.info = logged.append
+        app.log.info = logged_lines.append
 
-    return FundiTest(hooks=[('post_setup', record, 50)], **kw), logged
+    return FundiTest(hooks=[('post_setup', record, 50)], **kw), logged_lines
 
 
 def test_the_ai_lint_command_shows_the_license_notice():
     """ai lint logs the license notice while license_acknowledged is not true."""
-    app, logged = make_notice_test(argv=LINT, config_defaults=make_ai_config())
+    app, logged_lines = make_notice_test(argv=LINT, config_defaults=make_ai_config())
     with app:
         app.run()
-    assert logged.count(TokeoAi.FUNDI_LICENSE_NOTICE) == 1
+    assert logged_lines.count(TokeoAi.FUNDI_LICENSE_NOTICE) == 1
 
 
 def test_the_first_ai_call_from_code_shows_the_license_notice_once():
     """Two ask calls from code log the license notice once; acknowledged, never."""
-    app, logged = make_notice_test(config_defaults=make_ai_config())
+    app, logged_lines = make_notice_test(config_defaults=make_ai_config())
     with app:
         app.ai.ask('hi', agent='plain')
         app.ai.ask('hi', agent='plain')
-    assert logged.count(TokeoAi.FUNDI_LICENSE_NOTICE) == 1
+    assert logged_lines.count(TokeoAi.FUNDI_LICENSE_NOTICE) == 1
     cfg = make_ai_config()
     cfg['ai']['license_acknowledged'] = True
-    app, logged = make_notice_test(config_defaults=cfg)
+    app, logged_lines = make_notice_test(config_defaults=cfg)
     with app:
         app.ai.ask('hi', agent='plain')
-    assert TokeoAi.FUNDI_LICENSE_NOTICE not in logged
+    assert TokeoAi.FUNDI_LICENSE_NOTICE not in logged_lines
 
 
 def test_the_implicit_agent_offers_no_tool():

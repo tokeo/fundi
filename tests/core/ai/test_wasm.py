@@ -176,11 +176,11 @@ def test_guest_modules_import_only_the_stdlib_or_each_other():
             tree = ast.parse(f.read())
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                found = [alias.name.partition('.')[0] for alias in node.names]
-                assert all(module in sys.stdlib_module_names for module in found), (name, found)
+                found_modules = [alias.name.partition('.')[0] for alias in node.names]
+                assert all(module in sys.stdlib_module_names for module in found_modules), (name, found_modules)
             elif isinstance(node, ast.ImportFrom) and node.level:
-                found = [node.module] if node.module else [alias.name for alias in node.names]
-                assert set(found) <= names, (name, found)
+                found_modules = [node.module] if node.module else [alias.name for alias in node.names]
+                assert set(found_modules) <= names, (name, found_modules)
             elif isinstance(node, ast.ImportFrom):
                 assert node.module.partition('.')[0] in sys.stdlib_module_names, (name, node.module)
 

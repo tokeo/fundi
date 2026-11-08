@@ -285,6 +285,8 @@ def start_worker(tmp_path):
 - A file covering several modules prefixes the module, e.g.
   ```test_check_required_extensions_names_the_missing_ones```
 - No path in the name, pytest shows it: ```tests/core/utils/test_date.py::test_...```
+- ```expected``` (the expected result, a noun) and the marker ```@isolated```
+  keep their names, as the names section of the guideline sets
 - The tests of one function stand together under a section comment with its
   name, with two blank lines before and after; a file that already uses
   another style of section comments keeps it
@@ -550,7 +552,7 @@ outside, for what only shows from there: exit codes, signals, a terminal.
 ```python
 probe = 'tests.ext.tui.tui_tests_input_probe'
 with Terminal([sys.executable, '-m', probe], rows=12, columns=80) as terminal:
-    shown = terminal.wait_for(lambda lines: lines[-1] == 'Probe>')
+    shown_lines = terminal.wait_for(lambda lines: lines[-1] == 'Probe>')
     terminal.send(b'exit\r')
     terminal.wait()
 ```
@@ -783,11 +785,11 @@ def test_put_writes_one_complete_message(tmp_path):
 
 def test_worker_hands_a_message_on_and_removes_it(start_worker, tmp_path):
     """A message put into the outbox is handed on once, its file is gone."""
-    taken = []
-    start_worker(taken.append)
+    taken_messages = []
+    start_worker(taken_messages.append)
     put(str(tmp_path), 'hello')
     assert wait_until(lambda: not any(tmp_path.iterdir()))
-    assert taken == ['hello']
+    assert taken_messages == ['hello']
 
 
 def test_worker_keeps_a_message_its_handler_failed_on(start_worker, tmp_path):
@@ -815,8 +817,8 @@ def test_worker_stress_hands_every_message_on_once(start_worker, tmp_path):
     print(f'\nSTRESS_SEED={SEED}')
     rnd = random.Random(SEED)
     batches = [[f'{t}-{i}-' + 'x' * rnd.randrange(65536) for i in range(250)] for t in range(4)]
-    taken = []
-    start_worker(taken.append)
+    taken_messages = []
+    start_worker(taken_messages.append)
 
     def send(batch):
         for text in batch:
@@ -827,8 +829,8 @@ def test_worker_stress_hands_every_message_on_once(start_worker, tmp_path):
         thread.start()
     for thread in threads:
         thread.join()
-    assert wait_until(lambda: len(taken) == 1000 and not any(tmp_path.iterdir()), 30.0)
-    assert sorted(taken) == sorted(text for batch in batches for text in batch)
+    assert wait_until(lambda: len(taken_messages) == 1000 and not any(tmp_path.iterdir()), 30.0)
+    assert sorted(taken_messages) == sorted(text for batch in batches for text in batch)
 ```
 
 What it shows:

@@ -180,8 +180,8 @@ def test_a_timeout_in_the_docker_sandbox_raises_and_kills_the_container(docker):
     with DockerTest(config_defaults=make_ai_config(docker, timeout=1)) as app:
         with pytest.raises(TokeoAiError, match='timed out after 1s in the docker sandbox'):
             run_tool(app, 'sleep', dict(seconds=5))
-    started, killed = get_docker_calls(docker)
-    assert killed == ['kill', started[4]]
+    started_args, killed_args = get_docker_calls(docker)
+    assert killed_args == ['kill', started_args[4]]
 
 
 def test_reuse_runs_each_call_in_one_container_and_close_removes_it(docker):

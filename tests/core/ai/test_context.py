@@ -93,8 +93,8 @@ def test_track_records_a_step_and_caches_the_bare_object():
     ctx = TokeoAiContext()
     origin = object()
     invocation = Invocation(id='t1', name='calc', arguments={})
-    returned = ctx.track(origin, invocation)
-    assert returned is invocation
+    result = ctx.track(origin, invocation)
+    assert result is invocation
     # the cache holds the bare object
     assert ctx.invocations == [invocation]
     # the trace holds a step wrapping it, attributed to the origin
@@ -152,8 +152,8 @@ def test_supersede_with_none_records_an_unchanged_step_and_keeps_the_cache():
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     guard = object()
-    returned = ctx.supersede(guard, None, invocation)
-    assert returned is invocation
+    result = ctx.supersede(guard, None, invocation)
+    assert result is invocation
     # a step was appended, marked unchanged, originated by the guard
     assert len(ctx.trace) == 2
     assert ctx.trace[-1].origin is guard
@@ -167,8 +167,8 @@ def test_supersede_with_same_object_is_also_unchanged():
     """A guard returning the same object gets an unchanged step, as for None."""
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
-    returned = ctx.supersede(object(), invocation, invocation)
-    assert returned is invocation
+    result = ctx.supersede(object(), invocation, invocation)
+    assert result is invocation
     assert ctx.trace[-1].changed is False
     assert ctx.invocations == [invocation]
 
@@ -179,17 +179,17 @@ def test_supersede_with_a_new_object_swaps_the_cache_and_records_a_changed_step(
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     guard = object()
-    revised = copy.deepcopy(invocation)
-    revised.decision = Invocation.DENY
-    returned = ctx.supersede(guard, revised, invocation)
-    assert returned is revised
+    revised_invocation = copy.deepcopy(invocation)
+    revised_invocation.decision = Invocation.DENY
+    result = ctx.supersede(guard, revised_invocation, invocation)
+    assert result is revised_invocation
     # the cache now holds the copy in place of the original (still one entry)
-    assert ctx.invocations == [revised]
-    assert ctx.current_invocation is revised
+    assert ctx.invocations == [revised_invocation]
+    assert ctx.current_invocation is revised_invocation
     # the trace grew: the original track step plus the changed supersede step
     assert len(ctx.trace) == 2
     assert ctx.trace[-1].changed is True
-    assert ctx.trace[-1].object is revised
+    assert ctx.trace[-1].object is revised_invocation
     assert ctx.trace[-1].origin is guard
 
 
@@ -249,8 +249,8 @@ def test_track_and_supersede_record_the_stage_on_the_step():
     ctx = TokeoAiContext()
     invocation = ctx.track(object(), Invocation(id='t1', name='calc'))
     assert ctx.trace[-1].stage is None
-    revised = copy.copy(invocation)
-    ctx.supersede(object(), revised, invocation, stage='on_call')
+    revised_invocation = copy.copy(invocation)
+    ctx.supersede(object(), revised_invocation, invocation, stage='on_call')
     assert ctx.trace[-1].stage == 'on_call'
 
 
@@ -260,8 +260,8 @@ def test_refine_messages_in_place_records_an_unchanged_step():
     # is on the trace and the cache stays the same live list
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     before = ctx.messages
-    returned = ctx.refine_messages(object(), None, stage='on_begin')
-    assert returned is before
+    result = ctx.refine_messages(object(), None, stage='on_begin')
+    assert result is before
     assert ctx.trace[-1].changed is False
     assert ctx.trace[-1].stage == 'on_begin'
 
@@ -269,8 +269,8 @@ def test_refine_messages_in_place_records_an_unchanged_step():
 def test_refine_messages_same_list_is_also_unchanged():
     """Returning the live messages list counts as in place: an unchanged step."""
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
-    returned = ctx.refine_messages(object(), ctx.messages, stage='on_prompt')
-    assert returned is ctx.messages
+    result = ctx.refine_messages(object(), ctx.messages, stage='on_prompt')
+    assert result is ctx.messages
     assert ctx.trace[-1].changed is False
 
 
@@ -281,9 +281,9 @@ def test_refine_messages_with_a_new_list_replaces_the_whole_conversation():
     ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
     live = ctx.messages
     new_convo = [{'role': 'system', 'content': 'be brief'}, {'role': 'user', 'content': 'hi'}]
-    returned = ctx.refine_messages(object(), new_convo, stage='on_prompt')
+    result = ctx.refine_messages(object(), new_convo, stage='on_prompt')
     # same live list object, new content, every entry a TokeoAiChatMessage
-    assert returned is live
+    assert result is live
     assert [m['role'] for m in ctx.messages] == ['system', 'user']
     assert all(isinstance(m, TokeoAiChatMessage) for m in ctx.messages)
     assert ctx.trace[-1].changed is True
@@ -340,9 +340,9 @@ def test_track_wraps_plain_values_in_a_note():
     ctx.track(origin, 'policy checked')
     ctx.track(origin, {'checked': 3})
     ctx.track(origin, 42)
-    noted = [step.object for step in ctx.trace]
-    assert all(isinstance(obj, TokeoAiTraceNote) for obj in noted)
-    assert [obj.content for obj in noted] == ['policy checked', {'checked': 3}, 42]
+    trace_notes = [step.object for step in ctx.trace]
+    assert all(isinstance(obj, TokeoAiTraceNote) for obj in trace_notes)
+    assert [obj.content for obj in trace_notes] == ['policy checked', {'checked': 3}, 42]
 
 
 class _TrackMyKind:

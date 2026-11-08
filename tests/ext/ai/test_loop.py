@@ -41,7 +41,7 @@ class ScriptProvider(TokeoAiProvider):
     arguments), ...]}```. The turn played is the number of assistant turns in
     the messages so far, so a provider call needs no state of its own; past the
     end the last turn repeats. Every call records the messages it got in
-    ```seen```.
+    ```seen_messages```.
     """
 
     class Meta:
@@ -49,11 +49,11 @@ class ScriptProvider(TokeoAiProvider):
 
     def __init__(self, app, *args, **kw):
         super().__init__(app, *args, **kw)
-        self.seen = []
+        self.seen_messages = []
 
     def chat(self, messages, profile, tools=None, model_params=None):
         """Play the next turn of the script, record the messages."""
-        self.seen.append(list(messages))
+        self.seen_messages.append(list(messages))
         script = profile['options']['script']
         index = min(sum(1 for m in messages if m.get('role') == 'assistant'), len(script) - 1)
         turn = script[index]
@@ -136,7 +136,7 @@ def test_chat_runs_a_tool_and_asks_the_model_again():
         assert result.loopdata.steps == 1
         assert get_tool_contents(result) == ['moin']
         # the follow-up model call got the assistant turn and the tool result
-        last = app.ai._get_provider(SCRIPT).seen[-1]
+        last = app.ai._get_provider(SCRIPT).seen_messages[-1]
         assert [m['role'] for m in last] == ['user', 'assistant', 'tool']
 
 
@@ -247,7 +247,7 @@ def test_chat_redact_masks_the_call_in_history_and_trace():
         result = app.ai.chat([dict(role='user', content='hi')], agent='redacting')
         assert get_tool_contents(result) == ['[redacted]']
         # the follow-up model call got the masked assistant turn
-        assert 'geheim' not in repr(app.ai._get_provider(SCRIPT).seen[-1])
+        assert 'geheim' not in repr(app.ai._get_provider(SCRIPT).seen_messages[-1])
         assert 'geheim' not in repr([s.object for s in result.trace])
 
 
@@ -276,7 +276,7 @@ def test_a_decline_at_on_prompt_raises_with_the_run_so_far():
     with LoopTest(config_defaults=make_declining_config('on_prompt')) as app:
         with pytest.raises(TokeoAiRunDeclinedError, match='run declined at on_prompt: not today') as err_info:
             app.ai.chat([dict(role='user', content='hi')], agent='declining')
-        assert app.ai._get_provider(SCRIPT).seen == []
+        assert app.ai._get_provider(SCRIPT).seen_messages == []
     assert (err_info.value.stage, err_info.value.reason, err_info.value.by) == ('on_prompt', 'not today', 'human')
     assert err_info.value.result.trace[-1].object.content == dict(decline=dict(stage='on_prompt', reason='not today', by='human'))
 

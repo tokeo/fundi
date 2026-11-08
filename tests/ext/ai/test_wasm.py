@@ -461,6 +461,6 @@ def test_the_cache_dir_keeps_the_compiled_runtime(tmp, monkeypatch):
     def fail_compile(*args, **kw):
         raise AssertionError('compiled although cached')
 
-    cached = type('Module', (), dict(__init__=fail_compile, deserialize_file=wasmtime.Module.deserialize_file))
-    monkeypatch.setattr(wasmtime, 'Module', cached)
+    cached_module_cls = type('Module', (), dict(__init__=fail_compile, deserialize_file=wasmtime.Module.deserialize_file))
+    monkeypatch.setattr(wasmtime, 'Module', cached_module_cls)
     assert run_untrusted('2', cache_dir=tmp.dir).value.as_str == '2'

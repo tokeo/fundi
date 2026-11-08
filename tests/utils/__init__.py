@@ -153,14 +153,14 @@ def wait_process_group_ended(pgid, timeout=5.0):
 
     """
 
-    def has_ended():
+    def ended():
         try:
             os.killpg(pgid, 0)
         except ProcessLookupError:
             return True
         return False
 
-    return wait_until(has_ended, timeout)
+    return wait_until(ended, timeout)
 
 
 async def wait_until_async(check, timeout=5.0, interval=0.02):

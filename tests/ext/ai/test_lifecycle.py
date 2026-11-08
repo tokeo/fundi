@@ -71,8 +71,8 @@ def test_hook_signatures_match_the_contract():
 def test_before_may_reshape_and_return_a_dict():
     """before returns reshaped arguments: path 'x' comes back as 'safe/x'."""
     tool = _FramedTool.__new__(_FramedTool)
-    reshaped = tool.before({}, {'path': 'x'}, lambda m: None)
-    assert reshaped == {'path': 'safe/x'}
+    reshaped_arguments = tool.before({}, {'path': 'x'}, lambda m: None)
+    assert reshaped_arguments == {'path': 'safe/x'}
 
 
 def test_after_may_reshape_the_result():
@@ -94,11 +94,11 @@ def test_prepare_and_teardown_write_turndata():
 def test_teardown_reads_exception_from_result():
     """On a failed call teardown gets 'ValueError: nope' in result.state."""
     tool = _BareTool.__new__(_BareTool)
-    failed = ToolResult(value=None, state=ToolStates(error='ValueError: nope'))
+    failed_result = ToolResult(value=None, state=ToolStates(error='ValueError: nope'))
     # the default teardown is a no-op, but the contract is that result is always
     # a ToolResult and the exception lives in result.state.error
-    assert tool.teardown({}, {}, failed, lambda message: None) is None
-    assert failed.state.error == 'ValueError: nope'
+    assert tool.teardown({}, {}, failed_result, lambda message: None) is None
+    assert failed_result.state.error == 'ValueError: nope'
 
 
 # ---- the lifecycle as the loop runs it --------------------------------------
@@ -224,13 +224,13 @@ class _BrokenSandbox:
 class _SeeingTool(TokeoAiTool):
     """Records the result its teardown gets."""
 
-    seen = None
+    seen_result = None
 
     def exec(self, path):
         return ToolResult(value='never')
 
     def teardown(self, turndata, arguments, result, track):
-        self.seen = result
+        self.seen_result = result
 
 
 def test_teardown_gets_a_tool_result_when_the_sandbox_fails():
@@ -239,6 +239,6 @@ def test_teardown_gets_a_tool_result_when_the_sandbox_fails():
     handler = TokeoAi.__new__(TokeoAi)
     with pytest.raises(TokeoAiError, match='timed out'):
         handler._exec_lifecycle(tool, _BrokenSandbox(), {'path': 'x'}, TokeoAiContext(messages=[]))
-    assert isinstance(tool.seen, ToolResult)
-    assert tool.seen.value is None
-    assert tool.seen.state.error == 'TokeoAiError: timed out after 1s'
+    assert isinstance(tool.seen_result, ToolResult)
+    assert tool.seen_result.value is None
+    assert tool.seen_result.state.error == 'TokeoAiError: timed out after 1s'

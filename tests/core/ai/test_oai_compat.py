@@ -118,35 +118,35 @@ def test_oai_compat_keeps_reasoning_apart(monkeypatch):
 
 def test_oai_compat_sends_tools_and_auth_only_when_present(monkeypatch):
     """A key goes out as 'Bearer secret-token' and the tools in the body."""
-    seen = {}
+    seen_request = {}
 
     def handler(request):
-        seen['auth'] = request.headers.get('Authorization')
-        seen['body'] = json.loads(request.content)
+        seen_request['auth'] = request.headers.get('Authorization')
+        seen_request['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     # with a key and tools, both must travel
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1', 'key': 'secret-token'}}
     provider = _make_provider(handler, monkeypatch)
     provider.chat([{'role': 'user', 'content': 'hi'}], profile, tools=[{'name': 'calc'}])
-    assert seen['auth'] == 'Bearer secret-token'
-    assert seen['body']['tools'] == [{'name': 'calc'}]
-    assert seen['body']['model'] == 'm'
+    assert seen_request['auth'] == 'Bearer secret-token'
+    assert seen_request['body']['tools'] == [{'name': 'calc'}]
+    assert seen_request['body']['model'] == 'm'
 
 
 def test_oai_compat_omits_auth_and_tools_when_absent(monkeypatch):
     """Without key and tools no Authorization header and no tools are sent."""
-    seen = {}
+    seen_request = {}
 
     def handler(request):
-        seen['auth'] = request.headers.get('Authorization')
-        seen['body'] = json.loads(request.content)
+        seen_request['auth'] = request.headers.get('Authorization')
+        seen_request['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     provider = _make_provider(handler, monkeypatch)
     provider.chat([{'role': 'user', 'content': 'hi'}], _PROFILE)
-    assert seen['auth'] is None
-    assert 'tools' not in seen['body']
+    assert seen_request['auth'] is None
+    assert 'tools' not in seen_request['body']
 
 
 def test_oai_compat_unreachable_endpoint_raises_clear_error(monkeypatch):
@@ -184,52 +184,52 @@ def test_oai_compat_requires_base_url_and_model():
 
 def test_oai_compat_sends_profile_model_params(monkeypatch):
     """Profile model_params temperature 0.2 and top_p 0.9 go into the body."""
-    seen = {}
+    seen_request = {}
 
     def handler(request):
-        seen['body'] = json.loads(request.content)
+        seen_request['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
     provider = _make_provider(handler, monkeypatch)
     provider.chat([{'role': 'user', 'content': 'hi'}], profile)
-    assert seen['body']['temperature'] == 0.2
-    assert seen['body']['top_p'] == 0.9
+    assert seen_request['body']['temperature'] == 0.2
+    assert seen_request['body']['top_p'] == 0.9
     # the fixed keys are never shadowed by a param
-    assert seen['body']['model'] == 'm'
+    assert seen_request['body']['model'] == 'm'
 
 
 def test_oai_compat_call_params_override_profile(monkeypatch):
     """A call temperature 0.9 overrides the profile 0.2; top_p 0.9 stays."""
-    seen = {}
+    seen_request = {}
 
     def handler(request):
-        seen['body'] = json.loads(request.content)
+        seen_request['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     profile = {'model': 'm', 'options': {'base_url': 'http://x/v1'}, 'model_params': {'temperature': 0.2, 'top_p': 0.9}}
     provider = _make_provider(handler, monkeypatch)
     # the call override wins key by key; unset keys keep the profile value
     provider.chat([{'role': 'user', 'content': 'hi'}], profile, model_params={'temperature': 0.9})
-    assert seen['body']['temperature'] == 0.9
-    assert seen['body']['top_p'] == 0.9
+    assert seen_request['body']['temperature'] == 0.9
+    assert seen_request['body']['top_p'] == 0.9
 
 
 def test_oai_compat_model_param_overrides_profile_model(monkeypatch):
     """model in the call model_params sends 'override-model' instead."""
-    seen = {}
+    seen_request = {}
 
     def handler(request):
-        seen['body'] = json.loads(request.content)
+        seen_request['body'] = json.loads(request.content)
         return httpx.Response(200, json={'choices': [{'message': {'content': 'ok'}}]})
 
     profile = {'model': 'from-profile', 'options': {'base_url': 'http://x/v1'}}
     provider = _make_provider(handler, monkeypatch)
     # a model key in model_params targets a different model on the same endpoint
     provider.chat([{'role': 'user', 'content': 'hi'}], profile, model_params={'model': 'override-model'})
-    assert seen['body']['model'] == 'override-model'
+    assert seen_request['body']['model'] == 'override-model'
     # model appears once, not duplicated, and messages stay intact
-    assert seen['body']['messages'] == [{'role': 'user', 'content': 'hi'}]
+    assert seen_request['body']['messages'] == [{'role': 'user', 'content': 'hi'}]
 
 
 def test_oai_compat_maps_refusal(monkeypatch):
