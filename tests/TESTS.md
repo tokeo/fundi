@@ -292,10 +292,10 @@ def start_worker(tmp_path):
   another style of section comments keeps it
 
 ```python
-# outbox_dir
+# get_outbox_dir
 
 
-def test_outbox_dir_from_config(tmp_path, monkeypatch):
+def test_get_outbox_dir_from_config(tmp_path, monkeypatch):
     ...
 ```
 
@@ -657,14 +657,14 @@ import threading
 import uuid
 
 
-def outbox_dir(app):
+def get_outbox_dir(app):
     """The directory of the outbox, OUTBOX_DIR before the config."""
     return os.environ.get('OUTBOX_DIR') or app.config.get('outbox', 'dir')
 
 
-def put(directory, text):
+def put(outbox_dir, text):
     """Writes text as a new message and returns its file name."""
-    path = os.path.join(directory, uuid.uuid4().hex)
+    path = os.path.join(outbox_dir, uuid.uuid4().hex)
     with open(f'{path}.tmp', 'w') as f:
         f.write(text)
     # the worker only sees complete messages
@@ -675,18 +675,22 @@ def put(directory, text):
 class Worker(threading.Thread):
     """Hands each message of a directory on and removes it afterwards."""
 
-    def __init__(self, directory, handle, interval=0.02):
+    def __init__(self, outbox_dir, handle, interval=0.02):
         super().__init__(daemon=True)
-        self.directory = directory
+        #: The directory of the outbox
+        self.outbox_dir = outbox_dir
+        #: Called with the text of each message
         self.handle = handle
+        #: The seconds between two rounds
         self.interval = interval
-        self.stopped = threading.Event()
+        #: Set to stop the worker
+        self.stop_event = threading.Event()
 
     def run(self):
-        while not self.stopped.wait(self.interval):
-            for name in os.listdir(self.directory):
+        while not self.stop_event.wait(self.interval):
+            for name in os.listdir(self.outbox_dir):
                 if name.endswith('.msg'):
-                    self._take(os.path.join(self.directory, name))
+                    self._take(os.path.join(self.outbox_dir, name))
 
     def _take(self, path):
         with open(path) as f:
@@ -699,7 +703,7 @@ class Worker(threading.Thread):
         os.remove(path)
 
     def stop(self):
-        self.stopped.set()
+        self.stop_event.set()
         self.join()
 ```
 
@@ -718,7 +722,7 @@ import threading
 import pytest
 from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
-from tokeo.core.utils.outbox import outbox_dir, put, Worker
+from tokeo.core.utils.outbox import get_outbox_dir, put, Worker
 from tests.utils import stresstest, wait_until
 
 # a stress run is repeated by make test STRESSTESTS=1 STRESS_SEED=<seed>
@@ -728,9 +732,9 @@ SEED = int(os.environ.get('STRESS_SEED', random.randrange(2**32)))
 class OutboxTest(TokeoTest):
     """A test app with the given directory as outbox."""
 
-    def __init__(self, directory, **kw):
+    def __init__(self, outbox_dir, **kw):
         config = init_defaults('outbox')
-        config['outbox']['dir'] = directory
+        config['outbox']['dir'] = outbox_dir
         super().__init__(config_defaults=config, **kw)
 
 
@@ -750,24 +754,24 @@ def start_worker(tmp_path):
         worker.stop()
 
 
-# outbox_dir
+# get_outbox_dir
 
 
-def test_outbox_dir_from_config(tmp_path, monkeypatch):
+def test_get_outbox_dir_from_config(tmp_path, monkeypatch):
     """Without OUTBOX_DIR the directory of the config is taken."""
     monkeypatch.delenv('OUTBOX_DIR', raising=False)
     with OutboxTest(str(tmp_path)) as app:
-        assert outbox_dir(app) == str(tmp_path)
+        assert get_outbox_dir(app) == str(tmp_path)
 
 
-def test_outbox_dir_from_env_while_set(tmp_path, monkeypatch):
+def test_get_outbox_dir_from_env_while_set(tmp_path, monkeypatch):
     """OUTBOX_DIR wins while it is set, afterwards the config counts again."""
     monkeypatch.delenv('OUTBOX_DIR', raising=False)
     with OutboxTest(str(tmp_path)) as app:
         with monkeypatch.context() as patch:
             patch.setenv('OUTBOX_DIR', '/var/outbox')
-            assert outbox_dir(app) == '/var/outbox'
-        assert outbox_dir(app) == str(tmp_path)
+            assert get_outbox_dir(app) == '/var/outbox'
+        assert get_outbox_dir(app) == str(tmp_path)
 
 
 # put
