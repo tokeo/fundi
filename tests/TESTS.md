@@ -43,11 +43,10 @@ the app itself. Below them the directories follow the package path of the code,
 e.g. ```tests/core/ai/``` for ```tokeo/core/ai/```.
 
 A subject is one module or package under test. Its tests sit in one flat
-file in the directory of its package path, or, as soon as it has more than
-one file, in a directory of its own named after it. When a subject directory
-holds more than 6 Python files, test files, helpers and probes counted
-together, its helpers and probes move into ```lib/```; the test files stay on
-top.
+file in the directory of its package path, or, as soon as it has more than one
+file, in a directory of its own named after it. When a subject directory holds
+more than 6 Python files, test files, helpers and probes counted together,
+its helpers and probes move into ```lib/```; the test files stay on top.
 Test data lives in ```data/``` of its subject. The files in the root of
 ```tests/``` are the shared base.
 
@@ -98,8 +97,8 @@ tests/
 - A new test goes into the file of its subject, below the tests of the same
   function; a new file only for a part of its own, e.g. the stress tests or
   the tests against a live server
-- When a flat subject gets a second file, both move into a new directory
-  named after the subject, with an ```__init__.py```, e.g.
+- When a flat subject gets a second file, both move into a new directory named
+  after the subject, with an ```__init__.py```, e.g.
   ```tests/ext/test_print.py``` becomes ```tests/ext/print/test_print.py```
 
 ## Shared base
@@ -256,8 +255,8 @@ def test_serve_queues_needs_a_name(serve, capsys):
   order
 - A subject has no ```conftest.py``` of its own
 - A function of a test file that is neither a test nor a fixture starts
-  with an underscore and is named by verb and object, ```make_``` for test
-  data, e.g. ```_run_tool``` or ```_make_config```; a fixture stays a noun
+  with an underscore and is named by verb and object, e.g. ```_run_tool``` or
+  ```_make_config```; ```_make_``` builds test data. A fixture stays a noun
 
 ```python
 @pytest.fixture
@@ -285,6 +284,8 @@ def start_worker(tmp_path):
 - A file covering several modules prefixes the module, e.g.
   ```test_check_required_extensions_names_the_missing_ones```
 - No path in the name, pytest shows it: ```tests/core/utils/test_date.py::test_...```
+- The caught exception of ```pytest.raises``` is ```err_info```:
+  ```with pytest.raises(TokeoAiError) as err_info:```
 - ```expected``` (the expected result, a noun) and the marker ```@isolated```
   keep their names, as the names section of the guideline sets
 - The tests of one function stand together under a section comment with its
@@ -318,14 +319,6 @@ def test_invalid_body(body):
     with SmtpTest() as app:
         with pytest.raises(TypeError):
             app.mail._make_message(body, **app.mail._get_params())
-```
-
-A test that reads the raised error names it ```err_info```:
-
-```python
-with pytest.raises(TokeoAiError) as err_info:
-    provider.chat([{'role': 'user', 'content': 'hi'}], PROFILE)
-assert 'HTTP 401' in str(err_info.value)
 ```
 
 ## Docstrings
@@ -522,7 +515,7 @@ is missing, never to hide a failure.
 
 ```python
 needs_rabbitmq = pytest.mark.skipif(
-    not _reachable(RABBITMQ_URL),
+    not _is_reachable(RABBITMQ_URL),
     reason='needs a rabbitmq at localhost:5672 (set TOKEO_TEST_RABBITMQ_URL)',
 )
 
