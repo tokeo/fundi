@@ -240,7 +240,10 @@ def test_subprocess_timeout_ends_the_processes_the_tool_started(tmp_path):
 
 def test_subprocess_end_ends_the_processes_the_tool_started(tmp_path):
     """A tool that returns at once leaves no sleep it started behind."""
-    with FundiTest(config_defaults=_make_spawn_config(tmp_path)) as app:
+    cfg = _make_spawn_config(tmp_path)
+    # the 1 s timeout is for the timeout test, under load this call takes longer
+    cfg['ai']['sandboxes']['jailed']['options']['timeout'] = 30
+    with FundiTest(config_defaults=cfg) as app:
         assert run_tool(app, 'spawn', 'mixed', seconds=0) == 'spawned'
     pid = int((tmp_path / 'pid.txt').read_text())
     assert wait_until(lambda: not _is_alive(pid))

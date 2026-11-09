@@ -204,6 +204,8 @@ def test_reuse_starts_a_new_container_after_a_timeout(docker):
     with DockerTest(config_defaults=make_ai_config(docker, reuse=True, timeout=1)) as app:
         with pytest.raises(TokeoAiError, match='timed out'):
             run_tool(app, 'sleep', dict(seconds=5))
+        # the 1 s timeout is for the sleep only, under load the echo takes longer
+        app.ai._get_sandbox('docked')._config_options['timeout'] = 30
         assert run_tool(app, 'echo', dict(text='again')).value.as_str == 'again'
         app.ai._get_sandbox('docked').close()
     log = get_docker_calls(docker)
