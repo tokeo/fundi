@@ -2,16 +2,19 @@
 Tests for the docker sandbox.
 
 A fake ```docker``` command stands in for the client: it logs its arguments,
-answers ```run -d``` and ```kill```, and for a run or an exec starts the
-generic runner locally with only the ```-e``` variables. So the tests see the
-exact command line and a real tool result without a docker service. The live
-test runs only with a reachable docker and ```TOKEO_TEST_DOCKER_IMAGE```.
+answers ```run -d``` (after ```FAKE_DOCKER_SLEEP``` seconds, failing with
+```FAKE_DOCKER_FAIL```), ```kill``` and ```rm```, and for a run or an exec
+starts the generic runner locally with only the ```-e``` variables. So the
+tests see the exact command line and a real tool result without a docker
+service. The live test runs only with a reachable docker and
+```TOKEO_TEST_DOCKER_IMAGE```.
 """
 
 import os
 import sys
 import json
 import shutil
+import subprocess
 import pytest
 from cement.utils.misc import init_defaults
 from tokeo.main import TokeoTest
@@ -28,13 +31,14 @@ TOOLS = ['echo', 'env', 'sleep', 'boom', 'loud', 'big']
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 DOCKER_FAKE_SCRIPT = """#!{python}
-import os, sys, json
+import os, sys, json, time
 args = sys.argv[1:]
 with open({log!r}, 'a') as log:
     log.write(json.dumps(args) + '\\n')
-if args[0] == 'kill':
+if args[0] in ('kill', 'rm'):
     sys.exit(0)
 if args[0] == 'run' and '-d' in args:
+    time.sleep(float(os.environ.get('FAKE_DOCKER_SLEEP', 0)))
     fail = os.environ.get('FAKE_DOCKER_FAIL')
     sys.stderr.write(fail or '')
     sys.exit(1 if fail else 0)
@@ -223,6 +227,33 @@ def test_reuse_reports_a_container_that_does_not_start(docker, monkeypatch):
         assert app.ai._get_sandbox('docked')._container is None
 
 
+def test_reuse_gives_up_a_start_over_start_timeout(docker, monkeypatch):
+    """A run -d over start_timeout raises, its container is removed, none kept."""
+    monkeypatch.setenv('FAKE_DOCKER_SLEEP', '5')
+    with DockerTest(config_defaults=make_ai_config(docker, reuse=True, start_timeout=1)) as app:
+        with pytest.raises(TokeoAiError, match=r'cannot start its container: timed out after 1s$'):
+            run_tool(app, 'echo', dict(text='x'))
+        assert app.ai._get_sandbox('docked')._container is None
+    start, remove = get_docker_calls(docker)
+    assert remove == ['rm', '-f', start[start.index('--name') + 1]]
+
+
+@pytest.mark.parametrize('options, start_timeout', [(dict(), 60), (dict(start_timeout=11), 11)])
+def test_reuse_starts_under_start_timeout_and_calls_under_timeout(docker, monkeypatch, options, start_timeout):
+    """The run -d gets start_timeout, 60 by default; the exec gets timeout."""
+    timeouts = []
+    real_run = subprocess.run
+
+    def run_and_note_the_timeout(args, **kw):
+        timeouts.append((args[1], kw['timeout']))
+        return real_run(args, **kw)
+
+    monkeypatch.setattr(subprocess, 'run', run_and_note_the_timeout)
+    with DockerTest(config_defaults=make_ai_config(docker, reuse=True, timeout=7, **options)) as app:
+        assert run_tool(app, 'echo', dict(text='x')).value.as_str == 'x'
+    assert timeouts[:2] == [('run', start_timeout), ('exec', 7)]
+
+
 def test_a_missing_docker_command_is_a_machinery_error(tmp_path):
     """A command that does not exist raises 'cannot run'."""
     with DockerTest(config_defaults=make_ai_config(str(tmp_path / 'nodocker'))) as app:
@@ -251,6 +282,9 @@ def test_the_docker_sandbox_needs_an_image(docker):
         (dict(max_disk_mb=0), 'ai.sandboxes.docked.options', 'max_disk_mb must be a whole number'),
         (dict(max_disk_mb=1.5), 'ai.sandboxes.docked.options', 'max_disk_mb must be a whole number'),
         (dict(max_output_mb=0), 'ai.sandboxes.docked.options', 'max_output_mb must be a number of MB above 0'),
+        (dict(start_timeout=0.5), None, None),
+        (dict(start_timeout=0), 'ai.sandboxes.docked.options', 'start_timeout must be a number of seconds above 0'),
+        (dict(start_timeout='slow'), 'ai.sandboxes.docked.options', 'start_timeout must be a number of seconds above 0'),
     ],
 )
 def test_the_linter_checks_the_docker_options(options, path, message):

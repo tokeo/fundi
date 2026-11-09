@@ -515,6 +515,7 @@ read-only. Several docker sandboxes may differ in their rights.
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | docker, nothing else is set |
 | ```timeout``` | ```30``` | seconds | the host, then the container is killed |
 | ```reuse``` | ```false``` | ```true``` = one container for the process | the host |
+| ```start_timeout``` | ```60``` | seconds above 0, the start of the container of ```reuse``` | the host, then the container is removed |
 | ```max_output_mb``` | ```1``` | a number above 0 | the runner (capture), the host (reply) |
 
 ```yaml
@@ -537,6 +538,7 @@ sandboxes:
         TZ: ${TZ}
       timeout: 30               # seconds, then the container is killed
       reuse: false              # true = one container for the process
+      start_timeout: 60         # seconds the start of the reused container may take
       max_output_mb: 1          # stdout and stderr kept, largest reply
 ```
 

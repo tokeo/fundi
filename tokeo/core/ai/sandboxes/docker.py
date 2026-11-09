@@ -39,7 +39,9 @@ sandboxes:
 : ```reuse: false``` (the default) starts a fresh container for every call.
     ```reuse: true``` starts one container on the first call, with the same
     options, runs each call in it by ```exec```, and removes it when the process
-    ends; a timeout removes it too, the next call starts a new one.
+    ends; a timeout removes it too, the next call starts a new one. The start
+    of that container may take ```start_timeout``` seconds (default 60), the
+    ```timeout``` of a call does not apply to it.
 
 : ```command``` names the client, ```docker``` or ```podman``` (rootless).
     Whoever may use the docker service is root on the host in effect: never
@@ -55,7 +57,7 @@ import threading
 import tempfile
 import subprocess
 
-from tokeo.core.utils.validate import is_int_ge
+from tokeo.core.utils.validate import is_int_ge, is_number_gt
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError
 from tokeo.core.ai.sandbox import SANDBOX_MAX_OUTPUT_MB
 from tokeo.core.ai.sandboxes._common import (
@@ -119,6 +121,8 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             timeout=30,
             # true = one container for the process, else one per call
             reuse=False,
+            # wall-clock seconds the start of the container of reuse may take
+            start_timeout=60,
             # MB of stdout and stderr kept, and the largest reply read
             max_output_mb=SANDBOX_MAX_OUTPUT_MB,
         )
@@ -140,12 +144,15 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         ### Returns
 
         - **list[str]**: An error for a missing image, a root user, a max_disk_mb
-            that is no whole number from 1, or a max_output_mb not above 0
+            that is no whole number from 1, or a max_output_mb or start_timeout
+            not above 0
 
         """
         errors = TokeoAiSandbox.lint_options(self, options)
         if 'max_disk_mb' in (options or {}) and not is_int_ge(options['max_disk_mb'], 1):
             errors.append('max_disk_mb must be a whole number of MB, at least 1')
+        if 'start_timeout' in (options or {}) and not is_number_gt(options['start_timeout'], 0):
+            errors.append('start_timeout must be a number of seconds above 0')
         if not (options or {}).get('image'):
             errors.append('image is required')
         if str((options or {}).get('user', '65534:65534')).split(':')[0] in ('root', '0'):
@@ -192,7 +199,13 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                 if self._container is None:
                     name = self._format_container_name()
                     idle_cmd = ['--entrypoint', python, image, '-c', 'import signal; signal.pause()']
-                    self._run_client(self._build_run_args(name, detach=True) + idle_cmd, None, class_path)
+                    try:
+                        self._run_client(self._build_run_args(name, detach=True) + idle_cmd, None, class_path)
+                    except TokeoAiError:
+                        # a failed or timed out start may leave its container,
+                        # created or running; rm -f takes both, kill no created one
+                        self._kill_container(name, remove=True)
+                        raise
                     self._container = name
                     atexit.register(self.close)
                 name = self._container
@@ -245,10 +258,12 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         return args
 
     def _run_client(self, args, job, class_path):
-        # run the client, stdin carries the job; a timeout is a failure. stdout
+        # run the client, stdin carries the job; a timeout is a failure. no job
+        # is the start of the container of reuse, under start_timeout. stdout
         # and stderr go to files and are read at most max_output_mb, so a reply
         # without end cannot fill the memory of the host
         max_output_mb = self._config('max_output_mb')
+        timeout = self._config('timeout') if job is not None else self._config('start_timeout')
         with tempfile.TemporaryFile() as out_file, tempfile.TemporaryFile() as err_file:
             try:
                 proc = subprocess.run(
@@ -256,10 +271,12 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
                     input=job.encode() if job is not None else None,
                     stdout=out_file,
                     stderr=err_file,
-                    timeout=self._config('timeout'),
+                    timeout=timeout,
                 )
             except subprocess.TimeoutExpired:
-                raise TokeoAiError(f'tool {class_path!r} timed out after {self._config("timeout")}s in the docker sandbox')
+                if job is None:
+                    raise TokeoAiError(f'the docker sandbox cannot start its container: timed out after {timeout}s')
+                raise TokeoAiError(f'tool {class_path!r} timed out after {timeout}s in the docker sandbox')
             except OSError as err:
                 raise TokeoAiError(f'the docker sandbox cannot run {args[0]!r}: {err}')
             out_file.seek(0)
@@ -270,10 +287,11 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
             raise TokeoAiError(f'the docker sandbox cannot start its container: {err.strip()[:200]}')
         return out, err
 
-    def _kill_container(self, name):
-        # remove the container; it may be gone already (--rm)
+    def _kill_container(self, name, remove=False):
+        # kill the container, --rm removes it; it may be gone already. remove
+        # takes a container that was created but never started too
         try:
-            kill_cmd = [self._config('command'), 'kill', name]
+            kill_cmd = [self._config('command')] + (['rm', '-f'] if remove else ['kill']) + [name]
             subprocess.run(kill_cmd, capture_output=True, stdin=subprocess.DEVNULL, timeout=_DOCKER_KILL_TIMEOUT)
         except (OSError, subprocess.TimeoutExpired):
             pass
