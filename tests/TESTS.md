@@ -18,7 +18,7 @@ studying all the others. Each rule comes with an example.
 ```sh
 make test                          # all tests
 make test files=tests/ext/ai       # a directory or a file
-make test tests=throttle           # by name, as pytest -k
+make test tests=docker             # by name, as pytest -k
 make test debug=1                  # with prints and logs on debug level
 make test cov=1                    # with a coverage report
 make test STRESSTESTS=1            # the stress tests too
@@ -38,9 +38,9 @@ The temporary files of a run stay in ```tmp/tests/``` until the next run,
 ## Layout
 
 The directories of ```tests/``` follow the code under test: ```tests/core/```
-tests the core library, ```tests/ext/``` the extensions and ```tests/app/```
-the app itself. Below them the directories follow the package path of the code,
-e.g. ```tests/core/ai/``` for ```tokeo/core/ai/```.
+tests the core library and ```tests/ext/``` the extensions. Below them the
+directories follow the package path of the code, e.g. ```tests/core/ai/```
+for ```tokeo/core/ai/```.
 
 A subject is one module or package under test. Its tests sit in one flat
 file in the directory of its package path, or, as soon as it has more than one
@@ -88,7 +88,7 @@ tests/
 
 - A test file is named after what it tests, without what its directory
   already says: ```test_<module>.py``` for a module, e.g.
-  ```tests/ext/test_print.py```, ```test_<topic>.py``` or
+  ```tests/core/ai/test_utils.py```, ```test_<topic>.py``` or
   ```test_<part>.py``` in the directory of a subject, e.g.
   ```tests/core/ai/test_config.py```, ```tests/ext/ai/test_wasm.py```
 - The main file of a subject directory is named after the subject, e.g.
@@ -98,15 +98,16 @@ tests/
   function; a new file only for a part of its own, e.g. the stress tests or
   the tests against a live server
 - When a flat subject gets a second file, both move into a new directory named
-  after the subject, with an ```__init__.py```, e.g.
-  ```tests/ext/test_print.py``` becomes ```tests/ext/print/test_print.py```
+  after the subject, with an ```__init__.py```, as the tests of
+  ```tokeo/ext/ai.py``` lie in ```tests/ext/ai/```
 
 ## Shared base
 
 The root of ```tests/``` holds what every test may use: the setup pytest
 needs for all tests in ```conftest.py``` and a few general tools in
-```utils/```. It comes with the app template, so every project starts
-with the same base. Keeping it small lets each subject be read on its own.
+```utils/```. It follows the base of the app template, so every project
+works with the same tools. Keeping it small lets each subject be read on
+its own.
 
 | File | Holds |
 |---|---|
@@ -133,8 +134,8 @@ from tests.utils.isolation import IsolatedPytest
 - ```key``` is a random string of 32 characters, for a name or key of full
   length
 - ```disable_stdin_capture``` gives the test an empty stdin, for code that
-  reads stdin while pytest captures it, e.g. ```Connection.run()``` of
-  fabric; ```use_disabled_stdin_capture()``` does the same for one step
+  reads stdin while pytest captures it; ```use_disabled_stdin_capture()```
+  does the same for one step
 - ```ROOT_DIR``` is the root of the project, the working directory of every
   program a test starts
 
@@ -184,12 +185,13 @@ code of one test file stays in that file.
 |---|---|
 | ```<subject>_tests_helper.py``` | the test apps and shared code |
 | ```<subject>_tests_func_helpers.py``` | functions, when the helper grows too big |
-| ```<subject>_tests_<part>_helper.py``` | a part of its own, e.g. ```smtpd_tests_capture_events_helper.py``` |
+| ```<subject>_tests_<part>_helper.py``` | a part of its own |
 
-A helper holds test apps, functions and classes, no fixtures and no tests.
-When several test files need the same fixture, the helper holds the
-function that does the work, e.g. ```start_smtpd```, and each test file
-keeps its own short fixture around it.
+A helper holds test apps, functions and classes, no fixtures and no tests,
+e.g. the fake tools ```EchoTool``` and ```SleepTool``` of
+```tests/ext/ai/lib/ai_tests_helper.py```. When several test files need the
+same fixture, the helper holds the function that does the work, and each
+test file keeps its own short fixture around it.
 
 Names other files import are public, a leading underscore marks what only
 the helper itself uses.
@@ -202,22 +204,18 @@ extensions the subject needs. Differences are fixed derivations, not
 functions that build apps; the class name tells what a test needs.
 
 ```python
-class SchedulerTest(TokeoTest):
-    """A test app with the scheduler and the given tasks."""
+class DockerTest(TokeoTest):
+    """A test app with the ai extension and the extensions it needs."""
 
     class Meta:
-        extensions = ['tokeo.ext.print', 'tokeo.ext.tui.input', 'tokeo.ext.tui.output', 'tokeo.ext.scheduler']
-
-    def __init__(self, tasks=None, **kw):
-        config = init_defaults('scheduler')
-        config['scheduler']['tasks'] = tasks or {'time': dict(module='time', crontab='0 0 1 1 *')}
-        super().__init__(config_defaults=config, **kw)
-
-
-class SchedulerWithoutTuiTest(SchedulerTest):
-
-    class Meta:
-        extensions = ['tokeo.ext.print', 'tokeo.ext.tui.input', 'tokeo.ext.scheduler']
+        extensions = [
+            'tokeo.ext.yaml',
+            'tokeo.ext.appenv',
+            'tokeo.ext.print',
+            'tokeo.ext.jinja2',
+            'tokeo.ext.appshare',
+            'tokeo.ext.ai',
+        ]
 ```
 
 A base class of its own only pays when the derivations differ a lot;
@@ -228,18 +226,12 @@ A command runs by ```argv``` and ```app.run()```; what it prints is read by
 ```capsys```, a wrong argument ends in ```SystemExit```:
 
 ```python
-def test_launch_switches_removed(switch):
-    """--background and --no-colors are no switches any more."""
-    with SchedulerTest(argv=['scheduler', 'launch', switch]) as app:
-        with pytest.raises(SystemExit):
-            app.run()
-
-
-def test_serve_queues_needs_a_name(serve, capsys):
-    """--queues without a name exits with an error."""
-    with pytest.raises(SystemExit):
-        serve('--queues')
-    assert '--queues' in capsys.readouterr().err
+def test_ai_ask_asks_in_the_terminal(monkeypatch, capsys, key, out):
+    """ai ask in a terminal: y lets the run answer done, n prints the decline."""
+    ...
+    with LoopTest(argv=['ai', 'ask', 'hi', '--agent', 'careful'], config_defaults=cfg) as app:
+        app.run()
+    assert capsys.readouterr().out.splitlines()[-1] == out
 ```
 
 ## Fixtures
@@ -247,8 +239,7 @@ def test_serve_queues_needs_a_name(serve, capsys):
 - A fixture lives in the test file that uses it, above its first test
 - It has a one-line docstring naming what it gives
 - It gives one thing; a test that needs several of a kind, or differently
-  configured ones, gets a factory, e.g. ```start_worker``` in the complete
-  example below
+  configured ones, gets a factory, as in the complete example below
 - What it starts it stops after its ```yield```, also when the test fails
 - Its scope is the function; ```scope='module'``` only for a costly setup
   the tests only read, e.g. certificates, or for tests sharing a state in
@@ -256,54 +247,50 @@ def test_serve_queues_needs_a_name(serve, capsys):
 - A subject has no ```conftest.py``` of its own
 - A function of a test file that is neither a test nor a fixture starts
   with an underscore and is named by verb and object, e.g. ```_run_tool``` or
-  ```_make_config```; ```_make_``` builds test data. A fixture stays a noun
+  ```_make_spawn_config```; ```_make_``` builds test data. A fixture stays a
+  noun, e.g. ```docker```
 
 ```python
 @pytest.fixture
-def start_worker(tmp_path):
-    """Starts workers on tmp_path and stops them after the test."""
-    workers = []
-
-    def start(handle):
-        worker = Worker(str(tmp_path), handle)
-        worker.start()
-        workers.append(worker)
-        return worker
-
-    yield start
-    for worker in workers:
-        worker.stop()
+def docker(tmp_path):
+    """The path of a fake docker command; its log is get_docker_calls()."""
+    path = tmp_path / 'docker'
+    path.write_text(DOCKER_FAKE_SCRIPT.format(python=sys.executable, log=str(tmp_path / 'calls.log'), root=ROOT_DIR))
+    path.chmod(0o755)
+    return str(path)
 ```
 
 ## Names
 
 - Tests are functions, no classes: ```test_<function>_<expectation>```, e.g.
-  ```test_to_utc_aware_datetime_is_shifted```; for a class the class name in
-  lower case or the name of its method takes the place of the function,
-  e.g. ```test_worker_keeps_a_message_its_handler_failed_on```
+  ```test_add_tool_call_appends_with_a_counted_id```; for a class the class
+  name in lower case or the name of its method takes the place of the
+  function, e.g. ```test_chat_without_tool_calls_answers_at_once``` or
+  ```test_invocation_decision_constants_carry_the_expected_values```
 - A file covering several modules prefixes the module, e.g.
-  ```test_check_required_extensions_names_the_missing_ones```
-- No path in the name, pytest shows it: ```tests/core/utils/test_date.py::test_...```
+  ```test_redact_masks_nested_arguments``` in ```tests/core/ai/test_guard.py```
+- No path in the name, pytest shows it:
+  ```tests/core/ai/test_utils.py::test_...```
 - The caught exception of ```pytest.raises``` is ```err_info```:
   ```with pytest.raises(TokeoAiError) as err_info:```
 - ```expected``` (the expected result, a noun) and the marker ```@isolated```
   keep their names, as the names section of the guideline sets
 - The tests of one function stand together under a section comment with its
   name, with two blank lines before and after; a file that already uses
-  another style of section comments keeps it
+  another style of section comments keeps it, e.g. the ```# ---- ...```
+  lines of ```tests/core/ai/test_config.py```
 
 ```python
-# get_outbox_dir
+# chat
 
 
-def test_get_outbox_dir_from_config(tmp_path, monkeypatch):
+def test_chat_without_tool_calls_answers_at_once():
     ...
 ```
 
 - Tests sharing a state in order get it from a fixture with
-  ```scope='module'``` and run in the order of the file, e.g. the SMTP dialog
-  of ```test_process_line.py```; they are the only tests that depend on
-  their order, and their module docstring says so
+  ```scope='module'``` and run in the order of the file; they are the only
+  tests that depend on their order, and their module docstring says so
 
 ## Several cases of one expectation
 
@@ -313,12 +300,18 @@ cases share. ```ids``` names the cases where their values do not read well
 in the name pytest shows. Different expectations are different tests.
 
 ```python
-@pytest.mark.parametrize('body', [5, {'text': None}, (5, '')], ids=['int', 'dict_none', 'tuple_int'])
-def test_invalid_body(body):
-    """An int or a None part as body raises TypeError."""
-    with SmtpTest() as app:
-        with pytest.raises(TypeError):
-            app.mail._make_message(body, **app.mail._get_params())
+@pytest.mark.parametrize(
+    'name, message',
+    [('__implicit', 'reserved for the framework'), ('__own', 'reserved for the framework'), (None, 'must be a string')],
+    ids=['implicit', 'dunder', 'yaml_null'],
+)
+def test_linter_flags_a_reserved_or_no_agent_name(name, message):
+    """An agent named __implicit or __own is reserved, a yaml key null no name."""
+    cfg = make_ai_config()
+    cfg['ai']['agents'][name] = dict(type='fundi', options=dict(governors=[]))
+    with FundiTest(argv=LINT, config_defaults=cfg) as app:
+        issues = TokeoAiLinter(app).lint()
+        assert any(i.level == 'error' and message in i.message for i in issues)
 ```
 
 ## Docstrings
@@ -327,26 +320,30 @@ Every test has a docstring, pdoc shows it next to the name. It names the
 expectation, with the concrete value or case where possible.
 
 ```python
-def test_to_utc_aware_datetime_is_shifted():
-    """14:00 at +02:00 comes back as 12:00 UTC."""
-    d = datetime(2026, 6, 23, 14, 0, tzinfo=PLUS_TWO)
-    assert to_utc(d) == datetime(2026, 6, 23, 12, 0, tzinfo=timezone.utc)
+def test_coerce_types_like_a_yaml_scalar():
+    """'0.2', '42', 'true', 'null' get float, int, bool, None; 'qwen2.5' a str."""
+    assert coerce_model_param_value('0.2') == 0.2
+    assert coerce_model_param_value('42') == 42
+    ...
 ```
 
-Not ```"""Test to_utc."""``` and not the name as a sentence. One line is the
-rule; a test with a complex setup, e.g. a stress test, a probe or tests
-sharing a state in order, says in a few lines what runs, what is observed
-and what must hold. What all tests of a file share belongs into the module
-docstring, what a probe does into the docstring of the probe. Comments
-inside a test explain single steps only.
+Not ```"""Test coerce_model_param_value."""``` and not the name as a
+sentence. One line is the rule; a test with a complex setup, e.g. a stress
+test, a probe or tests sharing a state in order, says in a few lines what
+runs, what is observed and what must hold. What all tests of a file share
+belongs into the module docstring, what a probe does into the docstring of
+the probe. Comments inside a test explain single steps only.
 
 Every test file starts with a module docstring that names the code under
 test and what its tests cover:
 
 ```python
 """
-Tests for tokeo.core.utils.outbox: messages put into the outbox and handed
-on by its worker.
+Tests for the wasm sandbox as the ai extension drives it.
+
+Through the agent chain: what a wasm guest may reach, that it cannot import the
+framework, and that it has no network. The runtime guarantees on their own are
+tested in ```tests/core/ai/test_wasm.py```.
 """
 ```
 
@@ -357,28 +354,22 @@ or the project, and cleans nothing up: pytest empties ```tmp/tests/``` at the
 start of the next run, the results stay for a look until then.
 
 ```python
-def test_file_deleted_after_event(tmp_path):     # a directory of the test
-    _run(events, {'spool_path_prefix': str(tmp_path) + '/'})
-
-
-def test_temper_acquire_and_release(tmp):        # where a test app takes cement's fs.Tmp
-    with DiskcacheTest(tmp.dir) as app:
-        ...
-
-
-@pytest.fixture(scope='module')                  # shared by the tests of a module
-def certs(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp('certs')
+def test_subprocess_cwd_takes_effect(tmp_path):      # a directory of the test
+    cfg = make_ai_config()
+    cfg['ai']['sandboxes']['jailed']['options']['cwd'] = str(tmp_path / 'sbx')
     ...
+
+
+def test_wasm_names_a_missing_runtime(tmp):          # paths as str, by cement's fs.Tmp
+    ...
+    runtime_path = os.path.join(tmp.dir, 'python.wasm')
 ```
 
-A probe gets its directory from the test as an argument and creates none:
+A fixture with ```scope='module'``` takes its directory from
+```tmp_path_factory.mktemp()```. A probe gets its directory from the test as
+an argument and creates none.
 
-```python
-args = [sys.executable, '-m', probe, tmp.dir, 'dramatiq', 'monitor', '--follow']
-```
-
-No ```tempfile```, no ```shutil.rmtree```, no ```teardown_module``` for files.
+No ```tempfile```, no ```shutil.rmtree```, no clean-up of its own.
 
 ## State
 
@@ -387,25 +378,16 @@ globals change only by ```monkeypatch```, which restores them after the
 test, also where the code under test changes them.
 
 ```python
-monkeypatch.setattr(sys, 'argv', ['tokeo'])
-monkeypatch.setenv('dramatiq_worker_timeout', '500')
-monkeypatch.setattr(dramatiq_rabbitmq, 'DEAD_MESSAGE_TTL', dramatiq_rabbitmq.DEAD_MESSAGE_TTL)
+monkeypatch.setenv('FUNDI_HOST_VAR', 'host-value')
+monkeypatch.setattr(wasm, 'WASM_GUEST_MODULE_COPIES', ('no.such.module',))
+monkeypatch.setitem(sys.modules, 'wasmtime', None)
 ```
 
-A variable the code under test sets itself is announced first, else it
-stays for every later test:
-
-```python
-monkeypatch.setenv('dramatiq_queue_prefetch', '')
-monkeypatch.delenv('dramatiq_queue_prefetch')
-```
-
-A variable that may come from the shell and would change the result is
-removed for the test:
-
-```python
-monkeypatch.delenv('OUTBOX_DIR', raising=False)
-```
+A variable the code under test sets itself is announced first, by
+```monkeypatch.setenv(name, '')``` and ```monkeypatch.delenv(name)```, else
+it stays for every later test. A variable that may come from the shell and
+would change the result is removed for the test, by
+```monkeypatch.delenv(name, raising=False)```.
 
 ## Patch for a test or a step only
 
@@ -416,35 +398,28 @@ the change throughout, one step when only that step may see it.
 ```monkeypatch.context()``` gives a monkeypatch of its own that restores
 its changes at the end of its block, while the test goes on.
 
-A typical case is the standard input: pytest blocks reading it, but a
-program run by the code under test, e.g. by invoke, hands it on.
+A typical case is the standard input: pytest blocks reading it, but the
+code under test asks in the terminal, e.g. the confirm guard by
+```input()```.
 
 For the whole test:
 
 ```python
-def test_run_calls_a_task_with_its_runner(monkeypatch):
-    """run calls task1 with the runner of the local host, it exits with 0."""
-    # invoke hands stdin on, pytest blocks reading it
-    monkeypatch.setattr('sys.stdin', io.StringIO(''))
-    with AutomateTest() as app:
-        task = app.automate.tasks['task1']
-        results = app.automate.run(task)
-        ...
+def test_ai_ask_asks_in_the_terminal(monkeypatch, capsys, key, out):
+    """ai ask in a terminal: y lets the run answer done, n prints the decline."""
+    lines = [key, '']
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    monkeypatch.setattr('builtins.input', lambda prompt='': lines.pop(0))
+    ...
 ```
 
-For one step only:
+For one step only, as the complete example below shows too:
 
 ```python
-def test_run_calls_a_task_with_its_runner(monkeypatch):
-    """run calls task1 with the runner of the local host, it exits with 0."""
-    with AutomateTest() as app:
-        task = app.automate.tasks['task1']
-        with monkeypatch.context() as patch:
-            # invoke hands stdin on, pytest blocks reading it
-            patch.setattr('sys.stdin', io.StringIO(''))
-            results = app.automate.run(task)
-        # from here on sys.stdin is the one of pytest again
-        ...
+with monkeypatch.context() as patch:
+    patch.setattr('builtins.input', lambda prompt='': 'y')
+    app.run()
+# from here on input() reads the stdin of pytest again
 ```
 
 The shared base has both for stdin: the fixture ```disable_stdin_capture```
@@ -452,14 +427,12 @@ for the whole test and ```use_disabled_stdin_capture()``` of
 ```tests.utils``` for one step:
 
 ```python
-def test_run_calls_a_task_with_its_runner(disable_stdin_capture):
+def test_...(disable_stdin_capture):
     ...
 
 
-def test_run_calls_a_task_with_its_runner():
-    with AutomateTest() as app:
-        with use_disabled_stdin_capture():
-            results = app.automate.run(task)
+with use_disabled_stdin_capture():
+    app.run()
 ```
 
 ## Waiting
@@ -467,17 +440,15 @@ def test_run_calls_a_task_with_its_runner():
 A test waits for a condition, not for a fixed time.
 
 ```python
-assert wait_until(lambda: len(list(tmp_path.glob('pid_*'))) == 3, 3.0)
-assert await wait_until_async(lambda: srv.connections == 0)
-assert wait_process_group_ended(proc.pid)        # the master and all its workers
+assert wait_until(lambda: not _is_alive(pid))    # the sleep the tool started has ended
 ```
 
 ```wait_until``` and ```wait_until_async``` wait 5 seconds unless a timeout
 is given and return the last value of the check, so the ```assert``` shows
-what failed. ```time.sleep``` stays for a test that holds a state on
-purpose, e.g. a job keeping its slot while others try, and for a test
-where time itself is the subject, e.g. a lock that expires or a rate
-limit that refills.
+what failed; ```wait_process_group_ended``` waits for a process and all of
+its group. ```time.sleep``` stays for a test where time itself is the
+subject, e.g. in ```SleepTool``` of the helper, which sleeps past the
+timeout of a sandbox, and for a test that holds a state on purpose.
 
 ## Async code
 
@@ -487,18 +458,10 @@ code is a plain function: it puts the async steps into an inner
 stand inside ```go```.
 
 ```python
-def test_thread_safety_with_multiple_connections():
-    """100 parallel deliveries never mix the ctx of their connections."""
-    ev = ThreadSafetyEvents()
-    ...
-
+def test_...():
     async def go():
-        srv, port = await start_smtpd(ev, options=OPTIONS)
-        try:
-            ...
-            assert await wait_until_async(lambda: srv.processings == 0)
-        finally:
-            await srv.stop(wait_seconds_before_close=1.0)
+        ...
+        assert await wait_until_async(lambda: ...)
 
     asyncio.run(go())
 ```
@@ -508,18 +471,17 @@ def test_thread_safety_with_multiple_connections():
 A test that needs what is not always there skips with a reason naming what
 is missing, never to hide a failure.
 
-- A missing package: ```pytest.importorskip('pyte')``` at the place that
-  needs it
-- A platform, a Python version or a service: a named marker at the top of
-  the file, set on the tests that need it or as ```pytestmark``` on all
+- A missing package: ```pytest.importorskip('wasmtime')``` at the place
+  that needs it
+- A platform, a Python version, a build or a service: a named marker at the
+  top of the file, set on the tests that need it or as ```pytestmark``` on
+  all
 
 ```python
-needs_rabbitmq = pytest.mark.skipif(
-    not _is_reachable(RABBITMQ_URL),
-    reason='needs a rabbitmq at localhost:5672 (set TOKEO_TEST_RABBITMQ_URL)',
+needs_build = pytest.mark.skipif(
+    not _have_build,
+    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
 )
-
-pytestmark = needs_rabbitmq
 ```
 
 The tests of the wasm guest, ```tests/ext/ai/test_wasm.py```, need the
@@ -533,6 +495,15 @@ skipped:
 TOKEO_TEST_PYTHON_WASM=~/wasm/python.wasm TOKEO_TEST_WASI_STDLIB=~/wasm/lib/python3.13 make test
 ```
 
+The other tests of the docker sandbox, ```tests/ext/ai/test_docker.py```,
+use a fake ```docker``` command; only its live test needs a ```docker``` and
+an image with tokeo, fundi and the tests, named by
+```TOKEO_TEST_DOCKER_IMAGE```; without them it is skipped:
+
+```bash
+TOKEO_TEST_DOCKER_IMAGE=<image> make test files=tests/ext/ai/test_docker.py
+```
+
 ## Probes
 
 A probe is a program a test starts as its own process and observes from
@@ -540,31 +511,26 @@ outside, for what only shows from there: exit codes, signals, a terminal.
 
 - File ```<subject>_tests_<part>_probe.py```, class ```<Subject><Part>ProbeTest```
   derived from the test app of the subject
-- Started as a module from the project root, never by its path:
+- Started as a module from the project root, never by its path
+
+```Terminal``` of ```tests.utils.tui``` runs the program in a pseudo
+terminal and reads its screen by pyte; without pyte the test is skipped. A
+probe without a terminal runs by ```SubProcess``` of
+```tests.utils.process```, in a group of its own; a wait that fails shows
+the end of its output, leaving the block ends the group. Another program,
+e.g. the server of a live test, runs by ```SubProcess.run(program, *args)```,
+a free port for it gives ```find_free_port()``` of ```tests.utils```. The
+tests of fundi have no probe so far; the pattern:
 
 ```python
-probe = 'tests.ext.tui.tui_tests_input_probe'
+probe = 'tests.<dir>.<subject>_tests_<part>_probe'
 with Terminal([sys.executable, '-m', probe], rows=12, columns=80) as terminal:
-    shown_lines = terminal.wait_for(lambda lines: lines[-1] == 'Probe>')
-    terminal.send(b'exit\r')
-    terminal.wait()
-```
-
-```Terminal``` runs the program in a pseudo terminal and reads its screen by
-pyte; without pyte the test is skipped. A probe without a terminal runs by
-```SubProcess``` of ```tests.utils.process```, in a group of its own; a wait
-that fails shows the end of its output, leaving the block ends the group:
-
-```python
-with SubProcess.probe('tests.ext.smtpd.smtpd_tests_serve_probe', config, names) as process:
-    process.wait_for(lambda: _has_banner(port))
+    ...
+with SubProcess.probe(probe) as process:
+    process.wait_for(lambda: ...)
     process.signal(signal.SIGTERM)
     assert process.wait() == 0
 ```
-
-Another program, e.g. the server of a live test, runs by
-```SubProcess.run(program, *args)```, a free port for it gives
-```find_free_port()``` of ```tests.utils```.
 
 ## Stress tests
 
@@ -578,44 +544,30 @@ pytestmark = stresstest                          # all tests of the file
 
 
 @stresstest                                      # one test
-def test_worker_stress_hands_every_message_on_once(start_worker, tmp_path):
+def test_...():
     ...
 ```
 
-All its randomness comes from one seed, read from ```STRESS_SEED``` or
-drawn anew, and the test prints it. pytest shows the print of a failed
-test, and the same seed repeats the run:
-
-```python
-SEED = int(os.environ.get('STRESS_SEED', random.randrange(2**32)))
-
-
-def test_...():
-    print(f'\nSTRESS_SEED={SEED}')
-    rnd = random.Random(SEED)
-```
-
-```sh
-make test STRESSTESTS=1 STRESS_SEED=1234 files=tests/core/utils/test_outbox.py
-```
-
-Only ```rnd``` draws, never the functions of the module ```random```
-itself, else a repeated run takes other values.
+All its randomness comes from one seed, read from a variable of the
+environment or drawn anew, and the test prints it. pytest shows the print
+of a failed test, and the same seed repeats the run. Only a
+```random.Random``` of that seed draws, never the functions of the module
+```random``` itself, else a repeated run takes other values. The tests of
+fundi have no stress test so far; the complete example below shows one.
 
 ## Tests in a fresh process
 
 All tests share one pytest process, and with it its threads, modules and
 state. A test that needs a process without them is marked ```isolated```,
 e.g. a test that forks: Python warns on ```fork()``` while other threads
-run, and the C library of grpc keeps its threads for the life of the
-process once a test built a server.
+run, and a library may keep its threads for the life of the process.
 
 ```python
 from tests.utils import isolated
 
 
 @isolated
-def test_shared_limits_count_across_processes():
+def test_...():
     ...
 ```
 
@@ -628,8 +580,9 @@ the test runs as usual.
 - Its temporary files stay in ```tmp/tests/isolated/<test>/```
 - The fixtures of the test are set up in both processes, only the fresh one
   runs the test
-- Coverage measures the fresh pytest too, by ```patch = ["subprocess"]``` of
-  ```pyproject.toml```
+- Coverage measures the fresh pytest only with ```patch = ["subprocess"]```
+  in ```[tool.coverage.run]``` of ```pyproject.toml```; fundi has no test
+  marked ```isolated``` and does not set it so far
 - Each one costs a start of pytest, so mark only a test that needs it
 
 ## A complete example
@@ -849,7 +802,7 @@ What it shows:
 A deliberate deviation from these rules is marked right at its place:
 
 ```python
-# test rules exception: numbered test names mirror the midi-smtp-server suite
+# test rules exception: <the reason>
 ```
 
 ## Checklist
