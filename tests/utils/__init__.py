@@ -185,7 +185,7 @@ async def wait_until_async(check, timeout=5.0, interval=0.02):
         async def go():
             srv, port = await start_server()
             ...
-            assert await wait_until_async(lambda: srv.connections == 0)
+            assert await wait_until_async(lambda: srv.connection_cnt == 0)
 
         asyncio.run(go())
     ```
