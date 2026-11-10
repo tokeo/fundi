@@ -144,13 +144,15 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         ### Returns
 
         - **list[str]**: An error for a missing image, a root user, a max_disk_mb
-            that is no whole number from 1, or a max_output_mb or start_timeout
-            not above 0
+            that is no whole number from 1, or a max_output_mb, timeout or
+            start_timeout not above 0
 
         """
         errors = TokeoAiSandbox.lint_options(self, options)
         if 'max_disk_mb' in (options or {}) and not is_int_ge(options['max_disk_mb'], 1):
             errors.append('max_disk_mb must be a whole number of MB, at least 1')
+        if 'timeout' in (options or {}) and not is_number_gt(options['timeout'], 0):
+            errors.append('timeout must be a number of seconds above 0')
         if 'start_timeout' in (options or {}) and not is_number_gt(options['start_timeout'], 0):
             errors.append('start_timeout must be a number of seconds above 0')
         if not (options or {}).get('image'):

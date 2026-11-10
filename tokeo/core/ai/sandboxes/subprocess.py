@@ -33,6 +33,7 @@ import signal
 import tempfile
 import subprocess
 
+from tokeo.core.utils.validate import is_number_gt
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError
 from tokeo.core.ai.sandbox import SANDBOX_MAX_OUTPUT_MB
 from tokeo.core.ai.sandboxes._common import (
@@ -76,6 +77,26 @@ class TokeoAiSubprocessSandbox(TokeoAiSandbox):
             # MB of stdout and stderr kept, and the largest reply read
             max_output_mb=SANDBOX_MAX_OUTPUT_MB,
         )
+
+    def lint_options(self, options):
+        """
+        Check the values the linter cannot know.
+
+        ### Args
+
+        - **options** (dict): The item's ```options``` block
+
+        ### Returns
+
+        - **list[str]**: An error for a timeout that is neither above 0 nor
+            null, or a max_output_mb not above 0
+
+        """
+        errors = TokeoAiSandbox.lint_options(self, options)
+        timeout = (options or {}).get('timeout')
+        if timeout is not None and not is_number_gt(timeout, 0):
+            errors.append('timeout must be a number of seconds above 0 or null')
+        return errors
 
     def exec(self, tool, arguments):
         """

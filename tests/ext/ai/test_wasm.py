@@ -404,6 +404,17 @@ def test_the_linter_checks_the_watch_interval(value, valid):
     assert message is None if valid else message == 'watch_interval_seconds must be a number of seconds, at least 0.1'
 
 
+@pytest.mark.parametrize('value, valid', [(10, True), (0.5, True), (None, True), (0, False), (-1, False), (True, False), ('slow', False)])
+def test_the_linter_checks_the_timeout(value, valid):
+    """timeout is a number of seconds above 0, or null for no limit."""
+    cfg = _make_wasm_ai_config()
+    cfg['ai']['sandboxes']['wasm_untrusted']['options']['timeout'] = value
+    with WasmTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+        errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
+    message = errors.get('ai.sandboxes.wasm_untrusted.options')
+    assert message is None if valid else message == 'timeout must be a number of seconds above 0 or null'
+
+
 @needs_build
 def test_the_watcher_stops_a_guest_that_writes_endlessly():
     """A guest writing to /io endlessly stops at max_disk_mb 1, before a timeout."""

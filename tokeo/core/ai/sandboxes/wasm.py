@@ -44,7 +44,7 @@ import importlib.util
 from tokeo.core.ai import TokeoAiSandbox, TokeoAiError, ToolResult, ToolValue, ToolStates
 from tokeo.core.ai.sandbox import SANDBOX_MAX_OUTPUT_MB
 from tokeo.core.ai.sandboxes._common import _get_importable_path, expand_env, output_bytes, reply_bytes, check_output
-from tokeo.core.utils.validate import is_number_ge
+from tokeo.core.utils.validate import is_number_ge, is_number_gt
 
 #: The stdlib-only modules the guest gets as copies in ```/io/_guest```, per run.
 WASM_GUEST_MODULE_COPIES = (
@@ -226,11 +226,15 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         ### Returns
 
-        - **list[str]**: An error for a watch_interval_seconds below 0.1
-            seconds or a max_output_mb not above 0
+        - **list[str]**: An error for a timeout that is neither above 0 nor
+            null, a watch_interval_seconds below 0.1 seconds or a
+            max_output_mb not above 0
 
         """
         errors = TokeoAiSandbox.lint_options(self, options)
+        timeout = (options or {}).get('timeout')
+        if timeout is not None and not is_number_gt(timeout, 0):
+            errors.append('timeout must be a number of seconds above 0 or null')
         if not is_number_ge((options or {}).get('watch_interval_seconds', 1.0), 0.1):
             errors.append('watch_interval_seconds must be a number of seconds, at least 0.1')
         return errors

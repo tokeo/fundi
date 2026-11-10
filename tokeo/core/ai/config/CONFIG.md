@@ -472,7 +472,7 @@ runaway, it is no jail: the tool can read files and reach the network.
 
 | Option | Default | Values | Enforced by |
 |---|---|---|---|
-| ```timeout``` | ```null``` | seconds, ```null``` = no limit | the host, SIGKILL to the group |
+| ```timeout``` | ```null``` | seconds above 0, ```null``` = no limit | the host, SIGKILL to the group |
 | ```max_memory_mb``` | ```null``` | MB, ```null``` = no limit | the kernel, rlimit (RLIMIT_AS, else RLIMIT_DATA); macos rejects small limits, the call then fails |
 | ```cwd``` | ```null``` | a directory, created on demand | nothing, it steers relative paths |
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | the host, nothing else is set |
@@ -513,7 +513,7 @@ read-only. Several docker sandboxes may differ in their rights.
 | ```user``` | ```65534:65534``` | ```uid:gid```, never root (lint error) | docker |
 | ```mounts``` | ```null``` | ```{guest_path: host_path}```, read-only | docker |
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | docker, nothing else is set |
-| ```timeout``` | ```30``` | seconds | the host, then the container is killed |
+| ```timeout``` | ```30``` | seconds above 0, no ```null``` | the host, then the container is killed |
 | ```reuse``` | ```false``` | ```true``` = one container for the process | the host |
 | ```start_timeout``` | ```60``` | seconds above 0, the start of the container of ```reuse``` | the host, then the container is removed |
 | ```max_output_mb``` | ```1``` | a number above 0 | the runner (capture), the host (reply) |
@@ -552,6 +552,9 @@ With ```read_only: false``` the container writes to its own layer on the host
 disk and ```max_disk_mb``` has no effect; keep ```read_only``` where the disk
 matters.
 
+Each call starts a python in the container; a ```timeout``` below a few
+seconds leaves the tool little time.
+
 ### 5.5 wasm
 
 The call runs in a WebAssembly guest under Wasmtime: no network, only the
@@ -566,7 +569,7 @@ guest works is in the guide ```WASM.md``` of the sandboxes.
 | ```mounts``` | ```null``` | ```{guest_path: host_path}```, read-only | the host |
 | ```cwd``` | ```null``` | a host directory, read-write at ```/work``` | the host |
 | ```env``` | ```null``` | ```{NAME: value}```, ```${NAME}``` expands | the host, nothing else is set |
-| ```timeout``` | ```null``` | seconds, ```null``` = no limit | the host, a timer at the epoch |
+| ```timeout``` | ```null``` | seconds above 0, ```null``` = no limit | the host, a timer at the epoch |
 | ```max_memory_mb``` | ```null``` | MB, ```null``` = no limit | Wasmtime, store limits |
 | ```max_disk_mb``` | ```64``` | MB the guest adds to ```/io```, ```/work```, stdout and stderr; ```null``` = no limit | the host, the watcher |
 | ```max_files``` | ```1000``` | files and dirs the guest adds to ```/io``` and ```/work```; ```null``` = no limit | the host, the watcher |

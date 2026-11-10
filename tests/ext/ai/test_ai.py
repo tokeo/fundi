@@ -615,6 +615,15 @@ def test_linter_flags_an_unknown_sandbox_option(sandbox_type):
     assert _get_lint_errors(cfg)['ai.sandboxes.jailed.options.net'].startswith("unknown option 'net'")
 
 
+@pytest.mark.parametrize('value, valid', [(10, True), (0.5, True), (None, True), (0, False), (-1, False), (True, False), ('slow', False)])
+def test_linter_checks_the_subprocess_timeout(value, valid):
+    """The subprocess timeout is a number of seconds above 0, or null: no limit."""
+    cfg = _make_ai_config()
+    cfg['ai']['sandboxes']['jailed']['options']['timeout'] = value
+    message = _get_lint_errors(cfg).get('ai.sandboxes.jailed.options')
+    assert message is None if valid else message == 'timeout must be a number of seconds above 0 or null'
+
+
 @pytest.mark.parametrize(
     'section, name, item',
     [
