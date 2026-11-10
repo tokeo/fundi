@@ -29,8 +29,8 @@ def test_lock_of_its_own(rando):
 - Every test gets its own ```tmp```, ```rando``` and ```key```, nothing is
     shared
 - ```disable_stdin_capture``` gives the test an empty stdin, for code that
-    reads stdin while pytest captures it, e.g. ```Connection.run()``` of
-    fabric
+    reads stdin while pytest captures it, e.g. ```input()```, which raises
+    ```EOFError``` on it
 - ```tmp``` gives paths as str for code and test apps that want them,
     ```tmp_path``` of pytest gives a ```pathlib.Path```
 - pytest empties ```tmp/tests/``` at the start of the next run, so a test
@@ -92,6 +92,6 @@ def key(request):
 
 @pytest.fixture
 def disable_stdin_capture(monkeypatch):
-    """An empty stdin for the test, e.g. for Connection.run() of fabric."""
+    """An empty stdin for the test, input() raises EOFError on it."""
     monkeypatch.setattr("sys.stdin", StringIO(""))
     return monkeypatch

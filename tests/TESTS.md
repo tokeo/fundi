@@ -134,8 +134,9 @@ from tests.utils.isolation import IsolatedPytest
 - ```key``` is a random string of 32 characters, for a name or key of full
   length
 - ```disable_stdin_capture``` gives the test an empty stdin, for code that
-  reads stdin while pytest captures it; ```use_disabled_stdin_capture()```
-  does the same for one step
+  reads stdin while pytest captures it, e.g. ```input()```, which raises
+  ```EOFError``` on it; ```use_disabled_stdin_capture()``` does the same
+  for one step
 - ```ROOT_DIR``` is the root of the project, the working directory of every
   program a test starts
 
@@ -544,7 +545,7 @@ pytestmark = stresstest                          # all tests of the file
 
 
 @stresstest                                      # one test
-def test_...():
+def test_outbox_stress_hands_every_message_on_once(start_worker, tmp_path):
     ...
 ```
 
@@ -758,7 +759,7 @@ def test_worker_keeps_a_message_its_handler_failed_on(start_worker, tmp_path):
 
 
 @stresstest
-def test_worker_stress_hands_every_message_on_once(start_worker, tmp_path):
+def test_outbox_stress_hands_every_message_on_once(start_worker, tmp_path):
     """
     4 threads put 250 messages each, of random length up to 64 KiB, while
     the worker runs; every message is handed on exactly once and complete,
