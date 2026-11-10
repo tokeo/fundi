@@ -221,24 +221,24 @@ class _BrokenSandbox:
         raise TokeoAiError('timed out after 1s')
 
 
-class _SeeingTool(TokeoAiTool):
+class _RecordingTool(TokeoAiTool):
     """Records the result its teardown gets."""
 
-    seen_result = None
+    teardown_result = None
 
     def exec(self, path):
         return ToolResult(value='never')
 
     def teardown(self, turndata, arguments, result, track):
-        self.seen_result = result
+        self.teardown_result = result
 
 
 def test_teardown_gets_a_tool_result_when_the_sandbox_fails():
     """A failing sandbox rises, teardown still gets a ToolResult with the error."""
-    tool = _SeeingTool.__new__(_SeeingTool)
+    tool = _RecordingTool.__new__(_RecordingTool)
     handler = TokeoAi.__new__(TokeoAi)
     with pytest.raises(TokeoAiError, match='timed out'):
         handler._exec_lifecycle(tool, _BrokenSandbox(), {'path': 'x'}, TokeoAiContext(messages=[]))
-    assert isinstance(tool.seen_result, ToolResult)
-    assert tool.seen_result.value is None
-    assert tool.seen_result.state.error == 'TokeoAiError: timed out after 1s'
+    assert isinstance(tool.teardown_result, ToolResult)
+    assert tool.teardown_result.value is None
+    assert tool.teardown_result.state.error == 'TokeoAiError: timed out after 1s'

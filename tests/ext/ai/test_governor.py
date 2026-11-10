@@ -6,7 +6,6 @@ governor list turning into per-stage lists in order, and the actor being stamped
 into a reason the governor left unnamed.
 """
 
-from tokeo.main import TokeoTest
 from tokeo.core.ai.governor import (
     TokeoAiGovernor,
     GOVERNOR_STAGES,
@@ -21,20 +20,13 @@ from tokeo.core.ai.guards.policy import TokeoAiPolicyGuard
 from tokeo.core.ai.transformer import TokeoAiTransformer
 from tokeo.core.ai.conductor import TokeoAiConductor
 from tokeo.core.ai.data import Invocation, TokeoAiToolCall
+from tests.ext.ai.lib.ai_tests_helper import AiTest
 
 
-class AiTest(TokeoTest):
-    """Test app with the ai extension and the extensions it builds on."""
+class BareAiTest(AiTest):
+    """The test app with an ai config of nothing but the license key."""
 
     class Meta:
-        extensions = [
-            'tokeo.ext.yaml',
-            'tokeo.ext.appenv',
-            'tokeo.ext.print',
-            'tokeo.ext.jinja2',
-            'tokeo.ext.appshare',
-            'tokeo.ext.ai',
-        ]
         config_defaults = {'ai': {'license_acknowledged': False}}
 
 
@@ -95,7 +87,7 @@ def _get_governors_by_stage(app, governors):
 
 def test_each_stage_gets_its_own_ordered_list():
     """A governor is listed only at the stages it has, in flat-list order."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         a = OnCallGovernor(app)
         b = OnReturnGovernor(app)
         by_stage = _get_governors_by_stage(app, [a, b])
@@ -108,7 +100,7 @@ def test_each_stage_gets_its_own_ordered_list():
 
 def test_order_within_a_stage_follows_the_flat_list():
     """Two on_call governors keep the flat list's order, reversed when it is."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         first = OnCallGovernor(app)
         second = OnCallGovernor(app)
         by_stage = _get_governors_by_stage(app, [first, second])
@@ -120,7 +112,7 @@ def test_order_within_a_stage_follows_the_flat_list():
 
 def test_a_governor_with_several_stages_appears_in_each():
     """A governor with on_call and on_return is in both stage lists."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         both = CallAndReturnGovernor(app)
         only_call = OnCallGovernor(app)
         by_stage = _get_governors_by_stage(app, [only_call, both])
@@ -130,7 +122,7 @@ def test_a_governor_with_several_stages_appears_in_each():
 
 def test_stage_lists_are_independent_views_of_the_flat_order():
     """Each stage filters on its own: pc is 2nd at on_call, alone at on_prompt."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         pc = PromptAndCallGovernor(app)
         c = OnCallGovernor(app)
         # flat order [c, pc]: at on_call, c is before pc; at on_prompt, pc alone
@@ -141,7 +133,7 @@ def test_stage_lists_are_independent_views_of_the_flat_order():
 
 def test_no_governors_gives_empty_lists_for_every_stage():
     """No governors give an empty list per stage, so the loop runs ungoverned."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         by_stage = _get_governors_by_stage(app, [])
         assert all(by_stage[stage] == [] for stage in GOVERNOR_STAGES)
 
@@ -187,7 +179,7 @@ class GuardAllowingOnReturn(TokeoAiPolicyGuard):
 
 def test_call_deny_without_reason_is_stamped_with_the_actor():
     """A guard's silent deny holds; the reason names guard 'shredder'."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         governor = GuardDenyingSilently(app)
         governor._setup(app, 'shredder')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
@@ -201,7 +193,7 @@ def test_call_deny_without_reason_is_stamped_with_the_actor():
 
 def test_return_deny_keeps_a_named_reason_untouched():
     """An on_return deny's own reason 'result rejected' is fed back unstamped."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         governor = GuardDenyingOnReturn(app)
         governor._setup(app, 'rejector')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
@@ -214,7 +206,7 @@ def test_return_deny_keeps_a_named_reason_untouched():
 
 def test_governor_config_reads_a_key_honouring_the_stage():
     """An on_<stage> option wins at that stage, options elsewhere, then fallback."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(
             app,
@@ -235,7 +227,7 @@ def test_governor_label_reads_class_character_and_config_name():
     """The label is role + config name, or the class path for one never set up."""
     # the role comes from the class (isinstance); the class path is the
     # same form a point-of-use entry writes
-    with AiTest() as app:
+    with BareAiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'truncate')
         assert app.ai._format_governor_label(governor) == "transformer 'truncate'"
@@ -252,7 +244,7 @@ def test_governor_label_reads_class_character_and_config_name():
 
 def test_a_no_at_on_return_stays_when_a_later_guard_allows():
     """A later guard sets allow after 'result rejected': it runs, the no stays."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         rejector, lifter = GuardDenyingOnReturn(app), GuardAllowingOnReturn(app)
         rejector._setup(app, 'rejector')
         lifter._setup(app, 'lifter')
@@ -266,7 +258,7 @@ def test_a_no_at_on_return_stays_when_a_later_guard_allows():
 
 def test_a_no_at_on_call_stays_when_a_guard_at_on_return_allows():
     """A call denied at on_call stays denied; an allow at on_return is undone."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         shredder, lifter = GuardDenyingSilently(app), GuardAllowingOnReturn(app)
         shredder._setup(app, 'shredder')
         lifter._setup(app, 'lifter')
@@ -280,7 +272,7 @@ def test_a_no_at_on_call_stays_when_a_guard_at_on_return_allows():
 
 def test_a_transformer_that_changes_the_decision_ends_the_run():
     """A transformer setting deny at on_call is an error: TokeoAiError, no call."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         governor = DenyingSilently(app)
         governor._setup(app, 'shredder')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])
@@ -291,7 +283,7 @@ def test_a_transformer_that_changes_the_decision_ends_the_run():
 
 def test_a_conductor_that_changes_the_decision_ends_the_run():
     """A conductor setting deny at on_return is an error: TokeoAiError."""
-    with AiTest() as app:
+    with BareAiTest() as app:
         governor = DenyingOnReturn(app)
         governor._setup(app, 'rejector')
         ctx = TokeoAiContext(messages=[{'role': 'user', 'content': 'hi'}])

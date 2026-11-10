@@ -17,7 +17,7 @@ from tokeo.core.ai.guards.confirm import (
     TokeoAiConfirmRequest,
     TokeoAiConfirmRetry,
 )
-from tests.ext.ai.lib.ai_tests_helper import LoopTest, make_loop_config, make_call, get_tool_contents
+from tests.ext.ai.lib.ai_tests_helper import AiTest, make_loop_config, make_call, get_tool_contents
 
 YES = TokeoAiConfirmAnswer('yes', by='human', who='tom')
 YES_RUN = TokeoAiConfirmAnswer('yes_run', by='human', who='tom')
@@ -57,7 +57,7 @@ def _run_chat(cfg, *answers, asked_requests=None, **chat):
         return answers[min(len(asked_requests), len(answers)) - 1] if answers else None
 
     hooks = [(GOVERNOR_CONFIRM_CHANNEL_HOOK, channel)] if answers else []
-    with LoopTest(config_defaults=cfg, hooks=hooks) as app:
+    with AiTest(config_defaults=cfg, hooks=hooks) as app:
         result = app.ai.chat([dict(role='user', content='hi')], agent='careful', **chat)
     return result, asked_requests
 
@@ -165,7 +165,7 @@ def test_the_linter_checks_max_retries(value):
     cfg = _make_confirm_config([dict(text='done')])
     cfg['ai']['guards']['ask']['options']['max_retries'] = value
     cfg['ai']['guards']['ask']['on_call'] = dict(options=dict(max_retries=value))
-    with LoopTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
     expected = 'max_retries must be a whole number, at least 1'
     assert (errors.get('ai.guards.ask.options'), errors.get('ai.guards.ask.on_call.options')) == (expected, expected)
@@ -247,7 +247,7 @@ def test_ask_raises_when_the_run_is_declined():
         return NO
 
     cfg = _make_confirm_config([dict(text='done')], stages=('on_prompt',))
-    with LoopTest(config_defaults=cfg, hooks=[(GOVERNOR_CONFIRM_CHANNEL_HOOK, channel)]) as app:
+    with AiTest(config_defaults=cfg, hooks=[(GOVERNOR_CONFIRM_CHANNEL_HOOK, channel)]) as app:
         with pytest.raises(TokeoAiRunDeclinedError) as err_info:
             app.ai.ask('hi', agent='careful')
     assert (err_info.value.stage, err_info.value.reason) == ('on_prompt', 'not now')
@@ -258,10 +258,10 @@ def test_the_linter_takes_the_confirm_options_and_flags_a_typo():
     from tokeo.core.ai.linter import TokeoAiLinter
 
     cfg = _make_confirm_config([dict(text='done')], options=dict(tools=['echo'], default='yes'))
-    with LoopTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         assert [i for i in TokeoAiLinter(app).lint() if i.level == 'error'] == []
     cfg['ai']['guards']['ask']['options'] = dict(tool=['echo'])
-    with LoopTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         assert [i.path for i in TokeoAiLinter(app).lint() if i.level == 'error'] == ['ai.guards.ask.options.tool']
 
 
@@ -304,7 +304,7 @@ def test_ai_ask_asks_in_the_terminal(monkeypatch, capsys, key, out):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     monkeypatch.setattr('builtins.input', lambda prompt='': lines.pop(0))
     cfg = _make_confirm_config([dict(text='done')], stages=('on_prompt',))
-    with LoopTest(argv=['ai', 'ask', 'hi', '--agent', 'careful'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'ask', 'hi', '--agent', 'careful'], config_defaults=cfg) as app:
         app.run()
     assert capsys.readouterr().out.splitlines()[-1] == out
 

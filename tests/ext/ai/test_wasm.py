@@ -13,11 +13,11 @@ import pytest
 
 from cement.utils.misc import init_defaults
 
-from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.linter import TokeoAiLinter
 from tokeo.core.ai.sandboxes.wasm import TokeoAiWasmSandbox
 from tokeo.core.ai.tools.python_untrusted_exec import TokeoAiPythonUntrustedExecTool
+from tests.ext.ai.lib.ai_tests_helper import AiTest
 
 
 def test_wasm_missing_mount_path_names_the_path(tmp):
@@ -78,22 +78,10 @@ _DEPS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(cement.__file__)))
 
 # skip the build-dependent tests unless wasmtime and an actual build are present
 _have_build = importlib.util.find_spec('wasmtime') is not None and os.path.exists(_RUNTIME) and os.path.isdir(_STDLIB)
-
-
-class WasmTest(TokeoTest):
-    """A test app with just the ai extension, like the fundi harness."""
-
-    class Meta:
-        """Load the extensions the ai handler needs."""
-
-        extensions = [
-            'tokeo.ext.yaml',
-            'tokeo.ext.appenv',
-            'tokeo.ext.print',
-            'tokeo.ext.jinja2',
-            'tokeo.ext.appshare',
-            'tokeo.ext.ai',
-        ]
+needs_build = pytest.mark.skipif(
+    not _have_build,
+    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
+)
 
 
 def _make_wasm_ai_config():
@@ -153,14 +141,11 @@ def _make_wasm_ai_config():
     return cfg
 
 
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
+@needs_build
 def test_untrusted_exec_through_the_agent_chain():
     """Untrusted, statistics.median([5, 1, 9, 3, 7]) runs in the guest: '5'."""
     # no app mount; the result crosses the file bridge back
-    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
+    with AiTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
@@ -176,13 +161,10 @@ def test_untrusted_exec_through_the_agent_chain():
         assert text == '5'
 
 
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
+@needs_build
 def test_trusted_exec_through_the_agent_chain():
     """The trusted tool, rebuilt from the mounted source, imports tokeo: 'True'."""
-    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
+    with AiTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('trusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_trusted',
@@ -198,10 +180,7 @@ def test_trusted_exec_through_the_agent_chain():
         assert text == 'True'
 
 
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
+@needs_build
 def test_untrusted_guest_cannot_import_the_framework():
     """
     Untrusted, import tokeo.core.ai fails with ModuleNotFoundError and no value.
@@ -209,7 +188,7 @@ def test_untrusted_guest_cannot_import_the_framework():
     Nothing of tokeo enters the untrusted guest, only copies of the guest
     modules under _guest. The failure is a tool exception on the result (A).
     """
-    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
+    with AiTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
@@ -224,10 +203,7 @@ def test_untrusted_guest_cannot_import_the_framework():
         assert 'ModuleNotFoundError' in (out.state.error or '')
 
 
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
+@needs_build
 def test_wasm_guest_has_no_network():
     """
     socket.gethostbyname('example.com') fails in the guest: no value, an exception.
@@ -236,7 +212,7 @@ def test_wasm_guest_has_no_network():
     on the result's state (A). Its type is build-specific (gaierror, OSError or
     a missing socket module), so only the recorded failure is asserted.
     """
-    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
+    with AiTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
@@ -251,10 +227,7 @@ def test_wasm_guest_has_no_network():
         assert out.state.error is not None
 
 
-@pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
+@needs_build
 def test_wasm_guest_cannot_write_a_read_only_mount():
     """
     Writing /lib/tokeo_wasm_probe.txt fails with PermissionError, no host file.
@@ -264,7 +237,7 @@ def test_wasm_guest_cannot_write_a_read_only_mount():
     stays the only writable surface.
     """
     probe = os.path.join(_STDLIB, 'tokeo_wasm_probe.txt')
-    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
+    with AiTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
@@ -280,17 +253,11 @@ def test_wasm_guest_cannot_write_a_read_only_mount():
     assert not os.path.exists(probe)
 
 
-needs_build = pytest.mark.skipif(
-    not _have_build,
-    reason=f'no wasmtime or no wasm build at {_RUNTIME} / {_STDLIB} (override via TOKEO_TEST_PYTHON_WASM and TOKEO_TEST_WASI_STDLIB)',
-)
-
-
 def _run_untrusted(code, **options):
     """Run the code by the untrusted tool in wasm with extra options, return it."""
     cfg = _make_wasm_ai_config()
     cfg['ai']['sandboxes']['wasm_untrusted']['options'].update(options)
-    with WasmTest(config_defaults=cfg) as app:
+    with AiTest(config_defaults=cfg) as app:
         agent = app.ai._get_agent('untrusted_coder')
         return app.ai._exec_in_sandbox('run_untrusted', dict(code=code), agent, None, None, None, None)
 
@@ -398,7 +365,7 @@ def test_the_linter_checks_the_watch_interval(value, valid):
     """watch_interval_seconds is a number of seconds of at least 0.1."""
     cfg = _make_wasm_ai_config()
     cfg['ai']['sandboxes']['wasm_untrusted']['options']['watch_interval_seconds'] = value
-    with WasmTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
     message = errors.get('ai.sandboxes.wasm_untrusted.options')
     assert message is None if valid else message == 'watch_interval_seconds must be a number of seconds, at least 0.1'
@@ -409,7 +376,7 @@ def test_the_linter_checks_the_timeout(value, valid):
     """timeout is a number of seconds above 0, or null for no limit."""
     cfg = _make_wasm_ai_config()
     cfg['ai']['sandboxes']['wasm_untrusted']['options']['timeout'] = value
-    with WasmTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
     message = errors.get('ai.sandboxes.wasm_untrusted.options')
     assert message is None if valid else message == 'timeout must be a number of seconds above 0 or null'

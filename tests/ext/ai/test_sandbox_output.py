@@ -9,29 +9,15 @@ process and in the subprocess sandbox; docker and wasm have their own tests.
 
 import pytest
 from cement.utils.misc import init_defaults
-from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.linter import TokeoAiLinter
 from tokeo.core.ai.sandboxes._common import OutputBuffer, reply_bytes
+from tests.ext.ai.lib.ai_tests_helper import AiTest
 
 LOUD = 'tests.ext.ai.lib.ai_tests_helper:LoudTool'
 BIG = 'tests.ext.ai.lib.ai_tests_helper:BigTool'
 # 0.001 MB are 1048 bytes
 LIMIT = dict(max_output_mb=0.001)
-
-
-class OutputTest(TokeoTest):
-    """A test app with the ai extension and the extensions it needs."""
-
-    class Meta:
-        extensions = [
-            'tokeo.ext.yaml',
-            'tokeo.ext.appenv',
-            'tokeo.ext.print',
-            'tokeo.ext.jinja2',
-            'tokeo.ext.appshare',
-            'tokeo.ext.ai',
-        ]
 
 
 def _make_ai_config(options):
@@ -56,7 +42,7 @@ def _make_ai_config(options):
 
 def _run_tool(agent, tool, size, options=LIMIT):
     """Run the tool with the size in the sandbox of the agent."""
-    with OutputTest(config_defaults=_make_ai_config(options)) as app:
+    with AiTest(config_defaults=_make_ai_config(options)) as app:
         return app.ai._exec_in_sandbox(tool, dict(size=size), app.ai._get_agent(agent), None, None, None, None)
 
 
@@ -103,7 +89,7 @@ def test_the_default_output_mb_keeps_a_normal_reply():
 @pytest.mark.parametrize('value', [0, -1, 'big', None, True])
 def test_the_linter_checks_output_mb_of_every_sandbox(value):
     """max_output_mb is a number above 0, for in_process and subprocess alike."""
-    with OutputTest(argv=['ai', 'lint'], config_defaults=_make_ai_config(dict(max_output_mb=value))) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=_make_ai_config(dict(max_output_mb=value))) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
     expected = 'max_output_mb must be a number of MB above 0'
     assert (errors.get('ai.sandboxes.local.options'), errors.get('ai.sandboxes.jailed.options')) == (expected, expected)

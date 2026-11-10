@@ -6,23 +6,9 @@ terminal; the model call is replaced to see what conversation it gets.
 """
 
 from cement.utils.misc import init_defaults
-from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiRunResult, TokeoAiChatResult
 from tokeo.ext.ai import TokeoAiController, TokeoAi
-
-
-class ChatTest(TokeoTest):
-    """Test app with the ai extension and the extensions it builds on."""
-
-    class Meta:
-        extensions = [
-            'tokeo.ext.yaml',
-            'tokeo.ext.appenv',
-            'tokeo.ext.print',
-            'tokeo.ext.jinja2',
-            'tokeo.ext.appshare',
-            'tokeo.ext.ai',
-        ]
+from tests.ext.ai.lib.ai_tests_helper import AiTest
 
 
 class _Lines:
@@ -52,6 +38,6 @@ def test_chat_drops_a_turn_that_ctrl_c_ended(monkeypatch):
     monkeypatch.setattr(TokeoAi, 'chat', chat)
     cfg = init_defaults('ai')
     cfg['ai']['license_acknowledged'] = False
-    with ChatTest(argv=['ai', 'chat'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'chat'], config_defaults=cfg) as app:
         app.run()
     assert calls[1] == [{'role': 'user', 'content': 'second'}]

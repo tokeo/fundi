@@ -1,14 +1,14 @@
 """
-The tools the tests of the ai extension run in the sandboxes, and the test app
-with the scripted model the loop and confirm tests share.
+The tools the tests of the ai extension run in the sandboxes, and ```AiTest```,
+the test app of every test file of the ai extension.
 
 The tools live in a real module, not a closure, so the subprocess sandbox
 imports them by their class path in a fresh interpreter, exactly as the tools
 of a project are imported. Each one is a minimal ```TokeoAiTool```.
 
-```LoopTest``` runs with an ai config of ```make_loop_config```, whose profile
-plays the turns of a script by ```ScriptProvider```; ```make_call``` builds a
-turn that calls echo, ```get_tool_contents``` reads the tool results of a run.
+With an ai config of ```make_loop_config``` the profile plays the turns of a
+script by ```ScriptProvider```; ```make_call``` builds a turn that calls echo,
+```get_tool_contents``` reads the tool results of a run.
 """
 
 import os
@@ -210,7 +210,7 @@ class NothingTool(TokeoAiTool):
         return None
 
 
-class LoopTest(TokeoTest):
+class AiTest(TokeoTest):
     """Test app with the ai extension and the extensions it builds on."""
 
     class Meta:

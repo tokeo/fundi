@@ -9,27 +9,13 @@ The ToolResult model itself is tested in ```tests/core/ai/test_toolresult.py```.
 
 import pytest
 from cement.utils.misc import init_defaults
-from tokeo.main import TokeoTest
 from tokeo.core.ai import ToolResult, TokeoAiError
+from tests.ext.ai.lib.ai_tests_helper import AiTest
 
 # the class paths of the importable test tools the subprocess worker loads
 RAISE = 'tests.ext.ai.lib.ai_tests_helper:RaiseTool'
 DATA = 'tests.ext.ai.lib.ai_tests_helper:DataTool'
 NOTHING = 'tests.ext.ai.lib.ai_tests_helper:NothingTool'
-
-
-class ToolResultTest(TokeoTest):
-    """A test app with the ai extension and the extensions it needs."""
-
-    class Meta:
-        extensions = [
-            'tokeo.ext.yaml',
-            'tokeo.ext.appenv',
-            'tokeo.ext.print',
-            'tokeo.ext.jinja2',
-            'tokeo.ext.appshare',
-            'tokeo.ext.ai',
-        ]
 
 
 def _make_ai_config():
@@ -64,7 +50,7 @@ def _make_ai_config():
 
 def test_in_process_catches_a_raising_tool_into_state_exception():
     """In process a raise lands in state.error (tool error A), value None."""
-    with ToolResultTest(config_defaults=_make_ai_config()) as app:
+    with AiTest(config_defaults=_make_ai_config()) as app:
         agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
         assert isinstance(out, ToolResult)
@@ -75,7 +61,7 @@ def test_in_process_catches_a_raising_tool_into_state_exception():
 
 def test_subprocess_catches_a_raising_tool_into_state_exception():
     """The subprocess child catches the raise, the parent gets state.error."""
-    with ToolResultTest(config_defaults=_make_ai_config()) as app:
+    with AiTest(config_defaults=_make_ai_config()) as app:
         agent = app.ai._get_agent('jail')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
         assert out.value is None
@@ -93,7 +79,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
     loop's shaping of both into 'error: ...' content is in the Spiral tests.
     """
     cfg = _make_ai_config()
-    with ToolResultTest(config_defaults=cfg) as app:
+    with AiTest(config_defaults=cfg) as app:
         # A: a raising tool returns a result with state.error set
         agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('boom', {}, agent, None, None, None, None)
@@ -103,7 +89,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
     cfg['ai']['tools']['slow'] = dict(type='tests.ext.ai.lib.ai_tests_helper:SleepTool')
     cfg['ai']['sandboxes']['jailed']['tools'].append('slow')
     cfg['ai']['agents']['jail']['options']['tools'].append('slow')
-    with ToolResultTest(config_defaults=cfg) as app:
+    with AiTest(config_defaults=cfg) as app:
         agent = app.ai._get_agent('jail')
         with pytest.raises(TokeoAiError, match='timed out'):
             app.ai._exec_in_sandbox('slow', dict(seconds=3), agent, None, None, None, None)
@@ -114,7 +100,7 @@ def test_tool_error_a_and_machinery_error_b_are_separate():
 
 def test_in_process_captures_tool_stdout_into_state():
     """In process printed 'side output' lands in state.stdout, not the console."""
-    with ToolResultTest(config_defaults=_make_ai_config()) as app:
+    with AiTest(config_defaults=_make_ai_config()) as app:
         agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('data', {}, agent, None, None, None, None)
         assert out.state.stdout is not None
@@ -123,7 +109,7 @@ def test_in_process_captures_tool_stdout_into_state():
 
 def test_subprocess_captures_tool_stdout_into_state():
     """In a subprocess the child's printed 'side output' reaches state.stdout."""
-    with ToolResultTest(config_defaults=_make_ai_config()) as app:
+    with AiTest(config_defaults=_make_ai_config()) as app:
         agent = app.ai._get_agent('jail')
         out = app.ai._exec_in_sandbox('data', {}, agent, None, None, None, None)
         assert out.state.stdout is not None
@@ -132,7 +118,7 @@ def test_subprocess_captures_tool_stdout_into_state():
 
 def test_a_structured_tool_result_keeps_its_views_through_the_sandbox():
     """In process a returned dict keeps as_data {'answer': 42, 'label': 'ok'}."""
-    with ToolResultTest(config_defaults=_make_ai_config()) as app:
+    with AiTest(config_defaults=_make_ai_config()) as app:
         agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('data', {}, agent, None, None, None, None)
         assert out.value is not None
@@ -141,7 +127,7 @@ def test_a_structured_tool_result_keeps_its_views_through_the_sandbox():
 
 def test_a_tool_returning_nothing_yields_no_value():
     """A tool returning nothing gives value None, no exception: not a failure."""
-    with ToolResultTest(config_defaults=_make_ai_config()) as app:
+    with AiTest(config_defaults=_make_ai_config()) as app:
         agent = app.ai._get_agent('plain')
         out = app.ai._exec_in_sandbox('void', {}, agent, None, None, None, None)
         assert out.value is None

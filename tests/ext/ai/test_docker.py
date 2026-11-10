@@ -17,9 +17,9 @@ import shutil
 import subprocess
 import pytest
 from cement.utils.misc import init_defaults
-from tokeo.main import TokeoTest
 from tokeo.core.ai import TokeoAiError
 from tokeo.core.ai.linter import TokeoAiLinter
+from tests.ext.ai.lib.ai_tests_helper import AiTest
 
 ECHO = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
 ENV = 'tests.ext.ai.lib.ai_tests_helper:EnvTool'
@@ -51,20 +51,6 @@ python = args.index('-m') - 1
 os.chdir({root!r})
 os.execve(sys.executable, [sys.executable] + args[python + 1:], env)
 """
-
-
-class DockerTest(TokeoTest):
-    """A test app with the ai extension and the extensions it needs."""
-
-    class Meta:
-        extensions = [
-            'tokeo.ext.yaml',
-            'tokeo.ext.appenv',
-            'tokeo.ext.print',
-            'tokeo.ext.jinja2',
-            'tokeo.ext.appshare',
-            'tokeo.ext.ai',
-        ]
 
 
 @pytest.fixture
@@ -113,7 +99,7 @@ def _run_tool(app, tool, arguments):
 
 def test_the_docker_sandbox_runs_a_tool_in_a_hardened_container(docker):
     """The runner runs in a throwaway container with every hardening flag."""
-    with DockerTest(config_defaults=_make_ai_config(docker)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker)) as app:
         assert _run_tool(app, 'echo', dict(text='moin')).value.as_str == 'moin'
     [args] = _get_docker_calls(docker)
     assert args[:5] == ['run', '--rm', '-i', '--name', args[4]]
@@ -132,7 +118,7 @@ def test_the_docker_sandbox_mounts_read_only_and_passes_only_its_env(docker, mon
     monkeypatch.setenv('DOCKER_TEST_HOST', 'from host')
     monkeypatch.setenv('DOCKER_TEST_OTHER', 'secret')
     cfg = _make_ai_config(docker, mounts={'/data': '/srv/data', '/conf': 'conf'}, env=dict(GREETING='${DOCKER_TEST_HOST}'))
-    with DockerTest(config_defaults=cfg) as app:
+    with AiTest(config_defaults=cfg) as app:
         assert _run_tool(app, 'env', dict(name='GREETING')).value.as_str == 'from host'
         assert _run_tool(app, 'env', dict(name='DOCKER_TEST_OTHER')).value.as_str == '<unset>'
     args = _get_docker_calls(docker)[0]
@@ -144,7 +130,7 @@ def test_the_docker_sandbox_mounts_read_only_and_passes_only_its_env(docker, mon
 def test_the_docker_sandbox_takes_its_limits_from_the_options(docker):
     """network, read_only, max_memory_mb, max_pids and user follow the options."""
     cfg = _make_ai_config(docker, network='bridge', read_only=False, max_memory_mb=0, max_pids=0, user='1000:1000', python='python3.13')
-    with DockerTest(config_defaults=cfg) as app:
+    with AiTest(config_defaults=cfg) as app:
         _run_tool(app, 'echo', dict(text='x'))
     args = _get_docker_calls(docker)[0]
     assert args[args.index('--network') + 1] == 'bridge'
@@ -156,7 +142,7 @@ def test_the_docker_sandbox_takes_its_limits_from_the_options(docker):
 
 def test_disk_mb_sizes_the_tmpfs_of_a_read_only_container(docker):
     """max_disk_mb 16 makes /tmp a tmpfs of 16m."""
-    with DockerTest(config_defaults=_make_ai_config(docker, max_disk_mb=16)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker, max_disk_mb=16)) as app:
         _run_tool(app, 'echo', dict(text='x'))
     args = _get_docker_calls(docker)[0]
     assert args[args.index('--tmpfs') + 1] == '/tmp:rw,noexec,nosuid,size=16m'
@@ -164,7 +150,7 @@ def test_disk_mb_sizes_the_tmpfs_of_a_read_only_container(docker):
 
 def test_the_docker_sandbox_cuts_the_output_and_refuses_a_large_value(docker):
     """max_output_mb 0.001: 5000 bytes printed are cut, a 5000 byte value fails."""
-    with DockerTest(config_defaults=_make_ai_config(docker, max_output_mb=0.001)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker, max_output_mb=0.001)) as app:
         out = _run_tool(app, 'loud', dict(size=5000))
         assert out.state.stdout == 'x' * 1048 + '\n[... cut after 0.001 MB]'
         with pytest.raises(TokeoAiError, match='delivered more than 0.001 MB in the docker sandbox'):
@@ -173,7 +159,7 @@ def test_the_docker_sandbox_cuts_the_output_and_refuses_a_large_value(docker):
 
 def test_a_raising_tool_in_the_docker_sandbox_is_a_tool_error(docker):
     """The runner catches the raise; the result carries state.error."""
-    with DockerTest(config_defaults=_make_ai_config(docker)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker)) as app:
         out = _run_tool(app, 'boom', {})
     assert out.value is None
     assert 'tool failed on purpose' in out.state.error
@@ -181,7 +167,7 @@ def test_a_raising_tool_in_the_docker_sandbox_is_a_tool_error(docker):
 
 def test_a_timeout_in_the_docker_sandbox_raises_and_kills_the_container(docker):
     """A call over the timeout raises TokeoAiError and kills its container."""
-    with DockerTest(config_defaults=_make_ai_config(docker, timeout=1)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker, timeout=1)) as app:
         with pytest.raises(TokeoAiError, match='timed out after 1s in the docker sandbox'):
             _run_tool(app, 'sleep', dict(seconds=5))
     started_args, killed_args = _get_docker_calls(docker)
@@ -190,7 +176,7 @@ def test_a_timeout_in_the_docker_sandbox_raises_and_kills_the_container(docker):
 
 def test_reuse_runs_each_call_in_one_container_and_close_removes_it(docker):
     """reuse starts one container, execs each call in it, close kills it."""
-    with DockerTest(config_defaults=_make_ai_config(docker, reuse=True)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker, reuse=True)) as app:
         assert _run_tool(app, 'echo', dict(text='a')).value.as_str == 'a'
         assert _run_tool(app, 'echo', dict(text='b')).value.as_str == 'b'
         app.ai._get_sandbox('docked').close()
@@ -205,7 +191,7 @@ def test_reuse_runs_each_call_in_one_container_and_close_removes_it(docker):
 
 def test_reuse_starts_a_new_container_after_a_timeout(docker):
     """A timeout removes the reused container; the next call starts a new one."""
-    with DockerTest(config_defaults=_make_ai_config(docker, reuse=True, timeout=1)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker, reuse=True, timeout=1)) as app:
         with pytest.raises(TokeoAiError, match='timed out'):
             _run_tool(app, 'sleep', dict(seconds=5))
         # the 1 s timeout is for the sleep only, under load the echo takes longer
@@ -221,7 +207,7 @@ def test_reuse_starts_a_new_container_after_a_timeout(docker):
 def test_reuse_reports_a_container_that_does_not_start(docker, monkeypatch):
     """A failed run -d raises with the client's message; nothing is kept."""
     monkeypatch.setenv('FAKE_DOCKER_FAIL', 'no such image')
-    with DockerTest(config_defaults=_make_ai_config(docker, reuse=True)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker, reuse=True)) as app:
         with pytest.raises(TokeoAiError, match='cannot start its container: no such image'):
             _run_tool(app, 'echo', dict(text='x'))
         assert app.ai._get_sandbox('docked')._container is None
@@ -230,7 +216,7 @@ def test_reuse_reports_a_container_that_does_not_start(docker, monkeypatch):
 def test_reuse_gives_up_a_start_over_start_timeout(docker, monkeypatch):
     """A run -d over start_timeout raises, its container is removed, none kept."""
     monkeypatch.setenv('FAKE_DOCKER_SLEEP', '5')
-    with DockerTest(config_defaults=_make_ai_config(docker, reuse=True, start_timeout=1)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker, reuse=True, start_timeout=1)) as app:
         with pytest.raises(TokeoAiError, match=r'cannot start its container: timed out after 1s$'):
             _run_tool(app, 'echo', dict(text='x'))
         assert app.ai._get_sandbox('docked')._container is None
@@ -249,14 +235,14 @@ def test_reuse_starts_under_start_timeout_and_calls_under_timeout(docker, monkey
         return real_run(args, **kw)
 
     monkeypatch.setattr(subprocess, 'run', run_and_note_the_timeout)
-    with DockerTest(config_defaults=_make_ai_config(docker, reuse=True, timeout=7, **options)) as app:
+    with AiTest(config_defaults=_make_ai_config(docker, reuse=True, timeout=7, **options)) as app:
         assert _run_tool(app, 'echo', dict(text='x')).value.as_str == 'x'
     assert timeouts[:2] == [('run', start_timeout), ('exec', 7)]
 
 
 def test_a_missing_docker_command_is_a_machinery_error(tmp_path):
     """A command that does not exist raises 'cannot run'."""
-    with DockerTest(config_defaults=_make_ai_config(str(tmp_path / 'nodocker'))) as app:
+    with AiTest(config_defaults=_make_ai_config(str(tmp_path / 'nodocker'))) as app:
         with pytest.raises(TokeoAiError, match='cannot run'):
             _run_tool(app, 'echo', dict(text='x'))
 
@@ -265,7 +251,7 @@ def test_the_docker_sandbox_needs_an_image(docker):
     """Without an image the call raises before any client runs."""
     cfg = _make_ai_config(docker)
     cfg['ai']['sandboxes']['docked']['options']['image'] = None
-    with DockerTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         with pytest.raises(TokeoAiError, match='needs an image'):
             _run_tool(app, 'echo', dict(text='x'))
     assert _get_docker_calls(docker) == []
@@ -295,7 +281,7 @@ def test_the_linter_checks_the_docker_options(options, path, message):
     """Clean options lint clean; no image, root or an unknown key is an error."""
     cfg = _make_ai_config('docker')
     cfg['ai']['sandboxes']['docked']['options'].update(options)
-    with DockerTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
     if path is None:
         assert errors == {}
@@ -307,7 +293,7 @@ def test_the_linter_reports_a_missing_image_without_an_options_block():
     """Without options the block is {}, so the missing image is a lint error."""
     cfg = _make_ai_config('docker')
     del cfg['ai']['sandboxes']['docked']['options']
-    with DockerTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
     assert errors == {'ai.sandboxes.docked.options': 'image is required'}
 
@@ -320,5 +306,5 @@ def test_live_the_docker_sandbox_runs_a_tool_in_a_real_container():
     """With a real docker the echo tool answers from a container."""
     cfg = _make_ai_config('docker')
     cfg['ai']['sandboxes']['docked']['options']['image'] = os.environ['TOKEO_TEST_DOCKER_IMAGE']
-    with DockerTest(config_defaults=cfg) as app:
+    with AiTest(config_defaults=cfg) as app:
         assert _run_tool(app, 'echo', dict(text='live')).value.as_str == 'live'

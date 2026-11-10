@@ -205,7 +205,7 @@ extensions the subject needs. Differences are fixed derivations, not
 functions that build apps; the class name tells what a test needs.
 
 ```python
-class DockerTest(TokeoTest):
+class AiTest(TokeoTest):
     """A test app with the ai extension and the extensions it needs."""
 
     class Meta:
@@ -230,7 +230,7 @@ A command runs by ```argv``` and ```app.run()```; what it prints is read by
 def test_ai_ask_asks_in_the_terminal(monkeypatch, capsys, key, out):
     """ai ask in a terminal: y lets the run answer done, n prints the decline."""
     ...
-    with LoopTest(argv=['ai', 'ask', 'hi', '--agent', 'careful'], config_defaults=cfg) as app:
+    with AiTest(argv=['ai', 'ask', 'hi', '--agent', 'careful'], config_defaults=cfg) as app:
         app.run()
     assert capsys.readouterr().out.splitlines()[-1] == out
 ```
@@ -310,7 +310,7 @@ def test_linter_flags_a_reserved_or_no_agent_name(name, message):
     """An agent named __implicit or __own is reserved, a yaml key null no name."""
     cfg = _make_ai_config()
     cfg['ai']['agents'][name] = dict(type='fundi', options=dict(governors=[]))
-    with FundiTest(argv=LINT, config_defaults=cfg) as app:
+    with AiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
         assert any(i.level == 'error' and message in i.message for i in issues)
 ```
