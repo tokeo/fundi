@@ -17,7 +17,7 @@ from tokeo.core.ai.guards.confirm import (
     TokeoAiConfirmRequest,
     TokeoAiConfirmRetry,
 )
-from tests.ext.ai.test_loop import LoopTest, make_loop_config, make_call
+from tests.ext.ai.lib.ai_tests_helper import LoopTest, make_loop_config, make_call, get_tool_contents
 
 YES = TokeoAiConfirmAnswer('yes', by='human', who='tom')
 YES_RUN = TokeoAiConfirmAnswer('yes_run', by='human', who='tom')
@@ -34,7 +34,7 @@ class ForbidWordGuard(TokeoAiGuard):
             invocation.decision, invocation.reason = Invocation.DENY, 'says bad'
 
 
-def make_confirm_config(script, stages=('on_call',), options=None, forbid=False):
+def _make_confirm_config(script, stages=('on_call',), options=None, forbid=False):
     """make_loop_config with agent careful, confirm at the stages, maybe forbid."""
     cfg = make_loop_config(script)
     cfg['ai']['guards']['ask'] = dict(type='confirm', options=dict(options or {}))
@@ -44,7 +44,7 @@ def make_confirm_config(script, stages=('on_call',), options=None, forbid=False)
     return cfg
 
 
-def run_chat(cfg, *answers, asked_requests=None, **chat):
+def _run_chat(cfg, *answers, asked_requests=None, **chat):
     """
     Chat once as careful; the channel answers in order, none means no channel.
     The requests go to asked_requests, a list of the caller's to keep them on a
@@ -62,14 +62,9 @@ def run_chat(cfg, *answers, asked_requests=None, **chat):
     return result, asked_requests
 
 
-def get_tool_contents(result):
-    """The contents of the tool messages on the trace of a run, in order."""
-    return [s.object['content'] for s in result.trace if isinstance(s.object, dict) and s.object.get('role') == 'tool']
-
-
 def test_without_a_channel_the_default_says_no():
     """No channel: echo is skipped, the entry says no by default, allow to deny."""
-    result, _ = run_chat(make_confirm_config([make_call('moin'), dict(text='done')]))
+    result, _ = _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')]))
     assert get_tool_contents(result) == ['denied: denied by confirmation']
     confirmation = result.confirmations[0]
     assert (confirmation['answer'], confirmation['by']) == ('no', 'default')
@@ -79,13 +74,13 @@ def test_without_a_channel_the_default_says_no():
 @pytest.mark.parametrize('word, content', [('moin', 'moin'), ('bad', 'denied: says bad')])
 def test_the_default_yes_confirms_the_decision_of_the_guards(word, content):
     """default yes: a yes of the guards runs echo, a no stays a no."""
-    result, _ = run_chat(make_confirm_config([make_call(word), dict(text='done')], options=dict(default='yes'), forbid=True))
+    result, _ = _run_chat(_make_confirm_config([make_call(word), dict(text='done')], options=dict(default='yes'), forbid=True))
     assert get_tool_contents(result) == [content]
 
 
 def test_a_yes_confirms_the_decision_and_is_recorded():
     """yes by tom: echo runs; the request has the decision, the entry the answer."""
-    result, asked_requests = run_chat(make_confirm_config([make_call('moin'), dict(text='done')]), YES)
+    result, asked_requests = _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')]), YES)
     assert get_tool_contents(result) == ['moin']
     assert asked_requests[0].answer_values == ('yes', 'yes_run', 'no', 'no_retry')
     assert (asked_requests[0].decision, asked_requests[0].reason) == ('allow', None)
@@ -97,20 +92,20 @@ def test_a_yes_confirms_the_decision_and_is_recorded():
 
 def test_a_yes_never_turns_the_no_of_a_guard_into_a_yes():
     """forbid denies bad, tom answers yes: the call stays denied."""
-    result, asked_requests = run_chat(make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), YES)
+    result, asked_requests = _run_chat(_make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), YES)
     assert get_tool_contents(result) == ['denied: says bad']
     assert (asked_requests[0].decision, asked_requests[0].reason) == ('deny', 'says bad')
 
 
 def test_a_no_turns_a_yes_into_a_no_with_its_note():
     """no by tom with the note 'not now': echo is skipped with that note."""
-    result, _ = run_chat(make_confirm_config([make_call('moin'), dict(text='done')]), NO)
+    result, _ = _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')]), NO)
     assert get_tool_contents(result) == ['denied: not now']
 
 
 def test_yes_run_is_recalled_only_for_the_same_question():
     """yes_run on echo a: a second echo a is not asked, echo b is."""
-    result, asked_requests = run_chat(make_confirm_config([make_call('a'), make_call('a'), make_call('b'), dict(text='done')]), YES_RUN)
+    result, asked_requests = _run_chat(_make_confirm_config([make_call('a'), make_call('a'), make_call('b'), dict(text='done')]), YES_RUN)
     assert get_tool_contents(result) == ['a', 'a', 'b']
     assert [request.subject.arguments for request in asked_requests] == [dict(text='a'), dict(text='b')]
     assert [(c['recalled'], c['by']) for c in result.confirmations] == [(False, 'human'), (True, 'human'), (False, 'human')]
@@ -118,7 +113,7 @@ def test_yes_run_is_recalled_only_for_the_same_question():
 
 def test_no_retry_lets_the_guards_judge_anew_with_the_note():
     """forbid denies bad, no_retry 'trust it': forbid now allows, then a yes."""
-    result, asked_requests = run_chat(make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), TRUST, YES)
+    result, asked_requests = _run_chat(_make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), TRUST, YES)
     assert get_tool_contents(result) == ['bad']
     assert [request.decision for request in asked_requests] == ['deny', 'allow']
     assert [note['note'] for note in asked_requests[1].notes] == ['trust it']
@@ -128,14 +123,14 @@ def test_no_retry_lets_the_guards_judge_anew_with_the_note():
 def test_the_dialog_is_asked_again_after_each_retry_until_yes():
     """Two no_retry that do not help, then yes: the no of forbid stays."""
     wrong = TokeoAiConfirmAnswer('no_retry', by='human', note='still')
-    result, asked_requests = run_chat(make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), wrong, wrong, YES)
+    result, asked_requests = _run_chat(_make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), wrong, wrong, YES)
     assert len(asked_requests) == 3 and get_tool_contents(result) == ['denied: says bad']
 
 
 def test_no_retry_needs_a_note():
     """no_retry without a note is an error."""
     with pytest.raises(TokeoAiConfirmGuardError, match='no_retry needs a note'):
-        run_chat(make_confirm_config([make_call('moin'), dict(text='done')]), TokeoAiConfirmAnswer('no_retry', by='human'))
+        _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')]), TokeoAiConfirmAnswer('no_retry', by='human'))
 
 
 def test_more_retries_than_the_default_decline_the_run():
@@ -143,7 +138,7 @@ def test_more_retries_than_the_default_decline_the_run():
     again = TokeoAiConfirmAnswer('no_retry', by='auto', note='again')
     asked_requests = []
     with pytest.raises(TokeoAiRunDeclinedError, match='retried more than 5 times'):
-        run_chat(make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), again, asked_requests=asked_requests)
+        _run_chat(_make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), again, asked_requests=asked_requests)
     assert len(asked_requests) == 6
 
 
@@ -151,14 +146,14 @@ def test_more_retries_than_the_default_decline_the_run():
 def test_max_retries_is_set_per_guard_or_per_stage(options, asks):
     """max_retries 2 for the guard, or 1 for its stage on_call, ends the retries."""
     again = TokeoAiConfirmAnswer('no_retry', by='auto', note='again')
-    cfg = make_confirm_config([make_call('bad'), dict(text='done')], forbid=True)
+    cfg = _make_confirm_config([make_call('bad'), dict(text='done')], forbid=True)
     if 'on_call' in options:
         cfg['ai']['guards']['ask'].update(options)
     else:
         cfg['ai']['guards']['ask']['options'].update(options)
     asked_requests = []
     with pytest.raises(TokeoAiRunDeclinedError, match='retried more than'):
-        run_chat(cfg, again, asked_requests=asked_requests)
+        _run_chat(cfg, again, asked_requests=asked_requests)
     assert len(asked_requests) == asks
 
 
@@ -167,7 +162,7 @@ def test_the_linter_checks_max_retries(value):
     """max_retries is a whole number of at least 1, for the guard and per stage."""
     from tokeo.core.ai.linter import TokeoAiLinter
 
-    cfg = make_confirm_config([dict(text='done')])
+    cfg = _make_confirm_config([dict(text='done')])
     cfg['ai']['guards']['ask']['options']['max_retries'] = value
     cfg['ai']['guards']['ask']['on_call'] = dict(options=dict(max_retries=value))
     with LoopTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
@@ -179,7 +174,7 @@ def test_the_linter_checks_max_retries(value):
 def test_notes_of_an_earlier_run_reach_the_guards():
     """notes with 'trust it' from before: forbid allows bad at once."""
     notes = [dict(stage='on_call', note='trust it')]
-    result, asked_requests = run_chat(make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), YES, notes=notes)
+    result, asked_requests = _run_chat(_make_confirm_config([make_call('bad'), dict(text='done')], forbid=True), YES, notes=notes)
     assert get_tool_contents(result) == ['bad']
     assert asked_requests[0].notes == notes
 
@@ -187,26 +182,26 @@ def test_notes_of_an_earlier_run_reach_the_guards():
 def test_a_note_on_a_yes_is_kept_for_the_run_and_the_result():
     """yes with a note: the entry carries it, the next request shows it."""
     noted_answer = TokeoAiConfirmAnswer('yes', by='auto', who='a model', note='+20 % for this header')
-    result, asked_requests = run_chat(make_confirm_config([make_call('a'), make_call('b'), dict(text='done')]), noted_answer)
+    result, asked_requests = _run_chat(_make_confirm_config([make_call('a'), make_call('b'), dict(text='done')]), noted_answer)
     assert result.confirmations[0]['note'] == '+20 % for this header'
     assert [note['note'] for note in asked_requests[1].notes] == ['+20 % for this header']
 
 
 def test_the_option_tools_limits_what_is_asked():
     """tools [shout]: echo is not asked and runs."""
-    result, asked_requests = run_chat(make_confirm_config([make_call('moin'), dict(text='done')], options=dict(tools=['shout'])), NO)
+    result, asked_requests = _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')], options=dict(tools=['shout'])), NO)
     assert (get_tool_contents(result), asked_requests) == (['moin'], [])
 
 
 def test_no_answer_lifts_the_limits_of_the_config():
     """echo denied by the call: a yes does not make it run."""
-    result, _ = run_chat(make_confirm_config([make_call('moin'), dict(text='done')]), YES, deny='echo')
+    result, _ = _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')]), YES, deny='echo')
     assert get_tool_contents(result) == ["error: TokeoAiError: tool 'echo' is denied"]
 
 
 def test_a_no_at_on_return_replaces_the_result():
     """Asked at on_return, no: the model gets the denial, not 'moin'."""
-    result, _ = run_chat(make_confirm_config([make_call('moin'), dict(text='done')], stages=('on_return',)), NO)
+    result, _ = _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')], stages=('on_return',)), NO)
     assert get_tool_contents(result) == ['denied: not now']
 
 
@@ -214,20 +209,20 @@ def test_a_no_at_on_return_replaces_the_result():
 def test_a_no_at_a_stage_without_a_call_declines_the_run(stage):
     """A no at a stage without a tool call declines the run, its entry stays."""
     with pytest.raises(TokeoAiRunDeclinedError) as err_info:
-        run_chat(make_confirm_config([dict(text='done')], stages=(stage,)), NO)
+        _run_chat(_make_confirm_config([dict(text='done')], stages=(stage,)), NO)
     assert (err_info.value.stage, err_info.value.reason, err_info.value.by) == (stage, 'not now', 'human')
     assert [c['answer'] for c in err_info.value.result.confirmations] == ['no']
 
 
 def test_no_retry_at_a_stage_without_a_call_asks_again():
     """no_retry at on_answer, then yes: the run answers done."""
-    result, asked_requests = run_chat(make_confirm_config([dict(text='done')], stages=('on_answer',)), TRUST, YES)
+    result, asked_requests = _run_chat(_make_confirm_config([dict(text='done')], stages=('on_answer',)), TRUST, YES)
     assert (result.answer.text, len(asked_requests)) == ('done', 2)
 
 
 def test_the_request_carries_the_userdata_of_the_run():
     """userdata {'user': 'tom'} reaches the channel on the request."""
-    _, asked_requests = run_chat(make_confirm_config([make_call('moin'), dict(text='done')]), YES, userdata=dict(user='tom'))
+    _, asked_requests = _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')]), YES, userdata=dict(user='tom'))
     assert asked_requests[0].userdata == dict(user='tom')
 
 
@@ -242,7 +237,7 @@ def test_the_request_carries_the_userdata_of_the_run():
 def test_a_wrong_answer_is_an_error(answer, message):
     """An unknown answer, or by default from a channel, ends the run in an error."""
     with pytest.raises(TokeoAiConfirmGuardError, match=message):
-        run_chat(make_confirm_config([make_call('moin'), dict(text='done')]), answer)
+        _run_chat(_make_confirm_config([make_call('moin'), dict(text='done')]), answer)
 
 
 def test_ask_raises_when_the_run_is_declined():
@@ -251,7 +246,7 @@ def test_ask_raises_when_the_run_is_declined():
     def channel(app, request):
         return NO
 
-    cfg = make_confirm_config([dict(text='done')], stages=('on_prompt',))
+    cfg = _make_confirm_config([dict(text='done')], stages=('on_prompt',))
     with LoopTest(config_defaults=cfg, hooks=[(GOVERNOR_CONFIRM_CHANNEL_HOOK, channel)]) as app:
         with pytest.raises(TokeoAiRunDeclinedError) as err_info:
             app.ai.ask('hi', agent='careful')
@@ -262,7 +257,7 @@ def test_the_linter_takes_the_confirm_options_and_flags_a_typo():
     """The confirm config lints clean; an option tool, not tools, is an error."""
     from tokeo.core.ai.linter import TokeoAiLinter
 
-    cfg = make_confirm_config([dict(text='done')], options=dict(tools=['echo'], default='yes'))
+    cfg = _make_confirm_config([dict(text='done')], options=dict(tools=['echo'], default='yes'))
     with LoopTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         assert [i for i in TokeoAiLinter(app).lint() if i.level == 'error'] == []
     cfg['ai']['guards']['ask']['options'] = dict(tool=['echo'])
@@ -273,7 +268,7 @@ def test_the_linter_takes_the_confirm_options_and_flags_a_typo():
 # terminal
 
 
-def make_terminal_channel(*lines):
+def _make_terminal_channel(*lines):
     """A terminal channel that reads the lines in order, and what it wrote."""
     from tokeo.core.ai.guards.confirm.terminal import create_terminal_channel
 
@@ -281,7 +276,7 @@ def make_terminal_channel(*lines):
     return create_terminal_channel(lambda prompt: lines.pop(0), written_lines.append), written_lines
 
 
-def make_request(decision, reason, notes=()):
+def _make_request(decision, reason, notes=()):
     """A confirm request at on_call for echo('moin') with the given decision."""
     invocation = Invocation(id='c1', name='echo', arguments=dict(text='moin'))
     return TokeoAiConfirmRequest(invocation, decision, reason, ('yes', 'yes_run', 'no', 'no_retry'), 'on_call', 'ask', notes=list(notes))
@@ -289,16 +284,16 @@ def make_request(decision, reason, notes=()):
 
 def test_the_terminal_shows_the_decision_and_asks_until_an_answer():
     """x is no answer, y is yes: the call, the decision and the notes are shown."""
-    channel, written_lines = make_terminal_channel('x', 'y', '')
-    answer = channel(None, make_request('deny', 'says bad', [dict(note='trust it')]))
+    channel, written_lines = _make_terminal_channel('x', 'y', '')
+    answer = channel(None, _make_request('deny', 'says bad', [dict(note='trust it')]))
     assert (answer.value, answer.by, answer.note) == ('yes', 'human', None)
     assert written_lines == ['confirm on_call (ask): echo {"text": "moin"}', '  decision: deny (says bad)', '  note: trust it']
 
 
 def test_the_terminal_asks_for_the_note_of_a_no_retry():
     """t, an empty note, then 'trust it': the no_retry carries the note."""
-    channel, _ = make_terminal_channel('t', '', 'trust it')
-    answer = channel(None, make_request('deny', 'says bad'))
+    channel, _ = _make_terminal_channel('t', '', 'trust it')
+    answer = channel(None, _make_request('deny', 'says bad'))
     assert (answer.value, answer.note) == ('no_retry', 'trust it')
 
 
@@ -308,7 +303,7 @@ def test_ai_ask_asks_in_the_terminal(monkeypatch, capsys, key, out):
     lines = [key, '']
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     monkeypatch.setattr('builtins.input', lambda prompt='': lines.pop(0))
-    cfg = make_confirm_config([dict(text='done')], stages=('on_prompt',))
+    cfg = _make_confirm_config([dict(text='done')], stages=('on_prompt',))
     with LoopTest(argv=['ai', 'ask', 'hi', '--agent', 'careful'], config_defaults=cfg) as app:
         app.run()
     assert capsys.readouterr().out.splitlines()[-1] == out

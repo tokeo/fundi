@@ -1,9 +1,14 @@
 """
-The tools the tests of the ai extension run in the sandboxes.
+The tools the tests of the ai extension run in the sandboxes, and the test app
+with the scripted model the loop and confirm tests share.
 
-They live in a real module, not a closure, so the subprocess sandbox imports
-them by their class path in a fresh interpreter, exactly as the tools of a
-project are imported. Each one is a minimal ```TokeoAiTool```.
+The tools live in a real module, not a closure, so the subprocess sandbox
+imports them by their class path in a fresh interpreter, exactly as the tools
+of a project are imported. Each one is a minimal ```TokeoAiTool```.
+
+```LoopTest``` runs with an ai config of ```make_loop_config```, whose profile
+plays the turns of a script by ```ScriptProvider```; ```make_call``` builds a
+turn that calls echo, ```get_tool_contents``` reads the tool results of a run.
 """
 
 import os
@@ -11,8 +16,14 @@ import sys
 import time
 import subprocess
 
-from tokeo.core.ai import TokeoAiTool
+from cement.utils.misc import init_defaults
+from tokeo.main import TokeoTest
+from tokeo.core.ai import TokeoAiTool, TokeoAiProvider, TokeoAiChatResult, TokeoAiToolCall
 from tokeo.core.ai.tool import create_tool_result
+
+SCRIPT = 'tests.ext.ai.lib.ai_tests_helper:ScriptProvider'
+_ECHO = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
+_CODE = 'tokeo.core.ai.tools:TokeoAiPythonTrustedExecTool'
 
 
 class EchoTool(TokeoAiTool):
@@ -197,3 +208,78 @@ class NothingTool(TokeoAiTool):
 
     def exec(self, **arguments):
         return None
+
+
+class LoopTest(TokeoTest):
+    """Test app with the ai extension and the extensions it builds on."""
+
+    class Meta:
+        extensions = [
+            'tokeo.ext.yaml',
+            'tokeo.ext.appenv',
+            'tokeo.ext.print',
+            'tokeo.ext.jinja2',
+            'tokeo.ext.appshare',
+            'tokeo.ext.ai',
+        ]
+
+
+class ScriptProvider(TokeoAiProvider):
+    """
+    A provider that answers from the ```script``` option of its profile.
+
+    The script is a list of turns, each ```{'text': ..., 'calls': [(name,
+    arguments), ...]}```. The turn played is the number of assistant turns in
+    the messages so far, so a provider call needs no state of its own; past the
+    end the last turn repeats. Every call records the messages it got in
+    ```seen_messages```.
+    """
+
+    class Meta:
+        config_defaults = dict(script=None)
+
+    def __init__(self, app, *args, **kw):
+        super().__init__(app, *args, **kw)
+        self.seen_messages = []
+
+    def chat(self, messages, profile, tools=None, model_params=None):
+        """Play the next turn of the script, record the messages."""
+        self.seen_messages.append(list(messages))
+        script = profile['options']['script']
+        index = min(sum(1 for m in messages if m.get('role') == 'assistant'), len(script) - 1)
+        turn = script[index]
+        calls = [
+            TokeoAiToolCall(id=f'c{index}_{n}', name=name, arguments=arguments)
+            for n, (name, arguments) in enumerate(turn.get('calls', []))
+        ]
+        return TokeoAiChatResult(text=turn.get('text', ''), tool_calls=calls)
+
+
+def make_loop_config(script, **agent_options):
+    """An ai config: echo in process, agents plain and audited, the script."""
+    cfg = init_defaults('ai')
+    cfg['ai'] = dict(
+        license_acknowledged=False,
+        defaults=dict(profile='script', agent=None),
+        tools={'echo': dict(type=_ECHO), 'shout': dict(type=_ECHO), 'coding': dict(type=_CODE)},
+        guards={'audit': dict(type='trace_audit'), 'redact': dict(type='regex_redact', options=dict(patterns=[r'password=\S+']))},
+        # shout is configured and has a sandbox, but no agent offers it
+        sandboxes={'local': dict(type='in_process', tools=['echo', 'shout', 'coding'])},
+        agents={
+            'plain': dict(type='fundi', options=dict(governors=[], tools=['echo', 'coding'], sandboxes=['local'], **agent_options)),
+            'audited': dict(type='fundi', options=dict(tools=['echo'], governors=['audit'], sandboxes=['local'], **agent_options)),
+            'redacting': dict(type='fundi', options=dict(tools=['echo'], governors=['redact'], sandboxes=['local'], **agent_options)),
+        },
+        profiles={'script': dict(type=SCRIPT, options=dict(script=script))},
+    )
+    return cfg
+
+
+def make_call(text):
+    """A script turn that calls echo with the text."""
+    return dict(calls=[('echo', dict(text=text))])
+
+
+def get_tool_contents(result):
+    """The contents of the tool messages on the trace of a run, in order."""
+    return [s.object['content'] for s in result.trace if isinstance(s.object, dict) and s.object.get('role') == 'tool']

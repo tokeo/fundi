@@ -8,60 +8,11 @@ governors at the tool stages. The tools run in process.
 """
 
 import pytest
-from cement.utils.misc import init_defaults
-from tokeo.main import TokeoTest
-from tokeo.core.ai import TokeoAiError, TokeoAiProvider, TokeoAiGuard, TokeoAiRunDeclinedError, TokeoAiChatResult, TokeoAiToolCall
+from tokeo.core.ai import TokeoAiError, TokeoAiGuard, TokeoAiRunDeclinedError
 from tokeo.core.ai.data import Invocation
+from tests.ext.ai.lib.ai_tests_helper import SCRIPT, LoopTest, make_loop_config, make_call, get_tool_contents
 
-SCRIPT = 'tests.ext.ai.test_loop:ScriptProvider'
-ECHO = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
-CODE = 'tokeo.core.ai.tools:TokeoAiPythonTrustedExecTool'
 HINT = 'error: ran ok, printed output but set no result: put your answer in the last line'
-
-
-class LoopTest(TokeoTest):
-    """Test app with the ai extension and the extensions it builds on."""
-
-    class Meta:
-        extensions = [
-            'tokeo.ext.yaml',
-            'tokeo.ext.appenv',
-            'tokeo.ext.print',
-            'tokeo.ext.jinja2',
-            'tokeo.ext.appshare',
-            'tokeo.ext.ai',
-        ]
-
-
-class ScriptProvider(TokeoAiProvider):
-    """
-    A provider that answers from the ```script``` option of its profile.
-
-    The script is a list of turns, each ```{'text': ..., 'calls': [(name,
-    arguments), ...]}```. The turn played is the number of assistant turns in
-    the messages so far, so a provider call needs no state of its own; past the
-    end the last turn repeats. Every call records the messages it got in
-    ```seen_messages```.
-    """
-
-    class Meta:
-        config_defaults = dict(script=None)
-
-    def __init__(self, app, *args, **kw):
-        super().__init__(app, *args, **kw)
-        self.seen_messages = []
-
-    def chat(self, messages, profile, tools=None, model_params=None):
-        """Play the next turn of the script, record the messages."""
-        self.seen_messages.append(list(messages))
-        script = profile['options']['script']
-        index = min(sum(1 for m in messages if m.get('role') == 'assistant'), len(script) - 1)
-        turn = script[index]
-        calls = [
-            TokeoAiToolCall(id=f'c{index}_{n}', name=name, arguments=arguments)
-            for n, (name, arguments) in enumerate(turn.get('calls', []))
-        ]
-        return TokeoAiChatResult(text=turn.get('text', ''), tool_calls=calls)
 
 
 class DecliningGuard(TokeoAiGuard):
@@ -79,42 +30,12 @@ class DecliningGuard(TokeoAiGuard):
             raise TokeoAiRunDeclinedError('on_answer', 'not this answer', by='auto')
 
 
-def make_declining_config(stage):
+def _make_declining_config(stage):
     """make_loop_config with an agent whose one governor declines at the stage."""
     cfg = make_loop_config([dict(text='hello')])
     cfg['ai']['guards']['decline'] = dict(type='tests.ext.ai.test_loop:DecliningGuard', options=dict(stage=stage))
     cfg['ai']['agents']['declining'] = dict(type='fundi', options=dict(governors=['decline']))
     return cfg
-
-
-def make_loop_config(script, **agent_options):
-    """An ai config: echo in process, agents plain and audited, the script."""
-    cfg = init_defaults('ai')
-    cfg['ai'] = dict(
-        license_acknowledged=False,
-        defaults=dict(profile='script', agent=None),
-        tools={'echo': dict(type=ECHO), 'shout': dict(type=ECHO), 'coding': dict(type=CODE)},
-        guards={'audit': dict(type='trace_audit'), 'redact': dict(type='regex_redact', options=dict(patterns=[r'password=\S+']))},
-        # shout is configured and has a sandbox, but no agent offers it
-        sandboxes={'local': dict(type='in_process', tools=['echo', 'shout', 'coding'])},
-        agents={
-            'plain': dict(type='fundi', options=dict(governors=[], tools=['echo', 'coding'], sandboxes=['local'], **agent_options)),
-            'audited': dict(type='fundi', options=dict(tools=['echo'], governors=['audit'], sandboxes=['local'], **agent_options)),
-            'redacting': dict(type='fundi', options=dict(tools=['echo'], governors=['redact'], sandboxes=['local'], **agent_options)),
-        },
-        profiles={'script': dict(type=SCRIPT, options=dict(script=script))},
-    )
-    return cfg
-
-
-def make_call(text):
-    """A script turn that calls echo with the text."""
-    return dict(calls=[('echo', dict(text=text))])
-
-
-def get_tool_contents(result):
-    """The contents of the tool messages on the trace of a run, in order."""
-    return [s.object['content'] for s in result.trace if isinstance(s.object, dict) and s.object.get('role') == 'tool']
 
 
 # chat
@@ -213,14 +134,14 @@ def test_chat_refuses_arguments_that_are_no_json_object(agent):
         assert result.loopdata.failed_loop_cnt == 1
 
 
-def make_code_call(source):
+def _make_code_call(source):
     """A script turn that runs the source by the coding tool."""
     return dict(calls=[('coding', dict(code=source))])
 
 
 def test_chat_code_that_only_prints_gets_the_hint():
     """print(9) delivers nothing: the model gets the hint, not the printed 9."""
-    with LoopTest(config_defaults=make_loop_config([make_code_call('print(9)'), dict(text='done')])) as app:
+    with LoopTest(config_defaults=make_loop_config([_make_code_call('print(9)'), dict(text='done')])) as app:
         result = app.ai.chat([dict(role='user', content='hi')], agent='plain')
         assert get_tool_contents(result) == [HINT]
         assert result.loopdata.failed_loop_cnt == 1
@@ -228,7 +149,7 @@ def test_chat_code_that_only_prints_gets_the_hint():
 
 def test_chat_code_that_delivers_a_value_gets_it():
     """x = 9 on the last line delivers 9 to the model."""
-    with LoopTest(config_defaults=make_loop_config([make_code_call('x = 9'), dict(text='done')])) as app:
+    with LoopTest(config_defaults=make_loop_config([_make_code_call('x = 9'), dict(text='done')])) as app:
         result = app.ai.chat([dict(role='user', content='hi')], agent='plain')
         assert get_tool_contents(result) == ['9']
         assert result.loopdata.failed_loop_cnt == 0
@@ -236,7 +157,7 @@ def test_chat_code_that_delivers_a_value_gets_it():
 
 def test_chat_code_that_keeps_printing_ends_at_max_loops():
     """A model that keeps printing stops at max_loops 3, not after 13 rounds."""
-    with LoopTest(config_defaults=make_loop_config([make_code_call('print(9)')])) as app:
+    with LoopTest(config_defaults=make_loop_config([_make_code_call('print(9)')])) as app:
         with pytest.raises(TokeoAiError, match=r'max_loops \(3\) reached'):
             app.ai.chat([dict(role='user', content='hi')], agent='plain', max_loops=3)
 
@@ -273,7 +194,7 @@ def test_ask_returns_the_text_of_the_answer():
 
 def test_a_decline_at_on_prompt_raises_with_the_run_so_far():
     """Declined at on_prompt: no model call, the error names stage, reason, who."""
-    with LoopTest(config_defaults=make_declining_config('on_prompt')) as app:
+    with LoopTest(config_defaults=_make_declining_config('on_prompt')) as app:
         with pytest.raises(TokeoAiRunDeclinedError, match='run declined at on_prompt: not today') as err_info:
             app.ai.chat([dict(role='user', content='hi')], agent='declining')
         assert app.ai._get_provider(SCRIPT).seen_messages == []
@@ -283,7 +204,7 @@ def test_a_decline_at_on_prompt_raises_with_the_run_so_far():
 
 def test_a_decline_at_on_answer_keeps_the_declined_answer_off_the_result():
     """Declined at on_answer: the answer 'hello' is on the trace, not the result."""
-    with LoopTest(config_defaults=make_declining_config('on_answer')) as app:
+    with LoopTest(config_defaults=_make_declining_config('on_answer')) as app:
         with pytest.raises(TokeoAiRunDeclinedError) as err_info:
             app.ai.chat([dict(role='user', content='hi')], agent='declining')
     result = err_info.value.result

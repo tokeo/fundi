@@ -96,7 +96,7 @@ class WasmTest(TokeoTest):
         ]
 
 
-def make_wasm_ai_config():
+def _make_wasm_ai_config():
     """An ai config with the untrusted and the trusted tool, each behind wasm."""
     # a self-contained ai config with BOTH built-in tools, each behind a wasm
     # sandbox: the untrusted tool runs directly in the guest (no app mount), the
@@ -160,7 +160,7 @@ def make_wasm_ai_config():
 def test_untrusted_exec_through_the_agent_chain():
     """Untrusted, statistics.median([5, 1, 9, 3, 7]) runs in the guest: '5'."""
     # no app mount; the result crosses the file bridge back
-    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
@@ -182,7 +182,7 @@ def test_untrusted_exec_through_the_agent_chain():
 )
 def test_trusted_exec_through_the_agent_chain():
     """The trusted tool, rebuilt from the mounted source, imports tokeo: 'True'."""
-    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('trusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_trusted',
@@ -209,7 +209,7 @@ def test_untrusted_guest_cannot_import_the_framework():
     Nothing of tokeo enters the untrusted guest, only copies of the guest
     modules under _guest. The failure is a tool exception on the result (A).
     """
-    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
@@ -236,7 +236,7 @@ def test_wasm_guest_has_no_network():
     on the result's state (A). Its type is build-specific (gaierror, OSError or
     a missing socket module), so only the recorded failure is asserted.
     """
-    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
@@ -264,7 +264,7 @@ def test_wasm_guest_cannot_write_a_read_only_mount():
     stays the only writable surface.
     """
     probe = os.path.join(_STDLIB, 'tokeo_wasm_probe.txt')
-    with WasmTest(config_defaults=make_wasm_ai_config()) as app:
+    with WasmTest(config_defaults=_make_wasm_ai_config()) as app:
         agent = app.ai._get_agent('untrusted_coder')
         out = app.ai._exec_in_sandbox(
             'run_untrusted',
@@ -286,9 +286,9 @@ needs_build = pytest.mark.skipif(
 )
 
 
-def run_untrusted(code, **options):
+def _run_untrusted(code, **options):
     """Run the code by the untrusted tool in wasm with extra options, return it."""
-    cfg = make_wasm_ai_config()
+    cfg = _make_wasm_ai_config()
     cfg['ai']['sandboxes']['wasm_untrusted']['options'].update(options)
     with WasmTest(config_defaults=cfg) as app:
         agent = app.ai._get_agent('untrusted_coder')
@@ -298,7 +298,7 @@ def run_untrusted(code, **options):
 @needs_build
 def test_the_host_tells_stdout_and_stderr():
     """print out and err, then 7: the value 7, stdout and stderr as captured."""
-    out = run_untrusted('import sys\nprint("out")\nprint("err", file=sys.stderr)\n7')
+    out = _run_untrusted('import sys\nprint("out")\nprint("err", file=sys.stderr)\n7')
     assert out.value.as_str == '7'
     assert (out.state.stdout, out.state.stderr, out.state.error) == ('out\n', 'err\n', None)
 
@@ -306,7 +306,7 @@ def test_the_host_tells_stdout_and_stderr():
 @needs_build
 def test_the_host_tells_the_exception_of_a_raising_snippet():
     """1/0 gives no value and the last stderr line as the error."""
-    out = run_untrusted('1/0')
+    out = _run_untrusted('1/0')
     assert out.value is None
     assert out.state.error == 'ZeroDivisionError: division by zero'
     assert 'Traceback' in out.state.stderr
@@ -315,7 +315,7 @@ def test_the_host_tells_the_exception_of_a_raising_snippet():
 @needs_build
 def test_the_guest_cannot_forge_its_stdout():
     """A file /io/stdout written by the guest is not the captured stdout."""
-    out = run_untrusted('open("/io/stdout", "w").write("forged")\nopen("/io/stderr", "w").write("forged")\n1')
+    out = _run_untrusted('open("/io/stdout", "w").write("forged")\nopen("/io/stderr", "w").write("forged")\n1')
     assert (out.state.stdout, out.state.stderr) == (None, None)
 
 
@@ -323,20 +323,20 @@ def test_the_guest_cannot_forge_its_stdout():
 def test_a_failed_guest_machinery_is_an_error():
     """An exit with code 3 is the guest machinery failing: TokeoAiError."""
     with pytest.raises(TokeoAiError, match='failed in the wasm sandbox'):
-        run_untrusted('import sys\nsys.exit(3)')
+        _run_untrusted('import sys\nsys.exit(3)')
 
 
 @needs_build
 def test_the_untrusted_guest_sees_only_lib_and_io():
     """/lib and /io exist in the untrusted guest, /etc, /home, /tmp, /usr not."""
-    out = run_untrusted('import os\n[os.path.isdir(p) for p in ("/lib", "/io", "/etc", "/home", "/tmp", "/usr")]')
+    out = _run_untrusted('import os\n[os.path.isdir(p) for p in ("/lib", "/io", "/etc", "/home", "/tmp", "/usr")]')
     assert out.value.as_data == [True, True, False, False, False, False]
 
 
 @needs_build
 def test_the_untrusted_guest_cannot_leave_by_a_symlink():
     """A symlink in /io to ../../etc does not open a host file."""
-    out = run_untrusted('import os\nos.symlink("../../../../../etc", "/io/up")\nopen("/io/up/hostname").read()')
+    out = _run_untrusted('import os\nos.symlink("../../../../../etc", "/io/up")\nopen("/io/up/hostname").read()')
     assert out.value is None
     assert out.state.error is not None
 
@@ -344,7 +344,7 @@ def test_the_untrusted_guest_cannot_leave_by_a_symlink():
 @needs_build
 def test_the_untrusted_guest_has_no_shims_and_writes_no_bytecode():
     """threading comes from /lib, and the guest writes no bytecode."""
-    out = run_untrusted('import sys, threading\n[threading.__file__, sys.dont_write_bytecode]')
+    out = _run_untrusted('import sys, threading\n[threading.__file__, sys.dont_write_bytecode]')
     assert out.value.as_data == ['/lib/threading.py', True]
 
 
@@ -360,7 +360,7 @@ def test_guest_and_host_encode_a_value_alike(code):
 
     value = eval(code, dict(datetime=datetime, timezone=timezone))
     host = create_tool_result(value)
-    out = run_untrusted(f'from datetime import datetime, timezone\n{code}')
+    out = _run_untrusted(f'from datetime import datetime, timezone\n{code}')
     assert (out.value.as_json, out.state.is_incomplete) == (host.value.as_json, host.state.is_incomplete)
     if code != 'object()':
         assert out.value.as_str == host.value.as_str
@@ -370,7 +370,7 @@ def test_guest_and_host_encode_a_value_alike(code):
 def test_the_watcher_stops_a_guest_at_the_timeout():
     """while True: pass with timeout 1 ends as 'timed out after 1s'."""
     with pytest.raises(TokeoAiError, match=r'timed out after 1s'):
-        run_untrusted('while True:\n    pass', timeout=1)
+        _run_untrusted('while True:\n    pass', timeout=1)
 
 
 @needs_build
@@ -378,7 +378,7 @@ def test_the_timeout_does_not_wait_for_the_watch_interval():
     """timeout 1 with watch_interval_seconds 30 stops the guest after about 1 s."""
     start = time.monotonic()
     with pytest.raises(TokeoAiError, match=r'timed out after 1s'):
-        run_untrusted('while True:\n    pass', timeout=1, watch_interval_seconds=30)
+        _run_untrusted('while True:\n    pass', timeout=1, watch_interval_seconds=30)
     assert time.monotonic() - start < 10
 
 
@@ -386,7 +386,7 @@ def test_the_timeout_does_not_wait_for_the_watch_interval():
 def test_a_quick_guest_does_not_wait_for_the_watch_interval():
     """A guest that ends at once does not wait for watch_interval_seconds 30."""
     start = time.monotonic()
-    assert run_untrusted('1', watch_interval_seconds=30).value.as_str == '1'
+    assert _run_untrusted('1', watch_interval_seconds=30).value.as_str == '1'
     assert time.monotonic() - start < 10
 
 
@@ -396,7 +396,7 @@ def test_a_quick_guest_does_not_wait_for_the_watch_interval():
 )
 def test_the_linter_checks_the_watch_interval(value, valid):
     """watch_interval_seconds is a number of seconds of at least 0.1."""
-    cfg = make_wasm_ai_config()
+    cfg = _make_wasm_ai_config()
     cfg['ai']['sandboxes']['wasm_untrusted']['options']['watch_interval_seconds'] = value
     with WasmTest(argv=['ai', 'lint'], config_defaults=cfg) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
@@ -409,37 +409,37 @@ def test_the_watcher_stops_a_guest_that_writes_endlessly():
     """A guest writing to /io endlessly stops at max_disk_mb 1, before a timeout."""
     code = 'f = open("/io/fill", "w")\nwhile True:\n    f.write("x" * 65536)\n    f.flush()'
     with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
-        run_untrusted(code, max_disk_mb=1, timeout=None)
+        _run_untrusted(code, max_disk_mb=1, timeout=None)
 
 
 @needs_build
 def test_the_watcher_counts_what_a_guest_prints():
     """A guest printing without end fills no host disk: max_disk_mb 1 stops it."""
     with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
-        run_untrusted('while True:\n    print("x" * 65536)', max_disk_mb=1, timeout=None)
+        _run_untrusted('while True:\n    print("x" * 65536)', max_disk_mb=1, timeout=None)
 
 
 @needs_build
 def test_the_wasm_sandbox_cuts_the_output_and_refuses_a_large_value():
     """max_output_mb 0.001: 5000 bytes printed are cut, a 5000 byte value fails."""
-    out = run_untrusted('print("x" * 5000)\n1', max_output_mb=0.001)
+    out = _run_untrusted('print("x" * 5000)\n1', max_output_mb=0.001)
     assert out.state.stdout == 'x' * 1048 + '\n[... cut after 0.001 MB]'
     with pytest.raises(TokeoAiError, match='delivered more than 0.001 MB in the wasm sandbox'):
-        run_untrusted('"z" * 5000', max_output_mb=0.001)
+        _run_untrusted('"z" * 5000', max_output_mb=0.001)
 
 
 @needs_build
 def test_a_quick_guest_over_the_disk_limit_fails_too():
     """2 MB written at once with max_disk_mb 1 fails, even if the guest ended."""
     with pytest.raises(TokeoAiError, match='wrote more than 1 MB'):
-        run_untrusted('open("/io/big", "w").write("x" * 2 * 1024 * 1024)\n1', max_disk_mb=1)
+        _run_untrusted('open("/io/big", "w").write("x" * 2 * 1024 * 1024)\n1', max_disk_mb=1)
 
 
 @needs_build
 def test_the_watcher_counts_the_files_a_guest_creates():
     """50 files with max_files 10 fail as 'created more than 10 files'."""
     with pytest.raises(TokeoAiError, match='created more than 10 files'):
-        run_untrusted('for i in range(50):\n    open(f"/io/f{i}", "w").close()\n1', max_files=10)
+        _run_untrusted('for i in range(50):\n    open(f"/io/f{i}", "w").close()\n1', max_files=10)
 
 
 @needs_build
@@ -447,7 +447,7 @@ def test_the_watcher_counts_only_what_the_guest_adds_to_work(tmp):
     """A 2 MB file already in cwd is not the guest's, max_disk_mb 1 still passes."""
     with open(os.path.join(tmp.dir, 'kept'), 'w') as f:
         f.write('x' * 2 * 1024 * 1024)
-    assert run_untrusted('"ok"', cwd=tmp.dir, max_disk_mb=1).value.as_str == 'ok'
+    assert _run_untrusted('"ok"', cwd=tmp.dir, max_disk_mb=1).value.as_str == 'ok'
 
 
 @needs_build
@@ -455,7 +455,7 @@ def test_the_cache_dir_keeps_the_compiled_runtime(tmp, monkeypatch):
     """The first run stores the compiled runtime in cache_dir, the next loads it."""
     import wasmtime
 
-    assert run_untrusted('1', cache_dir=tmp.dir).value.as_str == '1'
+    assert _run_untrusted('1', cache_dir=tmp.dir).value.as_str == '1'
     assert [name for name in os.listdir(tmp.dir) if name.endswith('.cwasm')]
 
     def fail_compile(*args, **kw):
@@ -463,4 +463,4 @@ def test_the_cache_dir_keeps_the_compiled_runtime(tmp, monkeypatch):
 
     cached_module_cls = type('Module', (), dict(__init__=fail_compile, deserialize_file=wasmtime.Module.deserialize_file))
     monkeypatch.setattr(wasmtime, 'Module', cached_module_cls)
-    assert run_untrusted('2', cache_dir=tmp.dir).value.as_str == '2'
+    assert _run_untrusted('2', cache_dir=tmp.dir).value.as_str == '2'

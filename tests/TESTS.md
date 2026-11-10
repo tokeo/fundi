@@ -172,7 +172,7 @@ from tests.ext.ai.lib.ai_tests_helper import EchoTool           # own subject
 
 # never from another subject, a conftest.py or a test file, never by a bare name
 from tests.ext.ai.lib.ai_tests_helper import EchoTool           # wrong in tests/core/ai
-from tests.ext.ai.test_ai import make_ai_config                 # wrong
+from tests.ext.ai.test_ai import _make_ai_config                # wrong
 from ai_tests_helper import EchoTool                            # wrong
 ```
 
@@ -253,7 +253,7 @@ def test_ai_ask_asks_in_the_terminal(monkeypatch, capsys, key, out):
 ```python
 @pytest.fixture
 def docker(tmp_path):
-    """The path of a fake docker command; its log is get_docker_calls()."""
+    """The path of a fake docker command; its log is _get_docker_calls()."""
     path = tmp_path / 'docker'
     path.write_text(DOCKER_FAKE_SCRIPT.format(python=sys.executable, log=str(tmp_path / 'calls.log'), root=ROOT_DIR))
     path.chmod(0o755)
@@ -307,7 +307,7 @@ in the name pytest shows. Different expectations are different tests.
 )
 def test_linter_flags_a_reserved_or_no_agent_name(name, message):
     """An agent named __implicit or __own is reserved, a yaml key null no name."""
-    cfg = make_ai_config()
+    cfg = _make_ai_config()
     cfg['ai']['agents'][name] = dict(type='fundi', options=dict(governors=[]))
     with FundiTest(argv=LINT, config_defaults=cfg) as app:
         issues = TokeoAiLinter(app).lint()
@@ -355,7 +355,7 @@ start of the next run, the results stay for a look until then.
 
 ```python
 def test_subprocess_cwd_takes_effect(tmp_path):      # a directory of the test
-    cfg = make_ai_config()
+    cfg = _make_ai_config()
     cfg['ai']['sandboxes']['jailed']['options']['cwd'] = str(tmp_path / 'sbx')
     ...
 

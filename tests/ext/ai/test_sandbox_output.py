@@ -34,7 +34,7 @@ class OutputTest(TokeoTest):
         ]
 
 
-def make_ai_config(options):
+def _make_ai_config(options):
     """The tools loud and big in process (agent local), in a subprocess (jail)."""
     cfg = init_defaults('ai')
     cfg['ai'] = dict(
@@ -54,16 +54,16 @@ def make_ai_config(options):
     return cfg
 
 
-def run_tool(agent, tool, size, options=LIMIT):
+def _run_tool(agent, tool, size, options=LIMIT):
     """Run the tool with the size in the sandbox of the agent."""
-    with OutputTest(config_defaults=make_ai_config(options)) as app:
+    with OutputTest(config_defaults=_make_ai_config(options)) as app:
         return app.ai._exec_in_sandbox(tool, dict(size=size), app.ai._get_agent(agent), None, None, None, None)
 
 
 @pytest.mark.parametrize('agent', ['local', 'jail'])
 def test_the_captured_output_is_cut_at_output_mb(agent):
     """5000 bytes printed with max_output_mb 0.001: 1048 kept, then the mark."""
-    out = run_tool(agent, 'loud', 5000)
+    out = _run_tool(agent, 'loud', 5000)
     assert out.value.as_str == 'done'
     assert out.state.stdout == 'x' * 1048 + '\n[... cut after 0.001 MB]'
     assert out.state.stderr == 'y' * 1048 + '\n[... cut after 0.001 MB]'
@@ -72,7 +72,7 @@ def test_the_captured_output_is_cut_at_output_mb(agent):
 @pytest.mark.parametrize('agent', ['local', 'jail'])
 def test_output_within_output_mb_is_kept_whole(agent):
     """500 bytes printed with max_output_mb 0.001 stay as they are."""
-    out = run_tool(agent, 'loud', 500)
+    out = _run_tool(agent, 'loud', 500)
     assert (out.state.stdout, out.state.stderr) == ('x' * 500, 'y' * 500)
 
 
@@ -80,7 +80,7 @@ def test_output_within_output_mb_is_kept_whole(agent):
 def test_a_value_over_output_mb_is_an_error(agent, where):
     """A value of 5000 bytes with max_output_mb 0.001 is no result but an error."""
     with pytest.raises(TokeoAiError, match=rf'delivered more than 0.001 MB in the {where} sandbox'):
-        run_tool(agent, 'big', 5000)
+        _run_tool(agent, 'big', 5000)
 
 
 def test_the_buffer_cuts_between_whole_characters():
@@ -97,13 +97,13 @@ def test_the_raw_reply_may_hold_the_views_and_the_captures():
 
 def test_the_default_output_mb_keeps_a_normal_reply():
     """Without max_output_mb a 5000 byte value is well below the default 1 MB."""
-    assert run_tool('jail', 'big', 5000, options={}).value.as_str == 'z' * 5000
+    assert _run_tool('jail', 'big', 5000, options={}).value.as_str == 'z' * 5000
 
 
 @pytest.mark.parametrize('value', [0, -1, 'big', None, True])
 def test_the_linter_checks_output_mb_of_every_sandbox(value):
     """max_output_mb is a number above 0, for in_process and subprocess alike."""
-    with OutputTest(argv=['ai', 'lint'], config_defaults=make_ai_config(dict(max_output_mb=value))) as app:
+    with OutputTest(argv=['ai', 'lint'], config_defaults=_make_ai_config(dict(max_output_mb=value))) as app:
         errors = {i.path: i.message for i in TokeoAiLinter(app).lint() if i.level == 'error'}
     expected = 'max_output_mb must be a number of MB above 0'
     assert (errors.get('ai.sandboxes.local.options'), errors.get('ai.sandboxes.jailed.options')) == (expected, expected)
