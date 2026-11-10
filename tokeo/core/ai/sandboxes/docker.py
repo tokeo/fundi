@@ -128,7 +128,7 @@ class TokeoAiDockerSandbox(TokeoAiSandbox):
         )
 
     def __init__(self, app, *args, **kw):
-        super(TokeoAiDockerSandbox, self).__init__(app, *args, **kw)
+        super().__init__(app, *args, **kw)
         # the running container with reuse, and the lock to start it once
         self._container = None
         self._lock = threading.Lock()

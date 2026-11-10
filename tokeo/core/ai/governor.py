@@ -204,7 +204,7 @@ class TokeoAiGovernor(MetaMixin):
         config_defaults = {}
 
     def __init__(self, app, *args, **kw):
-        super(TokeoAiGovernor, self).__init__(*args, **kw)
+        super().__init__(*args, **kw)
         #: The Tokeo application instance
         self.app = app
         # the set of stages this governor participates in, filled lazily on the

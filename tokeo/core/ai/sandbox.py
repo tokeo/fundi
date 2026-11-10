@@ -70,7 +70,7 @@ class TokeoAiSandbox(MetaMixin):
         config_defaults = {}
 
     def __init__(self, app, *args, **kw):
-        super(TokeoAiSandbox, self).__init__(*args, **kw)
+        super().__init__(*args, **kw)
         #: The Tokeo application instance
         self.app = app
         self._config_name = None

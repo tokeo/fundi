@@ -215,7 +215,7 @@ class TokeoAi(MetaMixin):
         )
 
     def __init__(self, app, *args, **kw):
-        super(TokeoAi, self).__init__(*args, **kw)
+        super().__init__(*args, **kw)
         #: The Tokeo application instance
         self.app = app
         # initialize display license notice

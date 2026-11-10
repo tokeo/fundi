@@ -190,7 +190,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
         )
 
     def __init__(self, app, *args, **kw):
-        super(TokeoAiWasmSandbox, self).__init__(app, *args, **kw)
+        super().__init__(app, *args, **kw)
         # proxied config, filled in _setup (each is used at more than one place)
         self._runtime_path = None
         self._stdlib_dir = None
@@ -211,7 +211,7 @@ class TokeoAiWasmSandbox(TokeoAiSandbox):
 
         """
         # super first: builds the view the _config below reads
-        super(TokeoAiWasmSandbox, self)._setup(app, config_name, item)
+        super()._setup(app, config_name, item)
         # proxied: runtime and stdlib are each used at more than one place
         self._runtime_path = self._config('runtime_path')
         self._stdlib_dir = self._config('stdlib_dir')

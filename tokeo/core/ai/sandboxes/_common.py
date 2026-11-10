@@ -157,7 +157,7 @@ class OutputBuffer(io.StringIO):
     """
 
     def __init__(self, max_bytes, label):
-        super(OutputBuffer, self).__init__()
+        super().__init__()
         #: (bool) Whether output was dropped
         self.cut = False
         self._bytes_left = max_bytes
@@ -182,7 +182,7 @@ class OutputBuffer(io.StringIO):
                 data = data[: self._bytes_left]
                 self.cut = True
             self._bytes_left -= len(data)
-            super(OutputBuffer, self).write(data.decode('utf-8', 'ignore'))
+            super().write(data.decode('utf-8', 'ignore'))
         elif text:
             self.cut = True
         return len(text)
@@ -196,7 +196,7 @@ class OutputBuffer(io.StringIO):
         - **str**: The output
 
         """
-        value = super(OutputBuffer, self).getvalue()
+        value = super().getvalue()
         return f'{value}\n[... cut after {self._label}]' if self.cut else value
 
 
