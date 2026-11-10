@@ -11,7 +11,8 @@ exercised by the Spiral tests.
 """
 
 from tokeo.main import TokeoTest
-from tokeo.core.ai import Invocation, ToolResult, ToolStates
+from tokeo.core.ai import Invocation, ToolResult, ToolStates, TokeoAiTool
+from tokeo.core.ai.tool import create_tool_result
 from tokeo.core.ai.guards.redact import TokeoAiRegexRedactGuard
 from tokeo.core.ai.guards.policy import (
     TokeoAiToolPolicyGuard,
@@ -19,6 +20,21 @@ from tokeo.core.ai.guards.policy import (
     TokeoAiAbortPolicyGuard,
     TokeoAiPolicyGuardError,
 )
+
+
+class EchoTool(TokeoAiTool):
+    """Return its text argument; the simplest in/out tool."""
+
+    class Meta:
+        description = 'echo the given text'
+        parameters = {
+            'type': 'object',
+            'properties': {'text': {'type': 'string'}},
+            'required': ['text'],
+        }
+
+    def exec(self, **arguments):
+        return create_tool_result(str(arguments.get('text', '')))
 
 
 class AiTest(TokeoTest):
@@ -71,7 +87,7 @@ def test_tool_policy_allowlist_restricts_to_its_members():
 
 def _make_files_config():
     """An ai config with the group filesystem of read_file and append_file."""
-    echo = 'tests.ext.ai.lib.ai_tests_helper:EchoTool'
+    echo = 'tests.core.ai.test_guard:EchoTool'
     tools = {'read_file': echo, 'append_file': echo, 'filesystem': ['read_file', 'append_file']}
     return {'ai': {'license_acknowledged': False, 'tools': tools}}
 
