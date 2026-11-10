@@ -1,11 +1,14 @@
 """
-Tests for the shared --model-param parse+coerce helper.
+Tests for the helpers of tokeo.core.ai.utils.
 
-The helper turns repeatable ```key=value``` strings into a model_params dict,
-used the same way by ```ai ask```, the ```ai chat``` start flags and the
-interactive chat switches. It coerces the value like a yaml scalar (so numbers,
-booleans and null get their types) and treats a null/empty value as "remove the
-key". These tests pin that behaviour down in one place.
+```parse_model_params``` turns repeatable ```key=value``` strings into a
+model_params dict, used the same way by ```ai ask```, the ```ai chat``` start
+flags and the interactive chat switches; a null or empty value removes the
+key. ```coerce_model_param_value``` coerces the value like a yaml scalar, so
+numbers, booleans and null get their types.
+
+```add_tool_call``` and ```drop_tool_calls``` add and drop the tool calls of a
+chat result, each returns a new object.
 """
 
 import pytest
@@ -77,6 +80,7 @@ def test_parse_none_input_is_empty():
 
 
 def _make_blank_result():
+    """Return a chat result without text and tool calls."""
     return TokeoAiChatResult(text='', reasoning='', refusal='', tool_calls=[], usage=None, finish_reason=None)
 
 
