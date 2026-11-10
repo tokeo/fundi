@@ -141,14 +141,14 @@ def wait_process_group_ended(pgid, timeout=5.0):
     ```python
     def test_program_ends_with_its_group():
         args = [sys.executable, '-c', 'import time; time.sleep(30)']
-        proc = subprocess.Popen(args, start_new_session=True, cwd=ROOT_DIR)
+        process = subprocess.Popen(args, start_new_session=True, cwd=ROOT_DIR)
         try:
-            proc.terminate()
-            assert proc.wait(timeout=8) != 0
+            process.terminate()
+            assert process.wait(timeout=8) != 0
             # the program ended, and so did every process it forked
-            assert wait_process_group_ended(proc.pid)
+            assert wait_process_group_ended(process.pid)
         finally:
-            proc.kill()
+            process.kill()
     ```
 
     """
