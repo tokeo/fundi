@@ -42,9 +42,9 @@ class SubProcess:
     ```python
     def test_serve_ends_on_term():
         port = find_free_port()
-        probe = 'tests.ext.smtpd.smtpd_tests_serve_probe'
-        with SubProcess.probe(probe, json.dumps(config)) as process:
-            process.wait_for(lambda: _has_banner(port))
+        probe = 'tests.ext.outbox.outbox_tests_serve_probe'
+        with SubProcess.probe(probe, str(port)) as process:
+            process.wait_for(lambda: _is_listening(port))
             process.signal(signal.SIGTERM)
             assert process.wait() == 0
     ```
@@ -52,8 +52,8 @@ class SubProcess:
     A program that is no probe, e.g. a server of a live test:
 
     ```python
-    with SubProcess.run(POCKETBASE_BIN, 'serve', '--http', address) as process:
-        process.wait_for(lambda: _is_healthy(url))
+    with SubProcess.run(SERVER_BIN, '--port', str(port)) as process:
+        process.wait_for(lambda: _is_listening(port))
     ```
 
     """

@@ -28,7 +28,7 @@ pytestmark = stresstest          # all tests of the file
 
 
 @stresstest                      # one test
-def test_worker_stress_hands_every_message_on_once():
+def test_outbox_stress_hands_every_message_on_once():
     ...
 ```
 
@@ -209,11 +209,11 @@ def use_disabled_stdin_capture():
     ### Example
 
     ```python
-    def test_remote_run_reads_no_stdin():
+    def test_input_ends_on_an_empty_stdin():
         with use_disabled_stdin_capture():
-            # Connection.run() of fabric reads stdin, pytest captures it
-            result = connection.run('hostname', hide=True)
-        assert result.ok
+            # input() reads stdin, pytest captures it
+            with pytest.raises(EOFError):
+                input('name> ')
     ```
 
     """
