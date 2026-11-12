@@ -127,8 +127,9 @@ from tests.utils.tui import Terminal
 from tests.utils.isolation import IsolatedPytest
 ```
 
-- ```tmp``` is a cement ```fs.Tmp``` inside ```tmp_path```, with
-  ```tmp.dir``` and ```tmp.file```, for a test app that takes one
+- ```tmp``` is a ```Tmp``` of ```tests.utils``` inside ```tmp_path```, the
+  ```fs.Tmp``` of cement without its leaked descriptor, with ```tmp.dir```
+  and ```tmp.file```, for a test app that takes one
 - ```rando``` is a random string of 12 characters, for names that must not
   meet those of another run, e.g. a queue on a live server
 - ```key``` is a random string of 32 characters, for a name or key of full

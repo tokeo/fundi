@@ -2,12 +2,13 @@
 The helpers for all tests of the app.
 
 General tools every test may import: the root of the project, the markers
-of the stress tests and of the tests in a fresh process, waiting for a
-condition and an empty stdin for a step. They hold no asserts, the test
-asserts on what they return. The classes live in modules of their own and
-are imported by their full path: ```tests.utils.process``` runs a program
-as a process of its own, ```tests.utils.tui``` runs a program in a pseudo
-terminal, ```tests.utils.isolation``` runs a test in a pytest of its own.
+of the stress tests and of the tests in a fresh process, a temporary
+directory and file, waiting for a condition and an empty stdin for a step.
+They hold no asserts, the test asserts on what they return. The other
+classes live in modules of their own and are imported by their full path:
+```tests.utils.process``` runs a program as a process of its own,
+```tests.utils.tui``` runs a program in a pseudo terminal,
+```tests.utils.isolation``` runs a test in a pytest of its own.
 
 ### Example
 
@@ -51,10 +52,12 @@ def test_counts_in_a_fork():
 import os
 import time
 import socket
+import tempfile
 import asyncio
 from io import StringIO
 from contextlib import contextmanager
 import pytest
+from cement.utils import fs
 
 #: The root of the project, the working directory of every program a test
 #: starts, e.g. ```subprocess.Popen([...], cwd=ROOT_DIR)```.
@@ -69,6 +72,30 @@ stresstest = pytest.mark.skipif(os.environ.get('STRESSTESTS', '0') != '1', reaso
 #: process, by ```IsolatedPytest``` of ```tests.utils.isolation```. Set it on
 #: one test by ```@isolated```.
 isolated = pytest.mark.isolated
+
+
+class Tmp(fs.Tmp):
+    """
+    A temporary directory and file like ```fs.Tmp``` of cement, without a leak.
+
+    cement 3.0.16 keeps only the path of ```tempfile.mkstemp``` and never
+    closes its descriptor; this one closes it. It goes once cement does.
+
+    ### Keyword Args
+
+    - **kwargs**: ```suffix```, ```prefix```, ```dir``` and ```cleanup``` as
+        for ```fs.Tmp```
+
+    """
+
+    def __init__(self, **kwargs):
+        self.cleanup = kwargs.get('cleanup', True)
+        suffix = kwargs.get('suffix', '')
+        prefix = kwargs.get('prefix', 'tmp')
+        dir = kwargs.get('dir', None)
+        self.dir = tempfile.mkdtemp(suffix=suffix, prefix=prefix, dir=dir)
+        fd, self.file = tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=dir)
+        os.close(fd)
 
 
 def wait_until(check, timeout=5.0, interval=0.02):

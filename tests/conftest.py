@@ -48,8 +48,7 @@ import re
 from io import StringIO
 import pytest
 from cement.utils.misc import rando as _rando
-from cement.utils import fs
-from tests.utils import ROOT_DIR
+from tests.utils import ROOT_DIR, Tmp
 from tests.utils.isolation import IsolatedPytest
 
 
@@ -74,8 +73,8 @@ def pytest_pyfunc_call(pyfuncitem):
 
 @pytest.fixture(scope="function")
 def tmp(tmp_path):
-    """A cement fs.Tmp inside tmp_path, kept until the next run."""
-    yield fs.Tmp(dir=str(tmp_path))
+    """A Tmp of tests.utils inside tmp_path, kept until the next run."""
+    yield Tmp(dir=str(tmp_path))
 
 
 @pytest.fixture(scope="function")
